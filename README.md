@@ -14,7 +14,7 @@ Sarmad Sufyan Ahmed · Fizza Mubeen · Mahnoor Nadeem · Maham Ikram
 | `project-info/` | All project planning & design docs — architecture, API spec, algorithms, milestones, DB schema |
 | `backend/` | FastAPI gateway + platform services (market data, routing, risk, kill switch, …) |
 | `venues/` | 5 venue simulator FastAPI servers (V1 AlphaExchange → V5 EpsilonPool) |
-| `frontend/` | React + TypeScript dashboard (Figma Make generated — added separately by Fizza) |
+| `frontend/` | React + TypeScript dashboard |
 | `infra/` | Docker, AWS deployment, monitoring configs |
 | `tests/` | Integration, E2E, load tests |
 | `scripts/` | Dev utilities |
