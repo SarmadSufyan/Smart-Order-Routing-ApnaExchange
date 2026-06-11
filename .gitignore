@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+dist/
+build/
+.next/
+.nuxt/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Databases (just in case anyone uses SQLite locally)
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets — paranoia
+*.pem
+*.key
+*.p12
+secrets/
+
+# AI assistant — per-developer local settings & cache (not shared project rules)
+.claude/local/
+.claude/settings.local.json

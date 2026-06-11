@@ -1,0 +1,30 @@
+# Runtime dependencies for the backend gateway + platform services.
+# Pinned for reproducibility. Bump intentionally, not opportunistically.
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+pydantic-settings==2.3.4
+
+# HTTP client for calling venue REST APIs
+httpx==0.27.0
+
+# Structured logging
+structlog==24.2.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Numerics — used by risk metrics and (later) anomaly detection
+numpy==1.26.4
+
+# WebSocket (FastAPI uses starlette's, but explicit dep is safer)
+websockets==12.0
+
+# === M3+ dependencies — not used in POC, kept here so install is one-shot ===
+# sqlalchemy[asyncio]==2.0.31
+# asyncpg==0.29.0
+# redis[hiredis]==5.0.7
+# alembic==1.13.1
+# scipy==1.13.1
