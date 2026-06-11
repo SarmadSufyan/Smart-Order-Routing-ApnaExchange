@@ -4,7 +4,6 @@
 
 UITU Final Year Project — Group CS14
 Sarmad Sufyan Ahmed · Fizza Mubeen · Mahnoor Nadeem · Maham Ikram
-Supervisors: Sir Usman Javed · Miss Shiza
 
 ---
 
