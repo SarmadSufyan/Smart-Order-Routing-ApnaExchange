@@ -8,7 +8,7 @@
 
 ## Last updated
 
-**2026-06-11** — by Claude (Opus 4.7). Scaffolding done; team guides written; AWS-for-POC-venues clarification captured.
+**2026-06-12** — by Claude (Opus 4.6). Full backend implemented and tested end-to-end.
 
 ---
 
@@ -48,15 +48,20 @@ These were claimed "complete" in `project-info/MILESTONES.md` §M2 status but **
 
 Work is now parallel across three team workstreams. Dependencies are noted per task.
 
-### Workstream A — Backend / SOR (user)
+### Workstream A — Backend / SOR (user) — DONE
 
-In order:
+All backend services implemented and tested end-to-end:
 
-1. **Shared Pydantic models** — `backend/shared/models/` (order, venue, market_data, risk, execution). Unblocks B and C.
-2. **Venue health monitor** + **market data aggregator** — `backend/services/venue_health/`, `backend/services/market_data/`. Needs venues from B at least at the contract level.
-3. **Pre-trade risk engine + kill switch** — `backend/services/risk/`, `backend/services/order_state/`. POC use case #4.
-4. **Routing engine (best-price strategy)** — `backend/services/routing/`. Needs #1 and #2.
-5. **Gateway routers + WebSocket multiplexing** — `backend/gateway/` + `backend/routers/`. Wires the above to the frontend.
+1. ✅ **Shared Pydantic models** — `backend/shared/models/` (6 model files + exceptions)
+2. ✅ **Venue health monitor** — `backend/services/venue_monitor/health_checker.py` — health scoring, latency tracking, blacklist
+3. ✅ **Market data collector + aggregator** — `backend/services/market_data/` — NBBO computation, quote polling
+4. ✅ **Risk engine** — `backend/services/risk_engine/` — pre-trade checks (7 checks), kill switch, position tracker
+5. ✅ **Routing engine (best-price)** — `backend/services/routing_engine/` — order splitting, venue selection, fill handling
+6. ✅ **Order state manager** — `backend/services/order_state/` — deterministic state machine, fill tracking
+7. ✅ **Gateway + all routers** — `backend/gateway/` — auth, orders, venues, market-data, risk, routing, admin, execution-reports
+8. ✅ **WebSocket manager** — `backend/gateway/websocket/` — subscribe/unsubscribe, broadcast, per-channel routing
+9. ✅ **Mock venue simulator** — `backend/services/market_data/mock_venue.py` — 5 venues with GBM prices for local testing
+10. ✅ **JWT auth** — hardcoded users (admin/trader1/risk_mgr), role-based access control
 
 ### Workstream B — Market simulator (1 person)
 
@@ -80,19 +85,42 @@ See `frontend/TEAM_GUIDE.md` for the full plan. High level:
 
 ## Open questions / blockers
 
-None right now. Decisions locked at scaffold time:
+None right now. Decisions locked:
 
 - Persistence: **in-memory only** for POC (repository interfaces clean enough that M3 swaps in Postgres without service-layer changes).
 - Auth: **real JWT, hardcoded users** (admin / trader1 / risk_mgr) for POC.
 - Deployment: **AWS only**. For POC: venues go to AWS EC2 (one per venue) so health monitoring is meaningful; platform services + frontend run locally during the demo.
 - Venue simulator code: **rebuild fresh** from `project-info/ALGORITHMS.md` §3 spec, not migrated from elsewhere.
 - Team split: 2 frontend, 1 market simulator, user owns the rest. See `frontend/TEAM_GUIDE.md` and `venues/TEAM_GUIDE.md`.
+- Symbols: **multi-symbol basket** (e.g., AAPL, GOOGL, MSFT, AMZN, TSLA) — not single-ticker. Each venue maintains multi-symbol order books.
+- Team workflow: **simplified** — one branch per workstream, one PR when done, Sarmad reviews and merges. See `CONTRIBUTING.md`.
+- M1 diagrams: will be added to `diagrams/` folder by the user.
+
+---
+
+## How to run locally
+
+```powershell
+# Terminal 1: Start mock venues (all 5 on ports 8001-8005)
+cd D:\Sor-Fyp
+$env:PYTHONPATH = "."
+python -m backend.services.market_data.mock_venue
+
+# Terminal 2: Start the gateway (port 8000)
+cd D:\Sor-Fyp
+$env:PYTHONPATH = "."
+python -m uvicorn backend.gateway.main:app --host 127.0.0.1 --port 8000
+
+# Open Swagger UI: http://127.0.0.1:8000/docs
+# Login: POST /api/auth/login with {"username":"admin","password":"admin"}
+# Copy the access_token, click "Authorize" in Swagger, paste "Bearer <token>"
+```
 
 ---
 
 ## Not-yet-committed work in progress
 
-None.
+Backend implementation (not yet committed).
 
 ---
 
