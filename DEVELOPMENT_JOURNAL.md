@@ -76,6 +76,94 @@ Additional decision (carried in from prior conversation, captured in AI memory):
 
 ---
 
+## 2026-06-12 — Day 1: Workflow finalized + POC scope locked
+
+### What we did
+
+1. **Simplified the team workflow.** The original CONTRIBUTING.md had feature-by-feature branching, review matrices, and daily loops. Too complex for a 4-person FYP team. Replaced with: 3 branches (one per workstream), work freely, open one PR when done, Sarmad merges. That's it.
+
+2. **Locked remaining POC scope decisions:**
+   - **Multi-symbol basket** — not single-ticker. The SOR routes orders across multiple symbols (AAPL, GOOGL, MSFT, AMZN, TSLA etc.), each venue maintains order books for all symbols. This is closer to real SOR behavior.
+   - **Multi-symbol order books per venue** — confirmed. Each venue simulator serves quotes/books for all symbols in the basket.
+   - **M1 diagrams** — user will drop them into `diagrams/` folder for reference.
+   - **First coding step = shared Pydantic models** — confirmed.
+
+3. **Created `diagrams/` folder** for M1 visual docs.
+
+### Why multi-symbol matters
+
+A single-ticker demo would show SOR routing one order to the cheapest venue. That's a price comparator, not a Smart Order Router. With a basket:
+- Different symbols can have different best venues at the same time (AAPL best at V2, GOOGL best at V4).
+- The risk engine tracks exposure across all positions, not just one.
+- Kill switch affects all symbols — a realistic scenario.
+- The dashboard shows a richer, more convincing trading view.
+
+### Files changed
+
+- **Rewritten:** `CONTRIBUTING.md` — from 350 lines to ~100. Three branches, simple loop, done.
+- **Updated:** `PROGRESS.md` — new decisions (multi-symbol, simplified workflow), updated timestamp.
+- **Created:** `diagrams/README.md` — placeholder for M1 diagrams.
+
+### What's next
+
+**Start coding.** First step: shared Pydantic models in `backend/shared/models/`.
+
+---
+
+## 2026-06-12 — Day 1 (continued): Full backend implementation
+
+### What we did
+
+Built the entire backend in a single session. Every service from the BACKEND_GUIDE is now implemented, wired, and tested end-to-end.
+
+**Services built (bottom-up order):**
+
+1. **Config** (`gateway/config.py`) — Pydantic Settings, venue profiles, all env vars with POC defaults.
+2. **Logger** (`shared/utils/logger.py`) — structlog with console renderer for dev, JSON for prod.
+3. **Event bus** (`shared/events/event_bus.py`) — In-memory async pub/sub. Replaces Redis for POC. Same interface so M3 swap is a drop-in.
+4. **Auth** (`gateway/middleware/auth.py`) — Real JWT with 3 hardcoded users (admin/trader1/risk_mgr). Role-based access via `require_role()` decorator.
+5. **Venue health monitor** (`services/venue_monitor/health_checker.py`) — Polls `/health` on all 5 venues every 1s. Computes health score (weighted: latency 25%, fill rate 25%, reject rate 20%, uptime 15%, freshness 15%). Transitions venues between HEALTHY/DEGRADED/CRITICAL/BLACKLISTED/DISCONNECTED.
+6. **Market data collector** (`services/market_data/collector.py`) — Polls `/quote` on all venues for all symbols every 100ms. Marks stale quotes after 2s.
+7. **Market data aggregator** (`services/market_data/aggregator.py`) — Computes NBBO per symbol from eligible (non-blacklisted, non-stale) venue quotes.
+8. **Order manager** (`services/order_state/order_manager.py`) — In-memory order store. Enforces deterministic state machine transitions. Tracks child orders and fills.
+9. **Position tracker** (`services/risk_engine/position_tracker.py`) — Tracks net position and notional per symbol.
+10. **Kill switch** (`services/risk_engine/kill_switch.py`) — Activate/deactivate with reason tracking. Cancels all working orders on activation.
+11. **Pre-trade risk engine** (`services/risk_engine/pre_trade.py`) — 7 checks in sequence: kill switch → size limit → rate limit → position limit → notional limit → symbol restriction → venue restriction. Microsecond-level latency (~23-43μs per check).
+12. **Best-price routing strategy** (`services/routing_engine/strategies/best_price.py`) — Sorts venues by best ask (buy) or best bid (sell), greedily allocates quantity.
+13. **Routing engine** (`services/routing_engine/engine.py`) — Orchestrates: validate → risk check → NBBO lookup → route → send to venues → handle fills. Updates positions on fill.
+14. **WebSocket manager** (`gateway/websocket/ws_manager.py`) — Single multiplexed connection. Subscribe/unsubscribe per channel. All events auto-broadcast.
+15. **8 API routers** — auth, orders, venues, market-data, risk, routing, admin, execution-reports. All per API_SPECIFICATION.md.
+16. **Mock venue simulator** (`services/market_data/mock_venue.py`) — Runs all 5 venues locally for testing. GBM price engine per symbol, configurable latency/reject rates per venue profile.
+
+### Architecture decisions in this session
+
+- **Event bus wires WebSocket broadcasts automatically.** Every event published (venue_health, market_data, order_update, etc.) is broadcast to subscribed WebSocket clients. No manual broadcast calls in services.
+- **Execution reports stored in-memory list.** M3 moves to Postgres. Same query interface.
+- **Mock venues are realistic.** V3 (GammaMarkets) has 35% reject rate and 50-200ms latency. This exercises the health scoring, blacklisting, and error handling paths naturally.
+- **Position tracker updates on fill, not on order creation.** Only confirmed fills change exposure. This matches real trading systems.
+
+### Verified behavior
+
+Full end-to-end test confirmed:
+- Login → JWT → authenticated requests (3 roles)
+- 5 venues reachable, health-scored, status tracked
+- NBBO computed from live quotes across venues
+- Orders routed to best-priced venue, filled, positions updated
+- Kill switch blocks orders (503), cancels working orders
+- Venue blacklist excludes from routing
+- Role-based access (trader can't activate kill switch)
+- Execution reports tracked with venue latency
+- All 5 symbols (AAPL, GOOGL, MSFT, AMZN, TSLA) working
+
+### What's next
+
+- **Wait for teammates:** Frontend (Fizza's Figma drop-in) and venues (real simulator from spec).
+- **Connect:** When teammates push, swap mock venues for real ones, wire frontend to live API.
+- **Test integration:** End-to-end with real frontend + real venues + backend.
+- **Deploy venues to AWS EC2** for POC demo with real network latency.
+
+---
+
 ## 2026-06-11 — Day 0 (continued): Team guides + AWS-for-POC clarification
 
 ### What we did
