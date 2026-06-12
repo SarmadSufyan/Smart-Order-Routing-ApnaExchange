@@ -1,0 +1,57 @@
+"""
+server/routers/quote.py
+
+GET /quote?symbol=AAPL → bid/ask snapshot from orderbook engine.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel
+
+import structlog
+
+router = APIRouter()
+logger = structlog.get_logger()
+
+
+class QuoteResponse(BaseModel):
+    venue_id: str
+    symbol: str
+    bid_price: float
+    ask_price: float
+    bid_size: int
+    ask_size: int
+    last_price: float
+    volume: int
+    timestamp: str
+
+
+@router.get("/quote", response_model=QuoteResponse)
+async def get_quote(symbol: str = Query(default="AAPL")) -> QuoteResponse:
+    # Engine references are injected via app.state in venue_app.py
+    from server.venue_app import get_engines
+
+    engines = get_engines()
+    await engines.latency.inject()
+
+    mid = engines.price_engine.current_price
+    bid_price, ask_price, bid_size, ask_size = engines.orderbook.top_of_book(mid)
+
+    logger.debug("quote.served", venue_id=engines.profile.venue_id, symbol=symbol,
+                 bid=bid_price, ask=ask_price)
+
+    return QuoteResponse(
+        venue_id=engines.profile.venue_id,
+        symbol=symbol,
+        bid_price=bid_price,
+        ask_price=ask_price,
+        bid_size=bid_size,
+        ask_size=ask_size,
+        last_price=round(engines.price_engine.last_price, 2),
+        volume=engines.price_engine.volume,
+        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") +
+                  f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z",
+    )
