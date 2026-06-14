@@ -1,7 +1,7 @@
 """
 server/routers/health.py
 
-GET /health → venue status for the Venue Health Monitor.
+GET /health -> venue status for the Venue Health Monitor.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def reset_startup_time() -> None:
 class HealthResponse(BaseModel):
     venue_id: str
     name: str
-    status: str              # "ok" or "degraded"
+    status: str
     uptime_seconds: int
     current_regime: str
 
@@ -34,12 +34,15 @@ async def get_health() -> HealthResponse:
     from server.venue_app import get_engines
 
     engines = get_engines()
-    degraded = engines.fill_sim.is_degraded
+    degraded = engines.latency._is_degraded
+
+    first_symbol = next(iter(engines.symbols.values()))
+    regime = first_symbol.price_engine.current_regime.value
 
     return HealthResponse(
         venue_id=engines.profile.venue_id,
         name=engines.profile.name,
         status="degraded" if degraded else "ok",
         uptime_seconds=int(time.time() - _startup_time),
-        current_regime=engines.price_engine.current_regime.value,
+        current_regime=regime,
     )

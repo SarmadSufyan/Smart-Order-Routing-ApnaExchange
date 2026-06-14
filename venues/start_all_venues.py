@@ -37,7 +37,7 @@ VENUES = [
         "VENUE_NAME": "GammaMarkets",
         "VENUE_PORT": "8003",
         "VENUE_PROFILE": "gamma_markets",
-        "VENUE_DEGRADED": "true",     # Starts degraded — demo target
+        "VENUE_DEGRADED": "true",     # Starts degraded - demo target
     },
     {
         "VENUE_ID": "V4",
@@ -58,7 +58,7 @@ VENUES = [
 
 def main() -> None:
     print("\n" + "=" * 60)
-    print("  DEIRCP Venue Simulator — Starting 5 venues")
+    print("  DEIRCP Venue Simulator - Starting 5 venues")
     print("=" * 60 + "\n")
 
     processes: list[subprocess.Popen] = []
@@ -87,7 +87,7 @@ def main() -> None:
             stderr=subprocess.STDOUT,
         )
         processes.append(proc)
-        print(f"  ✓  {vid} — {name:20s} http://localhost:{port}/docs{degraded}")
+        print(f"  +  {vid} - {name:20s} http://localhost:{port}/docs{degraded}")
         time.sleep(0.5)
 
     print(f"\n  All 5 venues started.")
@@ -115,7 +115,7 @@ def main() -> None:
             for i, proc in enumerate(processes):
                 if proc.poll() is not None:
                     vid = VENUES[i]["VENUE_ID"]
-                    print(f"  ⚠  {vid} exited with code {proc.returncode}")
+                    print(f"  !  {vid} exited with code {proc.returncode}")
             time.sleep(1)
     except KeyboardInterrupt:
         shutdown(None, None)
