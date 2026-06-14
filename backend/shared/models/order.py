@@ -92,6 +92,7 @@ class Order(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     rejection_reason: str | None = None
     child_orders: list[ChildOrder] = []
+    routing_decision: dict | None = None  # RoutingDecision snapshot — stored as dict to avoid circular import
 
     def can_transition_to(self, new_status: OrderStatus) -> bool:
         return new_status in VALID_TRANSITIONS.get(self.status, set())
@@ -109,6 +110,7 @@ class OrderResponse(BaseModel):
     avg_fill_price: float = 0.0
     rejection_reason: str | None = None
     child_orders: list[ChildOrder] = []
+    routing_decision: dict | None = None
     created_at: datetime
 
     @classmethod
@@ -125,6 +127,7 @@ class OrderResponse(BaseModel):
             avg_fill_price=order.avg_fill_price,
             rejection_reason=order.rejection_reason,
             child_orders=order.child_orders,
+            routing_decision=order.routing_decision,
             created_at=order.created_at,
         )
 

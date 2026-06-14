@@ -1,5 +1,5 @@
 import React from 'react'
-import { C } from '../theme'
+import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { SYMBOLS } from '../mockData'
@@ -63,53 +63,53 @@ export function Wallet() {
     .filter((r) => r.exec_type === 'FILL' || r.exec_type === 'PARTIAL')
     .slice(0, 10)
 
-  const th: React.CSSProperties = { padding: '6px 10px', fontSize: 10, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
+  const th: React.CSSProperties = { padding: '6px 10px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
   const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
-  const td: React.CSSProperties = { padding: '8px 10px', color: C.text, fontSize: 12 }
+  const td: React.CSSProperties = { padding: '8px 10px', color: C.text, fontSize: F.base }
 
   return (
     <div>
-      <div style={{ fontSize: 15, color: C.text, marginBottom: 6 }}>Wallet — Portfolio Holdings</div>
-      <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>
+      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Wallet — Portfolio Holdings</div>
+      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16 }}>
         Live view of your positions, cash, and unrealized P&L. Mid prices are pulled from the NBBO across all 5 venues.
       </div>
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>PORTFOLIO VALUE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.text }}>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>PORTFOLIO VALUE</div>
+          <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>
             ${portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
-          <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Cash + Holdings</div>
+          <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>Cash + Holdings</div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>CASH AVAILABLE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.green }}>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>CASH AVAILABLE</div>
+          <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.green }}>
             ${cashAvailable.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
-          <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+          <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>
             from ${CASH_STARTING_BALANCE.toLocaleString()} starting
           </div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>HOLDINGS VALUE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.blue }}>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>HOLDINGS VALUE</div>
+          <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.blue }}>
             ${totalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
-          <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+          <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>
             across {holdings.length} symbol{holdings.length === 1 ? '' : 's'}
           </div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>UNREALIZED P&L</div>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>UNREALIZED P&L</div>
           <div style={{
-            fontSize: 22, fontWeight: 700,
+            fontSize: F.xxl, fontWeight: 700,
             color: totalPnl >= 0 ? C.green : C.red,
           }}>
             {totalPnl >= 0 ? '+' : ''}${totalPnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </div>
-          <div style={{ fontSize: 10, color: totalPnl >= 0 ? C.green : C.red, marginTop: 4 }}>
+          <div style={{ fontSize: F.xs, color: totalPnl >= 0 ? C.green : C.red, marginTop: 4 }}>
             {totalPnl >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%
           </div>
         </Card>
@@ -121,15 +121,15 @@ export function Wallet() {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <CardTitle>HOLDINGS</CardTitle>
-            <span style={{ fontSize: 10, color: C.dim }}>
+            <span style={{ fontSize: F.xs, color: C.dim }}>
               {holdings.length === 0 ? 'No positions yet' : `${holdings.length} position${holdings.length === 1 ? '' : 's'}`}
             </span>
           </div>
 
           {holdings.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: 12 }}>
+            <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.base }}>
               You don't own any shares yet.<br />
-              <span style={{ fontSize: 11, color: C.muted }}>Place an order from the Order Ticket page to start building positions.</span>
+              <span style={{ fontSize: F.sm, color: C.muted }}>Place an order from the Order Ticket page to start building positions.</span>
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -196,14 +196,14 @@ export function Wallet() {
           <Card>
             <CardTitle>ALLOCATION</CardTitle>
             {holdings.length === 0 ? (
-              <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: 11 }}>
+              <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: F.sm }}>
                 Nothing to allocate yet.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* Cash row */}
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: F.sm, marginBottom: 4 }}>
                     <span style={{ color: C.muted }}>Cash</span>
                     <span style={{ color: C.text }}>
                       {((cashAvailable / portfolioValue) * 100).toFixed(1)}%
@@ -222,7 +222,7 @@ export function Wallet() {
                   const pct = (Math.abs(h.marketValue) / portfolioValue) * 100
                   return (
                     <div key={h.symbol}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: F.sm, marginBottom: 4 }}>
                         <span style={{ color: C.muted }}>{h.symbol}</span>
                         <span style={{ color: C.text }}>{pct.toFixed(1)}%</span>
                       </div>
@@ -242,7 +242,7 @@ export function Wallet() {
           <Card>
             <CardTitle>RECENT FILLS</CardTitle>
             {recentFills.length === 0 ? (
-              <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: 11 }}>
+              <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: F.sm }}>
                 No fills yet.
               </div>
             ) : (
@@ -250,16 +250,16 @@ export function Wallet() {
                 {recentFills.map((r, i) => (
                   <div key={`${r.child_order_id}-${i}`} style={{
                     display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px', background: C.surface, borderRadius: 3, fontSize: 11,
+                    padding: '6px 8px', background: C.surface, borderRadius: 3, fontSize: F.sm,
                   }}>
-                    <span style={{ color: C.dim, fontSize: 10 }}>{r.timestamp.slice(11, 19)}</span>
+                    <span style={{ color: C.dim, fontSize: F.xs }}>{r.timestamp.slice(11, 19)}</span>
                     <span style={{ fontWeight: 600, width: 44 }}>{r.symbol}</span>
-                    <span style={{ color: r.side === 'BUY' ? C.green : C.red, fontWeight: 700, width: 30, fontSize: 10 }}>
+                    <span style={{ color: r.side === 'BUY' ? C.green : C.red, fontWeight: 700, width: 30, fontSize: F.xs }}>
                       {r.side}
                     </span>
                     <span style={{ color: C.muted }}>{r.quantity}</span>
                     <span style={{ color: C.text, marginLeft: 'auto' }}>${r.price.toFixed(2)}</span>
-                    <span style={{ color: C.blue, fontSize: 10 }}>{r.venue_id}</span>
+                    <span style={{ color: C.blue, fontSize: F.xs }}>{r.venue_id}</span>
                   </div>
                 ))}
               </div>
@@ -271,9 +271,9 @@ export function Wallet() {
       {/* Footer note */}
       <div style={{
         marginTop: 14, padding: 10, background: C.surface, borderRadius: 4,
-        fontSize: 10, color: C.dim, textAlign: 'center',
+        fontSize: F.xs, color: C.dim, textAlign: 'center',
       }}>
-        ⓘ Cash starts at $1,000,000 for the POC. Prices update live as the NBBO refreshes every 3 seconds.
+        â“˜ Cash starts at $1,000,000 for the POC. Prices update live as the NBBO refreshes every 3 seconds.
         {' '}
         Orders placed: {orders.length} · Fills recorded: {executionReports.filter(r => r.exec_type === 'FILL').length}
       </div>

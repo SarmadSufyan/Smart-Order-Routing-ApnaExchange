@@ -12,7 +12,7 @@ profile = VenueProfile(
     drift=0.00001,
     regime_transition_prob=0.005,
     spread_bps=1.5,                          # Tightest spread = best prices
-    liquidity_depth=500,                     # Deep liquidity
+    liquidity_depth=150,                     # Deepest book (still) — but small enough for demo splits
     depth_variance=0.20,
     base_latency_ms_range=(2.0, 8.0),        # Fastest
     degraded_latency_multiplier=10.0,

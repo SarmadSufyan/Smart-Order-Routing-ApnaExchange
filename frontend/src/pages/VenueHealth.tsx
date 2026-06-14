@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { C } from '../theme'
+import { C, F, tint } from '../theme'
 import { Card, CardTitle, ConnDot } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendVenueToUi } from '../adapters'
@@ -33,7 +33,7 @@ export function VenueHealth() {
 
   return (
     <div>
-      <div style={{ fontSize: 15, color: C.text, marginBottom: 14 }}>Venue Connectivity</div>
+      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Venue Connectivity</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
         {venues.map((v) => {
@@ -42,8 +42,8 @@ export function VenueHealth() {
             v.status === 'Degraded'     ? C.orange :
             isOffline                    ? C.red    : C.border
           const bg =
-            v.status === 'Degraded'     ? '#EF9F2706' :
-            isOffline                    ? '#E24B4A06' : '#1A1E24'
+            v.status === 'Degraded'     ? tint(C.orange, 2) :
+            isOffline                    ? tint(C.red, 2) : C.surface2
 
           return (
             <div key={v.id} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 6, padding: 14 }}>
@@ -51,16 +51,16 @@ export function VenueHealth() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ConnDot status={v.status} />
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{v.name}</span>
+                  <span style={{ fontSize: F.md, fontWeight: 600 }}>{v.name}</span>
                 </div>
-                <span style={{ fontSize: 10, color: C.muted, background: '#131619', padding: '2px 7px', borderRadius: 3 }}>
+                <span style={{ fontSize: F.xs, color: C.muted, background: C.surface, padding: '2px 7px', borderRadius: 3 }}>
                   {v.protocol}
                 </span>
               </div>
 
               {!isOffline ? (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px', marginBottom: 10, fontSize: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px', marginBottom: 10, fontSize: F.xs }}>
                     {[
                       { l: 'Latency',         v: fmtMs(v.latencyEma),    c: v.latencyEma > 50 ? C.orange : C.text },
                       { l: 'P99',             v: fmtMs(v.p99),           c: v.p99 > 100 ? C.orange : C.text       },
@@ -82,8 +82,8 @@ export function VenueHealth() {
                       style={{
                         flex: 1, padding: '5px 0',
                         border: `1px solid ${C.border}`, borderRadius: 3,
-                        background: '#131619', color: C.red,
-                        fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                        background: C.surface, color: C.red,
+                        fontSize: F.xs, cursor: 'pointer', fontFamily: 'inherit',
                         opacity: busy === v.backend.venue_id ? 0.5 : 1,
                       }}
                     >
@@ -93,9 +93,9 @@ export function VenueHealth() {
                 </>
               ) : (
                 <>
-                  <div style={{ textAlign: 'center', padding: '14px 0', color: C.red, fontSize: 12 }}>
-                    ⚠ Venue Blacklisted
-                    <div style={{ color: C.dim, fontSize: 10, marginTop: 4 }}>
+                  <div style={{ textAlign: 'center', padding: '14px 0', color: C.red, fontSize: F.base }}>
+                     Venue Blacklisted
+                    <div style={{ color: C.dim, fontSize: F.xs, marginTop: 4 }}>
                       Excluded from routing — no orders being sent
                     </div>
                   </div>
@@ -106,8 +106,8 @@ export function VenueHealth() {
                       style={{
                         flex: 1, padding: '5px 0',
                         border: `1px solid ${C.border}`, borderRadius: 3,
-                        background: '#131619', color: C.green,
-                        fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                        background: C.surface, color: C.green,
+                        fontSize: F.xs, cursor: 'pointer', fontFamily: 'inherit',
                         opacity: busy === v.backend.venue_id ? 0.5 : 1,
                       }}
                     >
@@ -123,11 +123,11 @@ export function VenueHealth() {
 
       <Card>
         <CardTitle>VENUE COMPARISON</CardTitle>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
             <tr>
               {['Venue', 'Cloud', 'Status', 'Latency', 'Health', 'Fill %', 'Reject %', 'Uptime'].map((h) => (
-                <th key={h} style={{ padding: '5px 8px', fontSize: 10, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }}>
+                <th key={h} style={{ padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }}>
                   {h}
                 </th>
               ))}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { C } from '../theme'
+import { C, F, tint } from '../theme'
 import { Card, CardTitle, ArcGauge } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendRiskToPositions } from '../adapters'
@@ -59,12 +59,12 @@ export function RiskManager() {
     },
   ]
 
-  const th: React.CSSProperties = { padding: '3px 8px', fontSize: 10, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
+  const th: React.CSSProperties = { padding: '3px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
   const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
 
   return (
     <div>
-      <div style={{ fontSize: 15, color: C.text, marginBottom: 14 }}>Risk Manager Console</div>
+      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Risk Manager Console</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
@@ -78,11 +78,11 @@ export function RiskManager() {
         </Card>
         <Card style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: notional > 0 ? C.green : C.muted }}>
+            <div style={{ fontSize: F.xxl, fontWeight: 700, color: notional > 0 ? C.green : C.muted }}>
               ${notional.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </div>
-            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Exposure Used</div>
-            <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>
+            <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>Exposure Used</div>
+            <div style={{ fontSize: F.xs, color: C.dim, marginTop: 2 }}>
               {riskStatus ? `${riskStatus.exposure_utilization_pct.toFixed(1)}% of limit` : '—'}
             </div>
           </div>
@@ -90,13 +90,18 @@ export function RiskManager() {
       </div>
 
       <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22 }}>🛡</span>
-          <span style={{ fontSize: 16, color: riskStatus?.kill_switch_active ? C.red : C.green }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{
+            width: 12, height: 12, borderRadius: '50%',
+            background: riskStatus?.kill_switch_active ? C.red : C.green,
+            boxShadow: `0 0 8px ${riskStatus?.kill_switch_active ? C.red : C.green}`,
+            display: 'inline-block', flexShrink: 0,
+          }} />
+          <span style={{ fontSize: F.lg, color: riskStatus?.kill_switch_active ? C.red : C.green, fontWeight: 600 }}>
             KILL SWITCH {riskStatus?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'}
           </span>
           {riskStatus?.kill_switch_active && riskStatus.kill_switch_reason && (
-            <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>
+            <span style={{ fontSize: F.sm, color: C.muted, marginLeft: 8 }}>
               Reason: {riskStatus.kill_switch_reason}
             </span>
           )}
@@ -105,7 +110,7 @@ export function RiskManager() {
           onClick={() => navigate('/killswitch')}
           style={{
             padding: '8px 20px', borderRadius: 4, border: 'none',
-            background: C.red, color: '#fff', fontSize: 12,
+            background: C.red, color: '#fff', fontSize: F.base,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
@@ -115,7 +120,7 @@ export function RiskManager() {
 
       <Card style={{ marginBottom: 12 }}>
         <CardTitle>PRE-TRADE CHECK BREAKDOWN</CardTitle>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
             <tr>
               <th style={th}>Check</th>
@@ -139,7 +144,7 @@ export function RiskManager() {
               )
             })}
             <tr style={{ ...tr, background: C.surface }}>
-              <td style={{ padding: '7px 8px', color: C.muted, fontSize: 10 }} colSpan={5}>
+              <td style={{ padding: '7px 8px', color: C.muted, fontSize: F.xs }} colSpan={5}>
                 Recent checks: <span style={{ color: C.text }}>{recent.length}</span> · approved: <span style={{ color: C.green }}>{approved}</span> · rejected: <span style={{ color: C.red }}>{rejected}</span> · avg time: <span style={{ color: C.text }}>{avgMs} ms</span>
               </td>
             </tr>
@@ -157,7 +162,7 @@ export function RiskManager() {
                 const pct = share * 100
                 return (
                   <div key={vid}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 3 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: F.xs, marginBottom: 3 }}>
                       <span style={{ color: C.muted }}>{vid}</span>
                       <span style={{ color: C.text }}>{pct.toFixed(1)}%</span>
                     </div>
@@ -169,7 +174,7 @@ export function RiskManager() {
               })}
             </div>
           ) : (
-            <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
               No routing data yet — place an order.
             </div>
           )}
@@ -183,18 +188,18 @@ export function RiskManager() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search symbol…"
               style={{
-                background: '#131619', border: `1px solid ${C.border}`, borderRadius: 3,
-                padding: '3px 8px', color: C.text, fontSize: 10, fontFamily: 'inherit',
+                background: C.surface, border: `1px solid ${C.border}`, borderRadius: 3,
+                padding: '3px 8px', color: C.text, fontSize: F.xs, fontFamily: 'inherit',
                 width: 120, outline: 'none',
               }}
             />
           </div>
           {filtered.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
               No open positions.
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
               <thead>
                 <tr>
                   <th style={th}>Sym</th>
@@ -206,7 +211,7 @@ export function RiskManager() {
               <tbody>
                 {filtered.map((p) => {
                   const pct = ((Math.abs(p.net) / p.max) * 100).toFixed(1)
-                  const bg  = +pct > 80 ? '#E24B4A10' : +pct > 60 ? '#EF9F2710' : undefined
+                  const bg  = +pct > 80 ? tint(C.red, 6) : +pct > 60 ? tint(C.orange, 6) : undefined
                   const pc  = +pct > 80 ? C.red : +pct > 60 ? C.orange : C.muted
                   return (
                     <tr key={p.sym} style={{ ...tr, background: bg }}>

@@ -12,7 +12,7 @@ profile = VenueProfile(
     drift=0.00001,
     regime_transition_prob=0.004,
     spread_bps=4.5,                          # Wider spread = premium fee venue
-    liquidity_depth=120,                     # Thin books
+    liquidity_depth=50,                      # Premium venue, thin top-of-book
     depth_variance=0.20,
     base_latency_ms_range=(1.0, 5.0),        # Lowest latency
     degraded_latency_multiplier=10.0,
