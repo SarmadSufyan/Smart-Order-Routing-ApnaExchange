@@ -1,7 +1,7 @@
 """
 server/routers/admin.py
 
-POST /admin/degrade → force venue into degraded mode (demo injection).
+POST /admin/degrade → force venue into degraded mode.
 POST /admin/recover → restore normal operation.
 """
 
@@ -25,8 +25,9 @@ async def admin_degrade() -> DegradeResponse:
     from server.venue_app import get_engines
 
     engines = get_engines()
-    engines.fill_sim.set_degraded(True)
     engines.latency.set_degraded(True)
+    for se in engines.symbols.values():
+        se.fill_sim.set_degraded(True)
 
     logger.warning("admin.degraded", venue_id=engines.profile.venue_id)
     return DegradeResponse(degraded=True)
@@ -37,8 +38,9 @@ async def admin_recover() -> DegradeResponse:
     from server.venue_app import get_engines
 
     engines = get_engines()
-    engines.fill_sim.set_degraded(False)
     engines.latency.set_degraded(False)
+    for se in engines.symbols.values():
+        se.fill_sim.set_degraded(False)
 
     logger.info("admin.recovered", venue_id=engines.profile.venue_id)
     return DegradeResponse(degraded=False)

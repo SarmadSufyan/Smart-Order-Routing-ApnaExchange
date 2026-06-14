@@ -1,23 +1,19 @@
 """
 server/venue_app.py
 
-FastAPI app factory. One running instance of this = one venue.
-
-Usage:
-  VENUE_ID=V1 VENUE_NAME=AlphaExchange VENUE_PORT=8001 VENUE_PROFILE=alpha_exchange \
-  uvicorn server.venue_app:app --port 8001
+FastAPI app factory. One running instance = one venue, serving all symbols.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.config import get_settings, get_profile
+from server.config import SYMBOLS, get_settings, get_profile
 from server.engine.price_engine import PriceEngine
 from server.engine.orderbook_engine import OrderBookEngine
 from server.engine.fill_simulator import FillSimulator
@@ -38,27 +34,35 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-# ─── Engine container (global, set once at startup) ──────────────────────────
+@dataclass
+class SymbolEngines:
+    price_engine: PriceEngine
+    orderbook: OrderBookEngine
+    fill_sim: FillSimulator
+
 
 @dataclass
 class Engines:
     profile: VenueProfile
-    price_engine: PriceEngine
-    orderbook: OrderBookEngine
-    fill_sim: FillSimulator
     latency: LatencyModel
+    symbols: dict[str, SymbolEngines] = field(default_factory=dict)
 
 
 _engines: Engines | None = None
 
 
 def get_engines() -> Engines:
-    """Called by routers to access the venue's engine instances."""
     assert _engines is not None, "Engines not initialized — app not started?"
     return _engines
 
 
-# ─── Lifespan ────────────────────────────────────────────────────────────────
+def get_symbol_engines(symbol: str) -> SymbolEngines:
+    engines = get_engines()
+    if symbol not in engines.symbols:
+        sym_list = list(engines.symbols.keys())
+        raise ValueError(f"Unknown symbol {symbol}. Available: {sym_list}")
+    return engines.symbols[symbol]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,30 +70,41 @@ async def lifespan(app: FastAPI):
 
     settings = get_settings()
     profile = get_profile()
-
-    price_engine = PriceEngine(profile)
-    orderbook = OrderBookEngine(profile)
     latency = LatencyModel(profile)
-    fill_sim = FillSimulator(profile, price_engine, orderbook)
 
-    # If VENUE_DEGRADED=true (V3 on its EC2), start in degraded mode
     if settings.venue_degraded:
-        fill_sim.set_degraded(True)
         latency.set_degraded(True)
         logger.warning("venue.starting_degraded", venue_id=profile.venue_id)
 
+    symbol_engines: dict[str, SymbolEngines] = {}
+
+    for symbol, sym_cfg in SYMBOLS.items():
+        pe = PriceEngine(
+            profile,
+            initial_price=sym_cfg["initial_price"],
+            volatility_mult=sym_cfg["volatility_mult"],
+        )
+        ob = OrderBookEngine(profile)
+        fs = FillSimulator(profile, pe, ob)
+
+        if settings.venue_degraded:
+            fs.set_degraded(True)
+
+        symbol_engines[symbol] = SymbolEngines(
+            price_engine=pe,
+            orderbook=ob,
+            fill_sim=fs,
+        )
+
     _engines = Engines(
         profile=profile,
-        price_engine=price_engine,
-        orderbook=orderbook,
-        fill_sim=fill_sim,
         latency=latency,
+        symbols=symbol_engines,
     )
 
-    # Start the GBM price engine background task
-    await price_engine.start()
+    for symbol, se in symbol_engines.items():
+        await se.price_engine.start()
 
-    # Reset health uptime counter
     from server.routers.health import reset_startup_time
     reset_startup_time()
 
@@ -97,23 +112,18 @@ async def lifespan(app: FastAPI):
         "venue.started",
         venue_id=profile.venue_id,
         name=profile.name,
-        cloud=profile.narrative_cloud,
-        region=profile.narrative_region,
+        symbols=list(SYMBOLS.keys()),
         port=settings.venue_port,
-        spread_bps=profile.spread_bps,
-        latency_range=profile.base_latency_ms_range,
-        reject_rate=f"{profile.reject_rate * 100:.1f}%",
         degraded=settings.venue_degraded,
     )
 
-    yield  # App runs
+    yield
 
-    await price_engine.stop()
+    for se in symbol_engines.values():
+        await se.price_engine.stop()
     _engines = None
     logger.info("venue.stopped", venue_id=profile.venue_id)
 
-
-# ─── App factory ─────────────────────────────────────────────────────────────
 
 settings = get_settings()
 profile = get_profile()
@@ -121,10 +131,10 @@ profile = get_profile()
 app = FastAPI(
     title=f"Venue Simulator — {profile.name} ({profile.venue_id})",
     description=(
-        f"Simulated trading venue for DEIRCP FYP POC.\n"
-        f"Narrative cloud: {profile.narrative_cloud} | Region: {profile.narrative_region}"
+        f"Multi-symbol venue simulator for DEIRCP FYP POC.\n"
+        f"Symbols: {', '.join(SYMBOLS.keys())}"
     ),
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -135,7 +145,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include all routers
 app.include_router(quote.router)
 app.include_router(orderbook.router)
 app.include_router(execute.router)
@@ -150,6 +159,6 @@ async def root() -> dict:
         "venue_id": profile.venue_id,
         "name": profile.name,
         "narrative_cloud": profile.narrative_cloud,
-        "symbol": settings.symbol,
+        "symbols": list(SYMBOLS.keys()),
         "docs": "/docs",
     }

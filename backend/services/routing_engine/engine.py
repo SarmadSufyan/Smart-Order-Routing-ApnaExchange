@@ -120,6 +120,22 @@ class RoutingEngine:
         for child in result.child_orders:
             await self._send_to_venue(order, child)
 
+        updated = self._orders.get_order(order.id)
+        if updated.filled_quantity >= updated.quantity:
+            pass
+        elif updated.filled_quantity > 0:
+            pass
+        elif updated.status == OrderStatus.WORKING:
+            all_rejected = all(
+                c.status in (OrderStatus.REJECTED,) or (c.filled_quantity == 0 and c.fill_price is None)
+                for c in updated.child_orders
+            )
+            if all_rejected and updated.filled_quantity == 0:
+                await self._orders.transition(
+                    order.id, OrderStatus.REJECTED,
+                    rejection_reason="All venue executions rejected",
+                )
+
         return result
 
     async def _send_to_venue(self, order: Order, child) -> None:
@@ -134,29 +150,35 @@ class RoutingEngine:
             resp = await self._http_client.post(
                 f"{url}/execute-order",
                 json={
-                    "order_id": str(child.id),
+                    "child_order_id": str(child.id),
                     "symbol": order.symbol,
                     "side": order.side.value,
                     "quantity": child.quantity,
                     "price": child.price,
                     "order_type": order.order_type.value,
                 },
-                timeout=5.0,
+                timeout=10.0,
             )
             latency_ms = (time.monotonic() - start) * 1000
 
             if resp.status_code == 200:
                 data = resp.json()
-                fill_price = data.get("fill_price", child.price)
-                fill_qty = data.get("filled_quantity", child.quantity)
+                exec_type = data.get("exec_type", "REJECT")
+                fill_price = data.get("fill_price", 0)
+                fill_qty = data.get("filled_qty", 0)
+                venue_latency = data.get("venue_latency_ms", latency_ms)
 
-                await self._orders.update_fill(
-                    order.id, child.id, fill_qty, fill_price
-                )
-                self._risk.position_tracker.update_position(
-                    order.symbol, order.side, fill_qty, fill_price
-                )
-                self._venue_monitor.record_order_result(child.venue_id, filled=True)
+                if exec_type in ("FILL", "PARTIAL") and fill_qty > 0:
+                    await self._orders.update_fill(
+                        order.id, child.id, fill_qty, fill_price
+                    )
+                    self._risk.position_tracker.update_position(
+                        order.symbol, order.side, fill_qty, fill_price
+                    )
+                    self._venue_monitor.record_order_result(child.venue_id, filled=True)
+                else:
+                    self._venue_monitor.record_order_result(child.venue_id, filled=False)
+                    child.status = OrderStatus.REJECTED
 
                 await event_bus.publish(
                     "execution_report",
@@ -164,12 +186,12 @@ class RoutingEngine:
                         "order_id": str(order.id),
                         "child_order_id": str(child.id),
                         "venue_id": child.venue_id,
-                        "exec_type": "FILL",
+                        "exec_type": exec_type,
                         "symbol": order.symbol,
                         "side": order.side.value,
-                        "quantity": fill_qty,
+                        "quantity": fill_qty if fill_qty > 0 else child.quantity,
                         "price": fill_price,
-                        "venue_latency_ms": round(latency_ms, 2),
+                        "venue_latency_ms": round(venue_latency, 2),
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
@@ -193,6 +215,7 @@ class RoutingEngine:
 
         except Exception as e:
             self._venue_monitor.record_order_result(child.venue_id, filled=False)
+            child.status = OrderStatus.REJECTED
             logger.error(
                 "venue_send_failed",
                 venue_id=child.venue_id,

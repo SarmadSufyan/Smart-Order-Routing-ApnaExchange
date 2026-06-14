@@ -1,7 +1,7 @@
 """
 server/routers/quote.py
 
-GET /quote?symbol=AAPL → bid/ask snapshot from orderbook engine.
+GET /quote?symbol=AAPL → bid/ask snapshot from the symbol's orderbook engine.
 """
 
 from __future__ import annotations
@@ -31,17 +31,16 @@ class QuoteResponse(BaseModel):
 
 @router.get("/quote", response_model=QuoteResponse)
 async def get_quote(symbol: str = Query(default="AAPL")) -> QuoteResponse:
-    # Engine references are injected via app.state in venue_app.py
-    from server.venue_app import get_engines
+    from server.venue_app import get_engines, get_symbol_engines
 
     engines = get_engines()
     await engines.latency.inject()
 
-    mid = engines.price_engine.current_price
-    bid_price, ask_price, bid_size, ask_size = engines.orderbook.top_of_book(mid)
+    se = get_symbol_engines(symbol)
+    mid = se.price_engine.current_price
+    bid_price, ask_price, bid_size, ask_size = se.orderbook.top_of_book(mid)
 
-    logger.debug("quote.served", venue_id=engines.profile.venue_id, symbol=symbol,
-                 bid=bid_price, ask=ask_price)
+    now = datetime.now(timezone.utc)
 
     return QuoteResponse(
         venue_id=engines.profile.venue_id,
@@ -50,8 +49,7 @@ async def get_quote(symbol: str = Query(default="AAPL")) -> QuoteResponse:
         ask_price=ask_price,
         bid_size=bid_size,
         ask_size=ask_size,
-        last_price=round(engines.price_engine.last_price, 2),
-        volume=engines.price_engine.volume,
-        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") +
-                  f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z",
+        last_price=round(se.price_engine.last_price, 2),
+        volume=se.price_engine.volume,
+        timestamp=now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z",
     )
