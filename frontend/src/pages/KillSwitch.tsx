@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { C } from '../theme'
+import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { isVenueBlacklisted } from '../adapters'
@@ -98,17 +98,23 @@ export function KillSwitch() {
     return list
   }, [killActive, riskStatus, venues, executionReports])
 
-  const th: React.CSSProperties = { padding: '3px 6px', fontSize: 10, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
+  const th: React.CSSProperties = { padding: '3px 6px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
   const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
 
-  const sevIcon = (s: string) =>
-    s === 'Critical' ? <span style={{ color: C.red }}>●</span> :
-    s === 'Warning'  ? <span style={{ color: C.orange }}>▲</span> :
-                       <span style={{ color: C.blue }}>ℹ</span>
+  const sevIcon = (s: string) => {
+    const color = s === 'Critical' ? C.red : s === 'Warning' ? C.orange : C.blue
+    const size = s === 'Critical' ? 10 : 9
+    return (
+      <span style={{
+        display: 'inline-block', width: size, height: size, borderRadius: '50%',
+        background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0,
+      }} />
+    )
+  }
 
   const statusStyle = (s: string): React.CSSProperties => ({
-    fontSize: 9, padding: '1px 5px', borderRadius: 2,
-    background: s === 'Active' ? '#E24B4A22' : '#4CAF5022',
+    fontSize: F.xs, padding: '1px 5px', borderRadius: 2,
+    background: s === 'Active' ? tint(C.red, 13) : tint(C.green, 13),
     color:      s === 'Active' ? C.red       : C.green,
   })
 
@@ -116,12 +122,12 @@ export function KillSwitch() {
 
   return (
     <div>
-      <div style={{ fontSize: 15, color: C.text, marginBottom: 14 }}>Kill Switch & Alerts</div>
+      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Kill Switch & Alerts</div>
 
       {/* BIG KILL SWITCH PANEL */}
       <div style={{
         borderRadius: 8, padding: 40, textAlign: 'center',
-        background: killActive ? C.red : '#1A1E24',
+        background: killActive ? C.red : C.surface2,
         border: killActive ? `1px solid ${C.red}` : `1px solid ${C.border}`,
         marginBottom: 16, minHeight: 200,
         transition: 'background .3s, border .3s',
@@ -129,30 +135,37 @@ export function KillSwitch() {
         {killActive ? (
           <>
             <div style={{ fontSize: 28, color: '#fff', fontWeight: 700, animation: 'pocBlink 1s infinite' }}>
-              ⚠ KILL SWITCH ACTIVE
+               KILL SWITCH ACTIVE
             </div>
-            <div style={{ color: '#ffffffcc', fontSize: 13, marginTop: 10 }}>
+            <div style={{ color: '#ffffffcc', fontSize: F.md, marginTop: 10 }}>
               Reason: {riskStatus?.kill_switch_reason || 'Manual activation'}
             </div>
-            <div style={{ color: '#ffffffaa', fontSize: 12, marginTop: 4 }}>
+            <div style={{ color: '#ffffffaa', fontSize: F.base, marginTop: 4 }}>
               Activated at: {riskStatus?.kill_switch_activated_at?.replace('T', ' ').slice(0, 19) || '—'}
             </div>
-            <div style={{ color: '#ffffffcc', fontSize: 14, marginTop: 16 }}>
+            <div style={{ color: '#ffffffcc', fontSize: F.md, marginTop: 16 }}>
               All new orders are being rejected by pre-trade check.
             </div>
             <button onClick={deactivate} disabled={busy} style={{
               marginTop: 20, padding: '10px 28px', borderRadius: 5,
               border: 'none', background: '#fff', color: C.red,
-              fontSize: 13, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+              fontSize: F.md, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
             }}>
               {busy ? 'Deactivating…' : 'Deactivate Kill Switch'}
             </button>
           </>
         ) : (
           <>
-            <div style={{ fontSize: 36, marginBottom: 8 }}>🛡</div>
-            <div style={{ fontSize: 22, color: C.green, marginBottom: 6 }}>System Operating Normally</div>
-            <div style={{ fontSize: 11, color: C.dim }}>
+            <div style={{
+              width: 56, height: 56, margin: '0 auto 12px',
+              borderRadius: '50%',
+              background: tint(C.green, 14),
+              border: `2px solid ${C.green}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: F.xxl, color: C.green, fontWeight: 700,
+            }}>OK</div>
+            <div style={{ fontSize: F.xxl, color: C.green, marginBottom: 6, fontWeight: 600 }}>System Operating Normally</div>
+            <div style={{ fontSize: F.base, color: C.dim }}>
               Kill switch is inactive — orders flow through pre-trade checks.
             </div>
 
@@ -160,14 +173,14 @@ export function KillSwitch() {
               <button onClick={activate} style={{
                 marginTop: 20, padding: '12px 32px', borderRadius: 5,
                 border: 'none', background: C.red, color: '#fff',
-                fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: F.md, cursor: 'pointer', fontFamily: 'inherit',
               }}>
                 Activate Kill Switch
               </button>
             ) : (
               <div style={{ marginTop: 16 }}>
-                <div style={{ color: C.orange, fontSize: 13, marginBottom: 8 }}>
-                  ⚠ Enter reason to confirm:
+                <div style={{ color: C.orange, fontSize: F.md, marginBottom: 8 }}>
+                   Enter reason to confirm:
                 </div>
                 <input
                   value={reason}
@@ -175,15 +188,15 @@ export function KillSwitch() {
                   placeholder="Reason for activation…"
                   style={{
                     width: '100%', maxWidth: 400, padding: '8px 12px',
-                    borderRadius: 4, background: '#131619',
+                    borderRadius: 4, background: C.surface,
                     border: `1px solid ${C.orange}`, color: C.text,
-                    fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                    fontSize: F.base, fontFamily: 'inherit', outline: 'none',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
                   <button onClick={activate} disabled={!reason || busy} style={{
                     padding: '8px 20px', borderRadius: 4, border: 'none',
-                    background: C.red, color: '#fff', fontSize: 12,
+                    background: C.red, color: '#fff', fontSize: F.base,
                     cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
                     opacity: reason && !busy ? 1 : 0.4,
                   }}>
@@ -191,8 +204,8 @@ export function KillSwitch() {
                   </button>
                   <button onClick={() => { setStep(0); setReason('') }} style={{
                     padding: '8px 20px', borderRadius: 4,
-                    border: `1px solid ${C.border}`, background: '#131619',
-                    color: C.muted, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                    border: `1px solid ${C.border}`, background: C.surface,
+                    color: C.muted, fontSize: F.base, cursor: 'pointer', fontFamily: 'inherit',
                   }}>
                     Cancel
                   </button>
@@ -206,24 +219,23 @@ export function KillSwitch() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-            <span>🔔</span>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
             <CardTitle>SYSTEM ALERTS</CardTitle>
           </div>
           <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {alerts.map((a, i) => {
               const isActive = a.status === 'Active'
               const bg = isActive
-                ? a.sev === 'Critical' ? '#E24B4A10' : '#EF9F2710'
-                : '#3B8BD408'
+                ? a.sev === 'Critical' ? tint(C.red, 6) : tint(C.orange, 6)
+                : tint(C.blue, 3)
               return (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 10px', borderRadius: 4, background: bg, fontSize: 11,
+                  padding: '8px 10px', borderRadius: 4, background: bg, fontSize: F.sm,
                 }}>
                   <span style={{ flexShrink: 0 }}>{sevIcon(a.sev)}</span>
-                  <span style={{ color: C.dim, width: 55, flexShrink: 0, fontSize: 10 }}>{a.time}</span>
-                  <span style={{ color: C.muted, width: 90, flexShrink: 0, fontSize: 10 }}>{a.sys}</span>
+                  <span style={{ color: C.dim, width: 55, flexShrink: 0, fontSize: F.xs }}>{a.time}</span>
+                  <span style={{ color: C.muted, width: 90, flexShrink: 0, fontSize: F.xs }}>{a.sys}</span>
                   <span style={{ flex: 1, color: C.text }}>{a.msg}</span>
                   <span style={statusStyle(a.status)}>{a.status}</span>
                 </div>
@@ -235,11 +247,11 @@ export function KillSwitch() {
         <Card>
           <CardTitle>BLACKLISTED VENUES</CardTitle>
           {blacklisted.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
               No venues blacklisted. All venues routable.
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
               <thead>
                 <tr>
                   <th style={th}>Venue</th>
@@ -250,7 +262,7 @@ export function KillSwitch() {
               </thead>
               <tbody>
                 {blacklisted.map((v) => (
-                  <tr key={v.venue_id} style={{ ...tr, background: '#EF9F2708' }}>
+                  <tr key={v.venue_id} style={{ ...tr, background: tint(C.orange, 3) }}>
                     <td style={{ padding: '7px 6px', color: C.orange }}>{v.name}</td>
                     <td style={{ padding: '7px 6px', color: C.muted }}>{v.cloud}</td>
                     <td style={{ padding: '7px 6px', textAlign: 'right', color: C.muted }}>{v.health_score?.toFixed(0)}%</td>

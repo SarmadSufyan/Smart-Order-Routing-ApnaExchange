@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { C } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { C, F, tint } from '../theme'
+import { Card } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { api, type NBBO, type Order, type ExecutionReport } from '../services/api'
 import { SYMBOLS } from '../mockData'
@@ -20,49 +20,42 @@ interface StepState {
 const STEP_DEFS = [
   {
     key: 'input',
-    icon: '📝',
     title: 'Order Received',
     short: 'Operator submits a new order',
     what: 'The order is created in the Order Manager with status NEW. Every order gets a UUID, timestamp, and audit trail.',
   },
   {
     key: 'risk',
-    icon: '🛡',
     title: 'Pre-Trade Risk Check',
     short: 'Four checks must pass',
     what: 'Before the order goes anywhere, the Risk Engine validates: kill switch is off, order size is under the limit, position limit per symbol is not exceeded, and notional exposure is within the cap.',
   },
   {
     key: 'md',
-    icon: '🌐',
     title: 'Market Data Aggregation',
     short: 'Pulls NBBO from all 5 venues',
     what: 'The Market Data Aggregator queries every connected venue and computes the National Best Bid & Offer — the best bid across venues and the best ask across venues. This is the "best price anywhere".',
   },
   {
     key: 'sor',
-    icon: '🧠',
     title: 'SOR Strategy Decision',
     short: 'Best-Price algorithm picks a venue',
     what: 'The Smart Order Router runs the Best-Price strategy. It looks at the NBBO and filters out blacklisted/degraded venues, then picks the venue with the best price for our side.',
   },
   {
     key: 'route',
-    icon: '📤',
     title: 'Venue Routing',
     short: 'Order sent to chosen venue',
     what: 'The Order Manager transitions the order to ROUTING then WORKING. A child order is sent via HTTP to the selected venue\'s /execute-order endpoint.',
   },
   {
     key: 'exec',
-    icon: '⚡',
     title: 'Execution Report',
     short: 'Venue responds with FILL or REJECT',
     what: 'The venue simulates matching against its order book. It either fills the order (returns FILL with fill price and quantity) or rejects it. Latency is tracked.',
   },
   {
     key: 'position',
-    icon: '📊',
     title: 'Position Update',
     short: 'Risk engine updates exposure',
     what: 'On a fill, the Position Tracker updates the net position, the avg entry price, and the total notional exposure. The audit log gets the execution report.',
@@ -86,7 +79,7 @@ export function HowItWorks() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentIdx, setCurrentIdx] = useState<number>(-1)
   const [steps, setSteps] = useState<StepState[]>(STEP_DEFS.map((s) => ({ key: s.key, status: 'pending' as StepStatus })))
-  const [summary, setSummary] = useState<string | null>(null)
+  const [summary, setSummary] = useState<{ kind: 'ok' | 'fail'; msg: string } | null>(null)
   const abortRef = useRef<boolean>(false)
 
   const speed = SPEEDS[speedIdx].ms
@@ -119,14 +112,14 @@ export function HowItWorks() {
     }
 
     try {
-      // ── Step 1: input ──
+      // Step 1: input
       setCurrentIdx(0)
       updateStep(0, { status: 'active', startedAt: Date.now(), data: { symbol, side, quantity: qty } })
       await sleep(speed)
       if (abortRef.current) return
       updateStep(0, { status: 'done', durationMs: speed })
 
-      // ── Step 2: risk ──
+      // Step 2: risk
       setCurrentIdx(1)
       const risk = await api.getRiskStatus()
       const checks = [
@@ -143,12 +136,12 @@ export function HowItWorks() {
 
       if (!riskOk) {
         for (let i = 2; i < STEP_DEFS.length; i++) updateStep(i, { status: 'skipped' })
-        setSummary('Order blocked by pre-trade risk check.')
+        setSummary({ kind: 'fail', msg: 'Order blocked by pre-trade risk check.' })
         setIsPlaying(false)
         return
       }
 
-      // ── Step 3: market data ──
+      // Step 3: market data
       setCurrentIdx(2)
       const quotesRes = await api.getQuotes(symbol)
       const allNbboRes = await api.getAllNBBO()
@@ -158,7 +151,7 @@ export function HowItWorks() {
       if (abortRef.current) return
       updateStep(2, { status: 'done', durationMs: speed })
 
-      // ── Step 4: SOR ──
+      // Step 4: SOR
       setCurrentIdx(3)
       const chosenVenue = side === 'BUY' ? nbbo?.best_ask_venue : nbbo?.best_bid_venue
       const chosenPrice = side === 'BUY' ? nbbo?.best_ask     : nbbo?.best_bid
@@ -170,17 +163,16 @@ export function HowItWorks() {
       if (abortRef.current) return
       updateStep(3, { status: 'done', durationMs: speed })
 
-      // ── Step 5: route ──
+      // Step 5: route
       setCurrentIdx(4)
       updateStep(4, { status: 'active', startedAt: Date.now(), data: { venue: chosenVenue, action: 'POST /execute-order' } })
-      // Actually submit the order now
       const submitStart = Date.now()
       let order: Order
       try {
         order = await api.submitOrder(symbol, side, qty)
       } catch (e) {
         updateStep(4, { status: 'failed', durationMs: Date.now() - submitStart, note: String((e as Error).message) })
-        setSummary(`Order failed to route: ${(e as Error).message}`)
+        setSummary({ kind: 'fail', msg: `Order failed to route: ${(e as Error).message}` })
         setIsPlaying(false)
         return
       }
@@ -189,7 +181,7 @@ export function HowItWorks() {
       if (abortRef.current) return
       updateStep(4, { status: 'done', durationMs: routeLatency, data: { venue: chosenVenue, order } })
 
-      // ── Step 6: execution ──
+      // Step 6: execution
       setCurrentIdx(5)
       const reports = (await api.getExecutionReports()).reports
       const myReport: ExecutionReport | undefined = reports.find((r) => r.order_id === order.id)
@@ -201,7 +193,7 @@ export function HowItWorks() {
         durationMs: speed,
       })
 
-      // ── Step 7: position ──
+      // Step 7: position
       setCurrentIdx(6)
       const newRisk = await api.getRiskStatus()
       updateStep(6, { status: 'active', startedAt: Date.now(), data: { positions: newRisk.positions, totalExposure: newRisk.total_exposure } })
@@ -211,13 +203,12 @@ export function HowItWorks() {
 
       // Final summary
       const filled = order.filled_quantity
-      const totalFee = 0
       if (order.status === 'FILLED') {
-        setSummary(`✓ Order FILLED: ${side} ${filled} ${symbol} @ avg $${order.avg_fill_price.toFixed(2)} on ${chosenVenue}.`)
+        setSummary({ kind: 'ok',   msg: `Order FILLED: ${side} ${filled} ${symbol} @ avg $${order.avg_fill_price.toFixed(2)} on ${chosenVenue}.` })
       } else if (order.status === 'REJECTED') {
-        setSummary(`✗ Order REJECTED: ${order.rejection_reason || 'see execution report'}`)
+        setSummary({ kind: 'fail', msg: `Order REJECTED: ${order.rejection_reason || 'see execution report'}` })
       } else {
-        setSummary(`Order status: ${order.status}`)
+        setSummary({ kind: 'ok',   msg: `Order status: ${order.status}` })
       }
       fetchAll()
     } finally {
@@ -226,19 +217,18 @@ export function HowItWorks() {
     }
   }
 
-  // Cleanup on unmount
   useEffect(() => () => { abortRef.current = true }, [])
 
   return (
     <div>
-      <div style={{ fontSize: 15, color: C.text, marginBottom: 6 }}>How It Works — Trace a Real Order</div>
-      <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>
+      <div style={{ fontSize: F.xl, color: C.text, marginBottom: 6, fontWeight: 600 }}>How It Works — Trace a Real Order</div>
+      <div style={{ fontSize: F.base, color: C.muted, marginBottom: 16 }}>
         Watch a single order travel through the platform, one stage at a time, with real backend data at every step.
       </div>
 
       {/* Controls */}
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 100px 1fr 200px', gap: 12, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 100px 1fr 220px', gap: 12, alignItems: 'end' }}>
           <div>
             <label style={lbl}>SYMBOL</label>
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} disabled={isPlaying} style={inp}>
@@ -265,11 +255,11 @@ export function HowItWorks() {
                   onClick={() => setSpeedIdx(i)}
                   disabled={isPlaying}
                   style={{
-                    flex: 1, padding: '6px 0', fontSize: 10, borderRadius: 3, cursor: isPlaying ? 'not-allowed' : 'pointer',
+                    flex: 1, padding: '8px 0', fontSize: F.sm, borderRadius: 3, cursor: isPlaying ? 'not-allowed' : 'pointer',
                     border: `1px solid ${speedIdx === i ? C.accent : C.border}`,
-                    background: speedIdx === i ? '#00D9FF15' : C.surface,
+                    background: speedIdx === i ? tint(C.accent, 8) : C.surface,
                     color: speedIdx === i ? C.accent : C.muted,
-                    fontFamily: 'inherit',
+                    fontFamily: 'inherit', fontWeight: speedIdx === i ? 600 : 400,
                   }}
                 >
                   {s.label}
@@ -282,24 +272,24 @@ export function HowItWorks() {
               onClick={play}
               disabled={isPlaying}
               style={{
-                flex: 2, padding: '10px 0', border: 'none', borderRadius: 4,
+                flex: 2, padding: '12px 0', border: 'none', borderRadius: 4,
                 background: isPlaying ? C.surface : C.accent, color: isPlaying ? C.muted : C.bg,
-                fontSize: 12, fontWeight: 700, letterSpacing: '.08em',
+                fontSize: F.base, fontWeight: 700, letterSpacing: '.08em',
                 cursor: isPlaying ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}
             >
-              {isPlaying ? '⏸ RUNNING…' : '▶ TRACE ORDER'}
+              {isPlaying ? 'RUNNING…' : 'TRACE ORDER'}
             </button>
             <button
               onClick={reset}
               disabled={!isPlaying && currentIdx === -1 && !summary}
               style={{
-                flex: 1, padding: '10px 0', border: `1px solid ${C.border}`, borderRadius: 4,
+                flex: 1, padding: '12px 0', border: `1px solid ${C.border}`, borderRadius: 4,
                 background: C.surface, color: C.muted,
-                fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                fontSize: F.base, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
-              ↺ RESET
+              RESET
             </button>
           </div>
         </div>
@@ -322,49 +312,53 @@ export function HowItWorks() {
                          C.border
 
           const bg =
-            isFailed   ? '#E24B4A06' :
-            isDone     ? '#4CAF5006' :
-            isActive   ? '#00D9FF10' :
-                         '#1A1E24'
+            isFailed   ? tint(C.red, 4) :
+            isDone     ? tint(C.green, 4) :
+            isActive   ? tint(C.accent, 8) :
+                         C.surface2
 
           return (
             <div key={def.key} style={{
               border: `1px solid ${borderColor}`,
               background: bg,
               borderRadius: 6,
-              padding: 14,
+              padding: 16,
               opacity: isSkipped ? 0.4 : 1,
               transition: 'all .3s',
               position: 'relative',
             }}>
 
               {/* Header row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {/* Step number badge — replaces the icon circle */}
                 <div style={{
-                  width: 32, height: 32, borderRadius: 16,
+                  width: 36, height: 36, borderRadius: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: borderColor === C.border ? C.surface : `${borderColor}20`,
-                  border: `1px solid ${borderColor}`,
-                  fontSize: 16,
+                  background: borderColor === C.border ? C.surface : tint(borderColor, 16),
+                  border: `1.5px solid ${borderColor}`,
+                  fontSize: F.md, fontWeight: 700,
+                  color: borderColor === C.border ? C.muted : borderColor,
                   animation: isActive ? 'pocPulse 1s infinite' : undefined,
+                  flexShrink: 0,
                 }}>
-                  {def.icon}
+                  {idx + 1}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>
-                    {idx + 1}. {def.title}
+                  <div style={{ fontSize: F.lg, color: C.text, fontWeight: 600 }}>
+                    {def.title}
                   </div>
-                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{def.short}</div>
+                  <div style={{ fontSize: F.sm, color: C.muted, marginTop: 2 }}>{def.short}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{
-                    fontSize: 9, padding: '2px 8px', borderRadius: 3,
-                    background: `${borderColor}25`, color: borderColor, letterSpacing: '.1em',
+                    fontSize: F.xs, padding: '3px 10px', borderRadius: 3,
+                    background: tint(borderColor, 20), color: borderColor, letterSpacing: '.1em',
+                    fontWeight: 600,
                   }}>
                     {state.status.toUpperCase()}
                   </span>
                   {state.durationMs !== undefined && (
-                    <div style={{ fontSize: 10, color: C.dim, marginTop: 3 }}>
+                    <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4 }}>
                       {state.durationMs} ms
                     </div>
                   )}
@@ -372,13 +366,13 @@ export function HowItWorks() {
               </div>
 
               {/* What this step does */}
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 10, paddingLeft: 44, lineHeight: 1.5 }}>
+              <div style={{ fontSize: F.base, color: C.muted, marginTop: 12, paddingLeft: 50, lineHeight: 1.55 }}>
                 {def.what}
               </div>
 
               {/* Live data for active/done step */}
               {state.data && (state.status === 'active' || state.status === 'done' || state.status === 'failed') && (
-                <div style={{ marginTop: 10, paddingLeft: 44 }}>
+                <div style={{ marginTop: 12, paddingLeft: 50 }}>
                   <StepDetails stepKey={def.key} data={state.data} side={side} />
                 </div>
               )}
@@ -390,13 +384,13 @@ export function HowItWorks() {
       {/* Summary */}
       {summary && (
         <div style={{
-          marginTop: 14, padding: 16, borderRadius: 6,
-          background: summary.startsWith('✓') ? '#4CAF5010' : '#E24B4A10',
-          border: `1px solid ${summary.startsWith('✓') ? C.green : C.red}`,
-          color: summary.startsWith('✓') ? C.green : C.red,
-          fontSize: 13, fontWeight: 600, textAlign: 'center',
+          marginTop: 16, padding: 18, borderRadius: 6,
+          background: summary.kind === 'ok' ? tint(C.green, 8) : tint(C.red, 8),
+          border: `1px solid ${summary.kind === 'ok' ? C.green : C.red}`,
+          color: summary.kind === 'ok' ? C.green : C.red,
+          fontSize: F.md, fontWeight: 600, textAlign: 'center',
         }}>
-          {summary}
+          {summary.msg}
         </div>
       )}
     </div>
@@ -420,14 +414,17 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {(data.checks || []).map((c: any) => (
           <div key={c.name} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '6px 10px', background: C.surface, borderRadius: 3, fontSize: 11,
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '8px 12px', background: C.surface, borderRadius: 3, fontSize: F.base,
           }}>
-            <span style={{ color: c.passed ? C.green : C.red, fontSize: 14 }}>
+            <span style={{
+              color: c.passed ? C.green : C.red, fontSize: F.lg, fontWeight: 700,
+              width: 18, textAlign: 'center',
+            }}>
               {c.passed ? '✓' : '✗'}
             </span>
-            <span style={{ flex: 1, color: C.text }}>{c.name}</span>
-            <span style={{ color: C.muted, fontSize: 10 }}>{c.detail}</span>
+            <span style={{ flex: 1, color: C.text, fontWeight: 500 }}>{c.name}</span>
+            <span style={{ color: C.muted, fontSize: F.sm }}>{c.detail}</span>
           </div>
         ))}
       </div>
@@ -441,8 +438,8 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
     const winnerVenue = nbbo ? (nbbo as any)[bestSideKey] : null
     return (
       <div>
-        <div style={{ fontSize: 10, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
-          QUOTES FROM ALL VENUES (you are buying — looking for lowest ASK):
+        <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
+          QUOTES FROM ALL VENUES ({side === 'BUY' ? 'buying — looking for lowest ASK' : 'selling — looking for highest BID'}):
         </div>
         <table style={tbl}>
           <thead>
@@ -459,21 +456,21 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
               const isWinner = vid === winnerVenue
               return (
                 <tr key={vid} style={{
-                  background: isWinner ? '#00D9FF10' : undefined,
-                  borderBottom: `1px solid ${C.border}40`,
+                  background: isWinner ? tint(C.accent, 8) : undefined,
+                  borderBottom: `1px solid ${tint(C.border, 40)}`,
                 }}>
                   <td style={td}>{vid}</td>
                   <td style={{ ...td, textAlign: 'right', color: C.green }}>{q.bid_price?.toFixed(2) ?? '—'}</td>
                   <td style={{ ...td, textAlign: 'right', color: C.red }}>{q.ask_price?.toFixed(2) ?? '—'}</td>
                   <td style={{ ...td, textAlign: 'right', color: C.muted }}>{((q.ask_price - q.bid_price) || 0).toFixed(3)}</td>
-                  <td style={{ ...td, color: C.accent, fontSize: 10 }}>{isWinner ? '◀ best' : ''}</td>
+                  <td style={{ ...td, color: C.accent, fontSize: F.sm, fontWeight: 600 }}>{isWinner ? 'best' : ''}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
         {nbbo && (
-          <div style={{ ...kvBox, marginTop: 8 }}>
+          <div style={{ ...kvBox, marginTop: 10 }}>
             <KV k="Best Bid" v={`${nbbo.best_bid?.toFixed(2)} @ ${nbbo.best_bid_venue}`} color={C.green} />
             <KV k="Best Ask" v={`${nbbo.best_ask?.toFixed(2)} @ ${nbbo.best_ask_venue}`} color={C.red} />
             <KV k="Spread"   v={(nbbo.spread || 0).toFixed(3)} />
@@ -486,21 +483,20 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
   if (stepKey === 'sor') {
     return (
       <div>
-        <div style={{ fontSize: 10, color: C.dim, marginBottom: 8, letterSpacing: '.1em' }}>
-          STRATEGY: best_price → pick the venue offering the best price for our side
+        <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 8, letterSpacing: '.1em' }}>
+          STRATEGY: best_price — pick the venue offering the best price for our side
         </div>
         <div style={{
-          padding: 12, background: '#00D9FF10', border: `1px solid ${C.accent}`,
-          borderRadius: 4, display: 'flex', alignItems: 'center', gap: 14,
+          padding: 14, background: tint(C.accent, 8), border: `1px solid ${C.accent}`,
+          borderRadius: 4, display: 'flex', alignItems: 'center', gap: 16,
         }}>
-          <div style={{ fontSize: 22 }}>🎯</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: C.muted }}>WINNER</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.accent }}>{data.chosenVenue}</div>
+            <div style={{ fontSize: F.sm, color: C.muted, letterSpacing: '.1em' }}>WINNER</div>
+            <div style={{ fontSize: F.xl, fontWeight: 700, color: C.accent, marginTop: 2 }}>{data.chosenVenue}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: C.muted }}>{side === 'BUY' ? 'BUY @' : 'SELL @'}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: side === 'BUY' ? C.red : C.green }}>
+            <div style={{ fontSize: F.sm, color: C.muted, letterSpacing: '.1em' }}>{side === 'BUY' ? 'BUY @' : 'SELL @'}</div>
+            <div style={{ fontSize: F.xl, fontWeight: 700, color: side === 'BUY' ? C.red : C.green, marginTop: 2 }}>
               ${data.chosenPrice?.toFixed(2)}
             </div>
           </div>
@@ -528,7 +524,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
     const r = data.report
     const o: Order = data.order
     if (!r) {
-      return <div style={{ fontSize: 11, color: C.muted }}>Awaiting execution report…</div>
+      return <div style={{ fontSize: F.base, color: C.muted }}>Awaiting execution report…</div>
     }
     return (
       <div>
@@ -540,7 +536,11 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
           <KV k="Latency"   v={`${r.venue_latency_ms?.toFixed(1) ?? '?'} ms`} color={r.venue_latency_ms > 100 ? C.orange : C.muted} />
         </div>
         {o.rejection_reason && (
-          <div style={{ marginTop: 8, padding: 8, background: '#E24B4A10', border: `1px solid ${C.red}40`, borderRadius: 4, fontSize: 11, color: C.red }}>
+          <div style={{
+            marginTop: 10, padding: 10, background: tint(C.red, 6),
+            border: `1px solid ${tint(C.red, 30)}`, borderRadius: 4,
+            fontSize: F.base, color: C.red,
+          }}>
             Rejection: {o.rejection_reason}
           </div>
         )}
@@ -552,7 +552,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
     const positions = data.positions || {}
     return (
       <div>
-        <div style={{ fontSize: 10, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
+        <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
           PORTFOLIO AFTER FILL:
         </div>
         <table style={tbl}>
@@ -568,7 +568,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
             {Object.entries(positions)
               .filter(([_, p]: any) => p.net_quantity !== 0)
               .map(([sym, p]: any) => (
-                <tr key={sym} style={{ borderBottom: `1px solid ${C.border}40` }}>
+                <tr key={sym} style={{ borderBottom: `1px solid ${tint(C.border, 40)}` }}>
                   <td style={td}>{sym}</td>
                   <td style={{ ...td, textAlign: 'right', color: p.net_quantity >= 0 ? C.green : C.red }}>
                     {p.net_quantity}
@@ -579,8 +579,8 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
               ))}
           </tbody>
         </table>
-        <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>
-          Total Exposure: <span style={{ color: C.text }}>${data.totalExposure?.toFixed(0).toLocaleString() ?? 0}</span>
+        <div style={{ marginTop: 10, fontSize: F.base, color: C.muted }}>
+          Total Exposure: <span style={{ color: C.text, fontWeight: 600 }}>${data.totalExposure?.toFixed(0).toLocaleString() ?? 0}</span>
         </div>
       </div>
     )
@@ -592,27 +592,27 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
 function KV({ k, v, color }: { k: string; v: string | number; color?: string }) {
   return (
     <div>
-      <div style={{ fontSize: 9, color: C.dim, letterSpacing: '.1em', marginBottom: 2 }}>{k}</div>
-      <div style={{ fontSize: 12, color: color ?? C.text, fontWeight: 600 }}>{v}</div>
+      <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 3 }}>{k}</div>
+      <div style={{ fontSize: F.md, color: color ?? C.text, fontWeight: 600 }}>{v}</div>
     </div>
   )
 }
 
 const lbl: React.CSSProperties = {
-  display: 'block', fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 4,
+  display: 'block', fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 4,
 }
 const inp: React.CSSProperties = {
-  width: '100%', padding: '8px 10px',
+  width: '100%', padding: '10px 12px',
   background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
-  color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none',
+  color: C.text, fontSize: F.base, fontFamily: 'inherit', outline: 'none',
 }
 const kvBox: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 14,
-  padding: 10, background: C.surface, borderRadius: 4,
+  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 16,
+  padding: 12, background: C.surface, borderRadius: 4,
 }
-const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 11 }
+const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: F.base }
 const th: React.CSSProperties = {
-  padding: '4px 8px', fontSize: 10, color: C.dim, fontWeight: 400,
+  padding: '6px 10px', fontSize: F.xs, color: C.dim, fontWeight: 400,
   borderBottom: `1px solid ${C.border}`, textAlign: 'left',
 }
-const td: React.CSSProperties = { padding: '5px 8px', color: C.text }
+const td: React.CSSProperties = { padding: '7px 10px', color: C.text }

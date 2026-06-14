@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { C } from '../theme'
+import { C, F, tint } from '../theme'
 import { BOOT_LINES, MOCK_VENUES } from '../mockData'
 import { useAuthStore } from '../stores/authStore'
 
@@ -46,7 +46,7 @@ export function Login() {
   }
   const inputStyle: React.CSSProperties = {
     flex: 1, background: 'none', border: 'none', outline: 'none',
-    color: C.text, fontSize: 12, fontFamily: 'inherit',
+    color: C.text, fontSize: F.base, fontFamily: 'inherit',
   }
 
   return (
@@ -60,19 +60,19 @@ export function Login() {
         justifyContent: 'space-between', padding: 32,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: C.accent, fontSize: 18 }}>⚡</span>
-          <span style={{ fontSize: 13, letterSpacing: '.08em' }}>SOR // COMMAND CENTER</span>
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.dim }}>v4.12.3</span>
+          <span style={{ color: C.accent, fontSize: 18 }}></span>
+          <span style={{ fontSize: F.md, letterSpacing: '.08em' }}>SOR // COMMAND CENTER</span>
+          <span style={{ marginLeft: 'auto', fontSize: F.xs, color: C.dim }}>v4.12.3</span>
         </div>
 
         <div>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.15em', marginBottom: 8 }}>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em', marginBottom: 8 }}>
             // SYSTEM BOOT
           </div>
           <div style={{ minHeight: 90 }}>
             {BOOT_LINES.slice(0, bootIdx).map((line, i) => (
               <div key={i} style={{
-                fontSize: 11, lineHeight: 1.8,
+                fontSize: F.sm, lineHeight: 1.8,
                 color: i === bootIdx - 1 ? C.accent : C.muted,
               }}>
                 {line}
@@ -85,7 +85,7 @@ export function Login() {
         </div>
 
         <div>
-          <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.15em', marginBottom: 6 }}>
+          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em', marginBottom: 6 }}>
             // VENUE GATEWAYS
           </div>
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
@@ -96,7 +96,7 @@ export function Login() {
                 <div key={v.id} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '6px 12px', borderBottom: `1px solid ${C.border2}`,
-                  background: C.surface, fontSize: 11,
+                  background: C.surface, fontSize: F.sm,
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
                   <span style={{ width: 90 }}>{v.name}</span>
@@ -110,7 +110,7 @@ export function Login() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 16, fontSize: 10, color: C.dim }}>
+        <div style={{ display: 'flex', gap: 16, fontSize: F.xs, color: C.dim }}>
           <span>REGION local</span>
           <span>NODE sor-p01</span>
           <span style={{ marginLeft: 'auto', color: C.muted }}>{clock}</span>
@@ -123,19 +123,19 @@ export function Login() {
 
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ color: C.accent }}>🔒</span>
-              <span style={{ fontSize: 10, color: C.dim, letterSpacing: '.15em' }}>SECURE ACCESS</span>
+              <span style={{ color: C.accent }}></span>
+              <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>SECURE ACCESS</span>
             </div>
-            <div style={{ fontSize: 22, letterSpacing: '-.3px', marginBottom: 4 }}>Sign in to continue</div>
-            <div style={{ fontSize: 12, color: C.muted }}>
+            <div style={{ fontSize: F.xxl, letterSpacing: '-.3px', marginBottom: 4 }}>Sign in to continue</div>
+            <div style={{ fontSize: F.base, color: C.muted }}>
               Operator credentials required. All sessions are audited.
             </div>
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>OPERATOR ID</div>
+            <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>OPERATOR ID</div>
             <div style={fieldStyle}>
-              <span style={{ color: C.dim }}>👤</span>
+              <span style={{ color: C.dim }}></span>
               <input
                 value={user}
                 onChange={(e) => setUser(e.target.value)}
@@ -144,14 +144,14 @@ export function Login() {
               />
             </div>
 
-            <div style={{ fontSize: 10, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>PASSPHRASE</div>
+            <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>PASSPHRASE</div>
             <div style={fieldStyle}>
-              <span style={{ color: C.dim }}>🔑</span>
+              <span style={{ color: C.dim }}></span>
               <input
                 type="password"
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
-                placeholder="••••••••••••"
+                placeholder="¢¢¢¢¢¢¢¢¢¢¢¢"
                 autoFocus
                 style={{ ...inputStyle, letterSpacing: 3 }}
                 autoComplete="current-password"
@@ -160,10 +160,10 @@ export function Login() {
 
             {error && (
               <div style={{
-                background: '#E24B4A15', border: `1px solid #E24B4A40`,
-                borderRadius: 4, padding: '8px 12px', color: C.red, fontSize: 11, marginBottom: 10,
+                background: tint(C.red, 8), border: `1px solid #E24B4A40`,
+                borderRadius: 4, padding: '8px 12px', color: C.red, fontSize: F.sm, marginBottom: 10,
               }}>
-                ⚠ {error}
+                 {error}
               </div>
             )}
 
@@ -171,15 +171,15 @@ export function Login() {
               width: '100%', height: 40, border: 'none', borderRadius: 4,
               background: loading ? C.surface : C.accent,
               color: loading ? C.muted : C.bg,
-              fontSize: 12, letterSpacing: '.1em', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
+              fontSize: F.base, letterSpacing: '.1em', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
-              {loading ? 'AUTHENTICATING…' : 'CONTINUE →'}
+              {loading ? 'AUTHENTICATING…' : 'CONTINUE >'}
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
               <div style={{ flex: 1, height: 1, background: C.border }} />
-              <span style={{ fontSize: 9, color: C.dim, letterSpacing: '.15em' }}>DEMO ACCOUNTS</span>
+              <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>DEMO ACCOUNTS</span>
               <div style={{ flex: 1, height: 1, background: C.border }} />
             </div>
 
@@ -193,11 +193,11 @@ export function Login() {
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '7px 12px', border: `1px solid ${C.border}`,
                     borderRadius: 4, background: C.surface, color: C.text,
-                    fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
+                    fontSize: F.sm, fontFamily: 'inherit', cursor: 'pointer',
                   }}
                 >
                   <span style={{ color: C.text }}>{acct.user}</span>
-                  <span style={{ color: C.dim, fontSize: 10 }}>{acct.role}</span>
+                  <span style={{ color: C.dim, fontSize: F.xs }}>{acct.role}</span>
                 </button>
               ))}
             </div>
@@ -205,9 +205,9 @@ export function Login() {
 
           <div style={{
             marginTop: 28, paddingTop: 12, borderTop: `1px solid ${C.border2}`,
-            display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.dim,
+            display: 'flex', justifyContent: 'space-between', fontSize: F.xs, color: C.dim,
           }}>
-            <span>© 2026 DEIRCP PLATFORM</span>
+            <span>Â© 2026 DEIRCP PLATFORM</span>
             <span>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: C.green, marginRight: 4 }} />
               Connected to localhost:8000

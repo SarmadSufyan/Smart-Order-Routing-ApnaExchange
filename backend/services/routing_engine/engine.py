@@ -97,6 +97,15 @@ class RoutingEngine:
         result = await self._strategy.route(order, nbbo, routable)
         result.routing_time_ms = round((time.monotonic() - start) * 1000, 2)
 
+        # Persist the decision snapshot on the parent order so the UI can
+        # show the panel exactly what the SOR considered and why.
+        if result.decision is not None:
+            try:
+                stored = self._orders.get_order(order.id)
+                stored.routing_decision = result.decision.model_dump()
+            except Exception:
+                pass
+
         if result.status == RoutingStatus.REJECTED:
             await self._orders.transition(
                 order.id,
