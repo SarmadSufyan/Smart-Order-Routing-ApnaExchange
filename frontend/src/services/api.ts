@@ -85,6 +85,31 @@ export interface ChildOrder {
   status: string
 }
 
+export interface VenueCandidate {
+  venue_id: string
+  price: number
+  size: number
+  rank: number
+  eligible: boolean
+  excluded_reason?: string | null
+  allocated_qty: number
+  is_winner: boolean
+}
+
+export interface RoutingDecision {
+  side: string
+  requested_quantity: number
+  total_allocated: number
+  candidates: VenueCandidate[]
+  winning_venues: string[]
+  blended_avg_price: number
+  worst_price: number
+  savings_per_share: number
+  total_savings: number
+  is_split: boolean
+  notes: string[]
+}
+
 export interface Order {
   id: string
   symbol: string
@@ -98,6 +123,7 @@ export interface Order {
   created_at: string
   updated_at: string
   child_orders: ChildOrder[]
+  routing_decision?: RoutingDecision | null
 }
 
 // Backend risk status shape (raw)

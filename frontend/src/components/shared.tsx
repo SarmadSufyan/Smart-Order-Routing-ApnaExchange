@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { C } from '../theme'
+import { C, F, tint, resolveColor } from '../theme'
+import { useThemeStore } from '../stores/themeStore'
 import type { VenueStatus, OrderState } from '../types'
 
-// ── Connection dot ─────────────────────────────────────────────
+// â”€â”€ Connection dot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function ConnDot({ status }: { status: VenueStatus }) {
   const color =
     status === 'Connected'    ? C.green  :
@@ -16,24 +17,24 @@ export function ConnDot({ status }: { status: VenueStatus }) {
   )
 }
 
-// ── Order state badge ──────────────────────────────────────────
+// â”€â”€ Order state badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function StateBadge({ state }: { state: OrderState }) {
   const map: Record<OrderState, { bg: string; color: string }> = {
-    Filled:          { bg: '#4CAF5020', color: C.green  },
-    Working:         { bg: '#3B8BD420', color: C.blue   },
-    PartiallyFilled: { bg: '#EF9F2720', color: C.orange },
-    Rejected:        { bg: '#E24B4A20', color: C.red    },
-    Cancelled:       { bg: '#5F5E5A30', color: C.dim    },
+    Filled:          { bg: tint(C.green, 13), color: C.green  },
+    Working:         { bg: tint(C.blue, 13), color: C.blue   },
+    PartiallyFilled: { bg: tint(C.orange, 13), color: C.orange },
+    Rejected:        { bg: tint(C.red, 13), color: C.red    },
+    Cancelled:       { bg: tint(C.dim, 19), color: C.dim    },
   }
   const s = map[state]
   return (
-    <span style={{ background: s.bg, color: s.color, padding: '1px 6px', borderRadius: 3, fontSize: 9, whiteSpace: 'nowrap' }}>
+    <span style={{ background: s.bg, color: s.color, padding: '1px 6px', borderRadius: 3, fontSize: F.xs, whiteSpace: 'nowrap' }}>
       {state}
     </span>
   )
 }
 
-// ── Card wrapper ───────────────────────────────────────────────
+// â”€â”€ Card wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
@@ -45,20 +46,21 @@ export function Card({ children, style }: { children: React.ReactNode; style?: R
   )
 }
 
-// ── Card title ─────────────────────────────────────────────────
+// â”€â”€ Card title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function CardTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+    <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 10, letterSpacing: '.05em', textTransform: 'uppercase' }}>
       {children}
     </div>
   )
 }
 
-// ── Arc Gauge (canvas) ────────────────────────────────────────
+// â”€â”€ Arc Gauge (canvas) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function ArcGauge({ value, max, label, unit, size = 110 }: {
   value: number; max: number; label: string; unit: string; size?: number
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const themeMode = useThemeStore((s) => s.mode)
   useEffect(() => {
     const c = ref.current; if (!c) return
     const ctx = c.getContext('2d')!
@@ -69,34 +71,37 @@ export function ArcGauge({ value, max, label, unit, size = 110 }: {
     const color = pct > 0.8 ? C.red : pct > 0.6 ? C.orange : C.blue
     ctx.clearRect(0, 0, w, h)
     ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI)
-    ctx.strokeStyle = C.border; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.stroke()
+    ctx.strokeStyle = resolveColor(C.border); ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.stroke()
     ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * pct)
-    ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.stroke()
-  }, [value, max, size])
+    ctx.strokeStyle = resolveColor(color); ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.stroke()
+  }, [value, max, size, themeMode])
   return (
     <div style={{ textAlign: 'center' }}>
       <canvas ref={ref} style={{ display: 'block', margin: '0 auto' }} />
-      <div style={{ fontSize: 13, color: C.text, marginTop: 2 }}>
-        {value.toLocaleString()} <span style={{ fontSize: 10, color: C.muted }}>{unit}</span>
+      <div style={{ fontSize: F.md, color: C.text, marginTop: 2 }}>
+        {value.toLocaleString()} <span style={{ fontSize: F.xs, color: C.muted }}>{unit}</span>
       </div>
-      <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+      <div style={{ fontSize: F.xs, color: C.muted }}>{label}</div>
     </div>
   )
 }
 
-// ── Sparkline chart ───────────────────────────────────────────
+// â”€â”€ Sparkline chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function Sparkline({ data }: { data: number[] }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const themeMode = useThemeStore((s) => s.mode)
   useEffect(() => {
     const c = ref.current; if (!c) return
     const ctx = c.getContext('2d')!
     const w = c.parentElement?.offsetWidth ?? 300, h = 80
     c.width = w; c.height = h
     const mn = 0, mx = 180
+    const borderC = resolveColor(C.border)
+    const blueC = resolveColor(C.blue)
     ctx.clearRect(0, 0, w, h)
     ;[0.25, 0.5, 0.75].forEach(f => {
       ctx.beginPath(); ctx.moveTo(0, h - f * h); ctx.lineTo(w, h - f * h)
-      ctx.strokeStyle = C.border; ctx.lineWidth = 0.5; ctx.stroke()
+      ctx.strokeStyle = borderC; ctx.lineWidth = 0.5; ctx.stroke()
     })
     ctx.beginPath()
     data.forEach((v, i) => {
@@ -104,16 +109,18 @@ export function Sparkline({ data }: { data: number[] }) {
       const y = h - ((v - mn) / (mx - mn)) * h
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
     })
-    ctx.strokeStyle = C.blue; ctx.lineWidth = 1.5; ctx.stroke()
+    ctx.strokeStyle = blueC; ctx.lineWidth = 1.5; ctx.stroke()
     ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath()
-    ctx.fillStyle = '#3B8BD415'; ctx.fill()
-  }, [data])
+    // canvas alpha fill — use rgba with 8% of the blue
+    ctx.fillStyle = blueC; ctx.globalAlpha = 0.08; ctx.fill(); ctx.globalAlpha = 1
+  }, [data, themeMode])
   return <canvas ref={ref} style={{ width: '100%', display: 'block' }} />
 }
 
-// ── Latency chart ─────────────────────────────────────────────
+// â”€â”€ Latency chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function LatencyChart() {
   const ref = useRef<HTMLCanvasElement>(null)
+  const themeMode = useThemeStore((s) => s.mode)
   useEffect(() => {
     const c = ref.current; if (!c) return
     const ctx = c.getContext('2d')!
@@ -121,9 +128,9 @@ export function LatencyChart() {
     c.width = w; c.height = h
     const pts = 30, maxVal = 1200
     const series = [
-      { color: C.blue,   base: 142 },
-      { color: C.green,  base: 98  },
-      { color: C.purple, base: 215 },
+      { color: resolveColor(C.blue),   base: 142 },
+      { color: resolveColor(C.green),  base: 98  },
+      { color: resolveColor(C.purple), base: 215 },
     ]
     series.forEach(s => {
       const data = Array.from({ length: pts }, () => s.base * (1 + (Math.random() - .5) * .2))
@@ -134,26 +141,31 @@ export function LatencyChart() {
       })
       ctx.strokeStyle = s.color; ctx.lineWidth = 1.5; ctx.stroke()
     })
-    // BATS spike
+    const orangeC = resolveColor(C.orange)
     const bats = Array.from({ length: pts }, (_, i) => 300 + Math.random() * 100 + (i > 10 && i < 20 ? 700 : 0))
     ctx.beginPath()
     bats.forEach((v, i) => {
       const x = (i / (pts - 1)) * w, y = h - 10 - ((Math.min(v, maxVal) / maxVal) * (h - 20))
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
     })
-    ctx.strokeStyle = C.orange; ctx.lineWidth = 1.5; ctx.stroke()
-    // Legend
-    const legs = [{ n: 'NYSE', c: C.blue }, { n: 'NASDAQ', c: C.green }, { n: 'BATS', c: C.orange }, { n: 'IEX', c: C.purple }]
+    ctx.strokeStyle = orangeC; ctx.lineWidth = 1.5; ctx.stroke()
+    const mutedC = resolveColor(C.muted)
+    const legs = [
+      { n: 'NYSE',   c: resolveColor(C.blue) },
+      { n: 'NASDAQ', c: resolveColor(C.green) },
+      { n: 'BATS',   c: orangeC },
+      { n: 'IEX',    c: resolveColor(C.purple) },
+    ]
     legs.forEach((l, i) => {
       ctx.fillStyle = l.c; ctx.fillRect(i * 90 + 8, h - 14, 20, 2)
-      ctx.fillStyle = C.muted; ctx.font = '10px Consolas,monospace'
+      ctx.fillStyle = mutedC; ctx.font = '11px Consolas,monospace'
       ctx.fillText(l.n, i * 90 + 32, h - 6)
     })
-  }, [])
+  }, [themeMode])
   return <canvas ref={ref} style={{ width: '100%', display: 'block' }} />
 }
 
-// ── Format helpers ────────────────────────────────────────────
+// â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function fmtAge(ms: number): string {
   const s = Math.floor(ms / 1000)
   return s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`
@@ -161,6 +173,6 @@ export function fmtAge(ms: number): string {
 
 export function fmtLatency(us: number): string {
   if (us === 0) return '—'
-  if (us < 1000) return `${us} µs`
+  if (us < 1000) return `${us} Âµs`
   return `${(us / 1000).toFixed(1)} ms`
 }
