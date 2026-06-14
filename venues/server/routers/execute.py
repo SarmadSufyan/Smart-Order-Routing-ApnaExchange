@@ -1,8 +1,7 @@
 """
 server/routers/execute.py
 
-POST /execute-order → fill / partial / reject.
-Domain exceptions from fill_simulator are caught here and converted to HTTP responses.
+POST /execute-order → fill / partial / reject using per-symbol engines.
 """
 
 from __future__ import annotations
@@ -22,16 +21,16 @@ logger = structlog.get_logger()
 class ExecuteOrderRequest(BaseModel):
     child_order_id: str
     symbol: str
-    side: str             # "BUY" or "SELL"
+    side: str
     quantity: int
     price: float
-    order_type: str = "MARKET"   # "MARKET" or "LIMIT"
+    order_type: str = "MARKET"
 
 
 class ExecuteOrderResponse(BaseModel):
     child_order_id: str
     venue_id: str
-    exec_type: str              # "FILL" / "PARTIAL" / "REJECT"
+    exec_type: str
     filled_qty: int = 0
     fill_price: float = 0.0
     venue_exec_id: Optional[str] = None
@@ -42,7 +41,7 @@ class ExecuteOrderResponse(BaseModel):
 
 @router.post("/execute-order", response_model=ExecuteOrderResponse)
 async def execute_order(req: ExecuteOrderRequest) -> ExecuteOrderResponse:
-    from server.venue_app import get_engines
+    from server.venue_app import get_engines, get_symbol_engines
 
     engines = get_engines()
 
@@ -51,14 +50,18 @@ async def execute_order(req: ExecuteOrderRequest) -> ExecuteOrderResponse:
     if req.quantity <= 0:
         raise HTTPException(status_code=400, detail="quantity must be positive")
 
-    # Inject venue latency
+    try:
+        se = get_symbol_engines(req.symbol)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     latency_ms = await engines.latency.inject()
 
     now = datetime.now(timezone.utc)
     ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
     try:
-        result = engines.fill_sim.execute(
+        result = se.fill_sim.execute(
             side=req.side.upper(),
             quantity=req.quantity,
             price=req.price,
@@ -75,10 +78,11 @@ async def execute_order(req: ExecuteOrderRequest) -> ExecuteOrderResponse:
             timestamp=ts,
         )
 
-    exec_id = engines.fill_sim.next_exec_id()
+    exec_id = se.fill_sim.next_exec_id()
 
     logger.info("execute_order.done",
                 venue_id=engines.profile.venue_id,
+                symbol=req.symbol,
                 child_order_id=req.child_order_id,
                 exec_type=result.exec_type.value,
                 filled_qty=result.filled_qty,

@@ -50,14 +50,21 @@ class PriceEngine:
     All state is in-memory; nothing persists across restarts.
     """
 
-    def __init__(self, profile: VenueProfile) -> None:
+    def __init__(
+        self,
+        profile: VenueProfile,
+        initial_price: float | None = None,
+        volatility_mult: float = 1.0,
+    ) -> None:
         self._profile = profile
-        self._price: float = profile.initial_price
-        self._initial_price: float = profile.initial_price
+        price = initial_price if initial_price is not None else profile.initial_price
+        self._price: float = price
+        self._initial_price: float = price
+        self._volatility_mult: float = volatility_mult
         self._regime: Regime = Regime.NORMAL
         self._rng = np.random.default_rng()
         self._tick_count: int = 0
-        self._last_price: float = profile.initial_price  # last trade price
+        self._last_price: float = price
         self._volume: int = 0
         self._running: bool = False
         self._task: asyncio.Task | None = None
@@ -130,7 +137,7 @@ class PriceEngine:
     def _regime_params(self) -> tuple[float, float]:
         """Return (drift_per_tick, vol_per_tick) adjusted for current regime."""
         base_mu = self._profile.drift
-        base_sigma = self._profile.volatility
+        base_sigma = self._profile.volatility * self._volatility_mult
 
         if self._regime == Regime.NORMAL:
             return base_mu, base_sigma
