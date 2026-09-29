@@ -65,3 +65,13 @@ secrets/
 # AI assistant — per-developer local settings & cache (not shared project rules)
 .claude/local/
 .claude/settings.local.json
+
+# Local working docs (not for the team / not pushed)
+PLAN.md
+NOTES.md
+SCRATCH.md
+
+# Obsidian vault — personal knowledge base
+notes/
+.obsidian/
+.trash/

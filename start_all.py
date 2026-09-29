@@ -1,84 +1,69 @@
 """
-Start all services for DEIRCP POC: 5 venues + API gateway.
-Run from the project root: python start_all.py
+Start ApnaSOR locally: API gateway (+ frontend dev server).
+
+Run from the project root:
+    python start_all.py               # gateway + frontend
+    python start_all.py --no-frontend # gateway only
+
+The gateway connects to the exchanges configured in .env (EXCHANGE_MODE,
+ENABLED_EXCHANGES, *_API_KEY). The old venue simulators are retired — see
+the archive/venue-simulators branch.
 """
 
+import argparse
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import time
-import signal
 
-VENUES = [
-    ("V1", "AlphaExchange", "8001", "alpha_exchange", "false"),
-    ("V2", "BetaLiquidity", "8002", "beta_liquidity", "false"),
-    ("V3", "GammaMarkets", "8003", "gamma_markets", "true"),
-    ("V4", "DeltaPrime", "8004", "delta_prime", "false"),
-    ("V5", "EpsilonPool", "8005", "epsilon_pool", "false"),
-]
+ROOT = os.path.dirname(os.path.abspath(__file__))
 
-def main():
-    root = os.path.dirname(os.path.abspath(__file__))
-    venues_dir = os.path.join(root, "venues")
-    processes = []
 
-    print("=" * 60)
-    print("  DEIRCP - Starting all services")
-    print("=" * 60)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Start ApnaSOR locally")
+    parser.add_argument("--no-frontend", action="store_true", help="start only the API gateway")
+    args = parser.parse_args()
 
-    for vid, name, port, profile, degraded in VENUES:
-        env = os.environ.copy()
-        env["VENUE_ID"] = vid
-        env["VENUE_NAME"] = name
-        env["VENUE_PORT"] = port
-        env["VENUE_PROFILE"] = profile
-        env["VENUE_DEGRADED"] = degraded
-
-        cmd = [
-            sys.executable, "-m", "uvicorn",
-            "server.venue_app:app",
-            "--host", "127.0.0.1",
-            "--port", port,
-            "--log-level", "warning",
-        ]
-
-        proc = subprocess.Popen(cmd, env=env, cwd=venues_dir)
-        processes.append(proc)
-        deg = " [DEGRADED]" if degraded == "true" else ""
-        print(f"  {vid} {name:20s} http://127.0.0.1:{port}{deg}")
-        time.sleep(0.3)
-
-    print()
-
+    processes: list[tuple[str, subprocess.Popen]] = []
     env = os.environ.copy()
-    env["PYTHONPATH"] = root
+    env["PYTHONPATH"] = ROOT
 
-    gateway_cmd = [
-        sys.executable, "-m", "uvicorn",
-        "backend.gateway.main:app",
-        "--host", "127.0.0.1",
-        "--port", "8000",
-    ]
+    print("=" * 60)
+    print("  ApnaSOR - starting services")
+    print("=" * 60)
 
-    gateway_proc = subprocess.Popen(gateway_cmd, env=env, cwd=root)
-    processes.append(gateway_proc)
-    print(f"  Gateway  http://127.0.0.1:8000")
-    print(f"  Swagger  http://127.0.0.1:8000/docs")
+    gateway = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.gateway.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        env=env,
+        cwd=ROOT,
+    )
+    processes.append(("Gateway", gateway))
+    print("  Gateway   http://127.0.0.1:8000   (Swagger: /docs)")
+
+    if not args.no_frontend:
+        npm = shutil.which("npm")
+        if npm is None:
+            print("  Frontend  skipped - npm not found on PATH")
+        else:
+            frontend = subprocess.Popen([npm, "run", "dev"], cwd=os.path.join(ROOT, "frontend"))
+            processes.append(("Frontend", frontend))
+            print("  Frontend  http://localhost:5173")
+
     print()
-    print(f"  Press Ctrl+C to stop all services.")
+    print("  Order books take a few seconds to sync after start-up.")
+    print("  Press Ctrl+C to stop everything.")
     print()
 
-    def shutdown(sig, frame):
-        print("\n  Stopping all services...")
-        for p in processes:
+    def shutdown(*_: object) -> None:
+        print("\n  Stopping services...")
+        for _, proc in processes:
             try:
-                p.terminate()
-                p.wait(timeout=3)
-            except Exception:
-                try:
-                    p.kill()
-                except Exception:
-                    pass
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:  # noqa: BLE001
+                proc.kill()
         print("  Done.")
         sys.exit(0)
 
@@ -86,15 +71,13 @@ def main():
 
     try:
         while True:
-            for i, proc in enumerate(processes):
+            for name, proc in processes:
                 if proc.poll() is not None:
-                    if i < len(VENUES):
-                        print(f"  {VENUES[i][0]} exited with code {proc.returncode}")
-                    else:
-                        print(f"  Gateway exited with code {proc.returncode}")
+                    print(f"  {name} exited with code {proc.returncode}")
+                    shutdown()
             time.sleep(2)
     except KeyboardInterrupt:
-        shutdown(None, None)
+        shutdown()
 
 
 if __name__ == "__main__":
