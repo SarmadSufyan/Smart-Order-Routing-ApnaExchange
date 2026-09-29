@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
-import { isVenueBlacklisted } from '../adapters'
+import { isVenueBlacklisted, LATENCY_WARN_MS } from '../adapters'
 
 type Alert = {
   sev: 'Critical' | 'Warning' | 'Info'
@@ -59,7 +59,7 @@ export function KillSwitch() {
           msg: `${v.name} blacklisted — excluded from routing`,
           status: 'Active', time: '—',
         })
-      } else if ((v.status || '').toUpperCase() === 'DEGRADED' || v.latency_ms > 80) {
+      } else if ((v.status || '').toUpperCase() === 'DEGRADED' || v.latency_ms > LATENCY_WARN_MS) {
         list.push({
           sev: 'Warning', sys: 'Venue Adapter',
           msg: `${v.name} latency elevated — ${v.latency_ms.toFixed(0)}ms`,
@@ -265,7 +265,7 @@ export function KillSwitch() {
                   <tr key={v.venue_id} style={{ ...tr, background: tint(C.orange, 3) }}>
                     <td style={{ padding: '7px 6px', color: C.orange }}>{v.name}</td>
                     <td style={{ padding: '7px 6px', color: C.muted }}>{v.cloud}</td>
-                    <td style={{ padding: '7px 6px', textAlign: 'right', color: C.muted }}>{v.health_score?.toFixed(0)}%</td>
+                    <td style={{ padding: '7px 6px', textAlign: 'right', color: C.muted }}>{((v.health_score ?? 0) * 100).toFixed(0)}%</td>
                     <td style={{ padding: '7px 6px', textAlign: 'right', color: C.red }}>BLACKLISTED</td>
                   </tr>
                 ))}

@@ -1,5 +1,6 @@
 import React from 'react'
 import { C, F, tint } from '../theme'
+import { fmtPrice, fmtQty } from '../format'
 import { RoutingProof } from './RoutingProof'
 import type { Order as BackendOrder } from '../services/api'
 
@@ -70,8 +71,9 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
                 Order {stateLabel} · Routing Proof
               </div>
               <div style={{ fontSize: F.sm, color: C.dim }}>
-                {order.id.slice(0, 8).toUpperCase()} · {order.symbol} · {order.side} {order.quantity.toFixed(0)}
-                {order.avg_fill_price > 0 && ` @ avg $${order.avg_fill_price.toFixed(2)}`}
+                {order.id.slice(0, 8).toUpperCase()} · {order.symbol} · {order.side} {fmtQty(order.quantity)}
+                {order.avg_fill_price > 0 && ` · filled @ ${fmtPrice(order.avg_fill_price)}`}
+                {order.child_orders[0]?.exchange_order_id && ` · exchange id ${order.child_orders[0].exchange_order_id}`}
                 {resolvedVenue && ` · ${resolvedVenue}`}
               </div>
             </div>
@@ -81,7 +83,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
 
         <div style={{ padding: '14px 18px' }}>
           {order.routing_decision ? (
-            <RoutingProof decision={order.routing_decision} symbol={order.symbol} />
+            <RoutingProof decision={order.routing_decision} symbol={order.symbol} fillPrice={order.avg_fill_price} />
           ) : (
             <div style={{ padding: 28, textAlign: 'center', color: C.dim, fontSize: F.base }}>
               <div style={{ fontSize: F.xxl, marginBottom: 8 }}>ⓘ</div>

@@ -4,8 +4,9 @@ import { Card, CardTitle, ConnDot, StateBadge, ArcGauge, Sparkline, fmtAge } fro
 import { NewOrderModal } from '../components/NewOrderModal'
 import { OrderProofModal } from '../components/OrderProofModal'
 import { useDataStore } from '../stores/dataStore'
-import { backendOrderToUi, backendVenueToUi } from '../adapters'
+import { backendOrderToUi, backendVenueToUi, fmtRate, LATENCY_WARN_MS } from '../adapters'
 import { SYMBOLS } from '../mockData'
+import { fmtPrice, fmtQty, spreadBps } from '../format'
 
 const RAFT_NODES = [
   { id: 'node-01', role: 'LEADER',      healthy: true,  hb: '45ms' },
@@ -13,8 +14,9 @@ const RAFT_NODES = [
   { id: 'node-03', role: 'FOLLOWER',    healthy: true,  hb: '52ms' },
 ]
 
-const POSITION_LIMIT = 25000
-const NOTIONAL_LIMIT = 1_000_000
+// Demo "book sweep" order size: big enough to walk past the best level on a
+// thin book, small enough to stay under the default $10k per-order limit.
+const DEMO_NOTIONAL_USD = 4_000
 
 export function Dashboard() {
   const backendVenues   = useDataStore((s) => s.venues)
@@ -30,21 +32,20 @@ export function Dashboard() {
     ? backendOrders.find((o) => o.id === selectedOrderId) ?? null
     : null
 
-  // Pick the symbol with the freshest NBBO across the most venues for the demo
-  function pickDemoSymbol(): string {
-    let best = 'AAPL'
-    let bestEligibleVenues = 0
+  // Demo: pick the symbol whose best ask holds the LEAST value, then size the
+  // order at ~$4k so it has the best chance of walking several price levels.
+  function pickDemo(): { symbol: string; qty: string } {
+    let best: { symbol: string; topValue: number; ask: number } | null = null
     for (const sym of SYMBOLS) {
       const n = nbbos[sym]
       if (!n?.best_ask || n.best_ask <= 0) continue
-      const venueCount = Object.keys(n).length
-      if (venueCount > bestEligibleVenues) {
-        bestEligibleVenues = venueCount
-        best = sym
-      }
+      const topValue = n.best_ask * n.best_ask_size
+      if (!best || topValue < best.topValue) best = { symbol: sym, topValue, ask: n.best_ask }
     }
-    return best
+    if (!best) return { symbol: SYMBOLS[0], qty: '' }
+    return { symbol: best.symbol, qty: String(Number((DEMO_NOTIONAL_USD / best.ask).toPrecision(3))) }
   }
+  const demo = pickDemo()
 
   const orders = backendOrders.slice(0, 12).map(backendOrderToUi)
   const venues = backendVenues.map(backendVenueToUi)
@@ -59,10 +60,12 @@ export function Dashboard() {
     setThroughput((prev) => [...prev.slice(1), routingStats?.orders_routed_today ?? 0])
   }, [routingStats?.orders_routed_today])
 
-  const netSharesAbs = riskStatus
-    ? Object.values(riskStatus.positions || {}).reduce((sum, p) => sum + Math.abs(p.net_quantity || 0), 0)
+  // Summing BTC + XRP units is meaningless, so count symbols with a position.
+  const openPositions = riskStatus
+    ? Object.values(riskStatus.positions || {}).filter((p) => Math.abs(p.net_quantity || 0) > 0).length
     : 0
   const notional = Math.max(0, riskStatus?.total_exposure ?? 0)
+  const notionalLimit = riskStatus?.exposure_limit || 1_000_000
   const ordersToday = routingStats?.orders_routed_today ?? 0
 
   const th: React.CSSProperties = { padding: '3px 6px', fontSize: F.xs, color: C.dim, textAlign: 'left', borderBottom: `1px solid ${C.border}`, fontWeight: 400 }
@@ -85,9 +88,9 @@ export function Dashboard() {
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = tint(C.orange, 18))}
             onMouseLeave={(e) => (e.currentTarget.style.background = tint(C.orange, 10))}
-            title="Submits an oversized order that forces the SOR to split across multiple venues"
+            title="Pre-fills a ~$4k order on the thinnest book so the SOR walks several price levels"
           >
-            ⚡ Demo: Liquidity Sweep
+            ⚡ Demo: Book Sweep
           </button>
           <button
             onClick={() => { setDemoMode(false); setShowOrderModal(true) }}
@@ -146,7 +149,7 @@ export function Dashboard() {
                     <span style={{ color: C.dim, width: 64, fontSize: F.xs, flexShrink: 0 }}>{o.id}</span>
                     <span style={{ width: 50, fontWeight: 600 }}>{o.sym}</span>
                     <span style={{ color: o.side === 'BUY' ? C.green : C.red, width: 30, fontSize: F.xs, fontWeight: 700 }}>{o.side}</span>
-                    <span style={{ color: C.muted, width: 40, textAlign: 'right' }}>{o.qty.toLocaleString()}</span>
+                    <span style={{ color: C.muted, width: 70, textAlign: 'right' }}>{fmtQty(o.qty, 5)}</span>
                     <StateBadge state={o.state} />
                     <span style={{
                       color: C.blue, fontSize: F.xs, background: tint(C.blue, 14),
@@ -215,11 +218,11 @@ export function Dashboard() {
                   return (
                     <tr key={s} style={tr}>
                       <td style={{ padding: '6px', fontWeight: 600 }}>{s}</td>
-                      <td style={{ padding: '6px', textAlign: 'right', color: C.green }}>{n.best_bid?.toFixed(2)}</td>
+                      <td style={{ padding: '6px', textAlign: 'right', color: C.green }}>{fmtPrice(n.best_bid)}</td>
                       <td style={{ padding: '6px', textAlign: 'center', color: C.dim, fontSize: 10 }}>{n.best_bid_venue}</td>
-                      <td style={{ padding: '6px', textAlign: 'right', color: C.red   }}>{n.best_ask?.toFixed(2)}</td>
+                      <td style={{ padding: '6px', textAlign: 'right', color: C.red   }}>{fmtPrice(n.best_ask)}</td>
                       <td style={{ padding: '6px', textAlign: 'center', color: C.dim, fontSize: 10 }}>{n.best_ask_venue}</td>
-                      <td style={{ padding: '6px', textAlign: 'right', color: C.orange, fontSize: 10 }}>{n.spread?.toFixed(3)}</td>
+                      <td style={{ padding: '6px', textAlign: 'right', color: C.orange, fontSize: 10 }}>{spreadBps(n.best_bid, n.best_ask).toFixed(2)} bps</td>
                     </tr>
                   )
                 })}
@@ -247,11 +250,11 @@ export function Dashboard() {
                   }}>
                     <td style={{ padding: '6px' }}>{v.name}</td>
                     <td style={{ padding: '6px', textAlign: 'center' }}><ConnDot status={v.status} /></td>
-                    <td style={{ padding: '6px', textAlign: 'right', color: v.latencyEma > 50 ? C.orange : C.muted }}>
-                      {v.latencyEma > 0 ? v.latencyEma.toFixed(1) : '—'}
+                    <td style={{ padding: '6px', textAlign: 'right', color: v.latencyEma > LATENCY_WARN_MS ? C.orange : C.muted }}>
+                      {v.latencyEma > 0 ? v.latencyEma.toFixed(0) : '—'}
                     </td>
-                    <td style={{ padding: '6px', textAlign: 'right', color: v.fillRate > 90 ? C.green : v.fillRate > 75 ? C.orange : C.red }}>
-                      {v.fillRate}%
+                    <td style={{ padding: '6px', textAlign: 'right', color: !v.hasOrders ? C.dim : v.fillRate > 90 ? C.green : v.fillRate > 75 ? C.orange : C.red }}>
+                      {fmtRate(v, v.fillRate)}
                     </td>
                     <td style={{ padding: '6px', textAlign: 'right', color: v.rejectRate > 5 ? C.red : C.muted }}>
                       {v.rejectRate > 0 ? `${v.rejectRate}%` : '—'}
@@ -268,8 +271,8 @@ export function Dashboard() {
           <Card>
             <CardTitle>RISK GAUGES</CardTitle>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <ArcGauge value={netSharesAbs} max={POSITION_LIMIT * 5}  label="Net Position" unit="shares" size={110} />
-              <ArcGauge value={Math.round(notional)} max={NOTIONAL_LIMIT} label="Notional" unit="USD" size={110} />
+              <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open Positions" unit="symbols" size={110} />
+              <ArcGauge value={Math.round(notional)} max={notionalLimit} label="Notional" unit="USD" size={110} />
               <ArcGauge value={ordersToday} max={500} label="Orders Routed" unit="today" size={110} />
               <div style={{ textAlign: 'center', paddingTop: 8 }}>
                 <div style={{ fontSize: F.lg, fontWeight: 700, color: riskStatus?.kill_switch_active ? C.red : C.green }}>
@@ -320,11 +323,11 @@ export function Dashboard() {
       <NewOrderModal
         open={showOrderModal}
         onClose={() => { setShowOrderModal(false); setDemoMode(false) }}
-        initialSymbol={demoMode ? pickDemoSymbol() : 'AAPL'}
-        initialSide={demoMode ? 'BUY' : 'BUY'}
-        initialQty={demoMode ? '700' : ''}
+        initialSymbol={demoMode ? demo.symbol : SYMBOLS[0]}
+        initialSide="BUY"
+        initialQty={demoMode ? demo.qty : ''}
         banner={demoMode
-          ? 'DEMO — oversized 700-share order to force multi-venue split. Watch the SOR sweep down the book.'
+          ? `DEMO — ~$${DEMO_NOTIONAL_USD.toLocaleString()} of ${demo.symbol} on the thinnest book. The SOR walks the consolidated book; with 2+ exchanges connected it splits across venues.`
           : undefined}
       />
 

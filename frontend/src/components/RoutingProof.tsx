@@ -1,5 +1,6 @@
 import React from 'react'
 import { C, F, tint } from '../theme'
+import { baseAsset, fmtPrice, fmtQty, fmtSize, fmtUsd } from '../format'
 import type { RoutingDecision } from '../services/api'
 
 /**
@@ -7,23 +8,32 @@ import type { RoutingDecision } from '../services/api'
  * ────────────
  * The "show the panel WHY this is the best price" component.
  * Renders:
- *   1. A ranked table of all 5 venues with their prices, sizes, eligibility
- *   2. The winning venue(s) highlighted, with how many shares each got
- *   3. The blended avg fill price + savings vs the worst venue
- *   4. A stacked bar visualizing the split allocation
+ *   1. A ranked table of every quoting venue with price, size, eligibility
+ *   2. The winning venue(s) highlighted, with how much each received
+ *   3. The expected (pre-trade) VWAP from walking the real order book
+ *   4. Savings vs the worst venue, when more than one venue competes
  *   5. Plain-English notes explaining the routing decision
  */
 
 interface Props {
   decision: RoutingDecision
   symbol: string
+  /** Actual average fill price, to compare with the pre-trade estimate. */
+  fillPrice?: number
 }
 
 // Local alias so the JSX below reads cleanly; `card` is just the surface.
 const card = C.surface
 
-export function RoutingProof({ decision, symbol }: Props) {
+export function RoutingProof({ decision, symbol, fillPrice }: Props) {
   const isBuy = decision.side === 'BUY'
+  const unit = decision.base_asset || baseAsset(symbol)
+  // Implementation shortfall: how much worse (+) or better (-) the real fill
+  // was than the price the router expected from the order book.
+  const expected = decision.blended_avg_price
+  const shortfallBps = fillPrice && expected
+    ? ((fillPrice - expected) / expected) * 10_000 * (isBuy ? 1 : -1)
+    : null
 
   const th: React.CSSProperties = {
     padding: '6px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400,
@@ -46,19 +56,34 @@ export function RoutingProof({ decision, symbol }: Props) {
               SOR DECISION · {symbol}
             </div>
             <div style={{ fontSize: F.md, color: C.text, fontWeight: 600 }}>
-              {isBuy ? 'Bought' : 'Sold'} {decision.total_allocated.toFixed(0)} shares
-              {' '}@ blended avg{' '}
-              <span style={{ color: C.green }}>${decision.blended_avg_price.toFixed(4)}</span>
+              Routed {isBuy ? 'buy' : 'sell'} of {fmtQty(decision.total_allocated)} {unit}
+              {' '}· expected VWAP{' '}
+              <span style={{ color: C.green }}>{fmtPrice(decision.blended_avg_price)}</span>
             </div>
+            <div style={{ fontSize: F.xs, color: C.muted, marginTop: 3 }}>
+              {decision.levels_used ? `${decision.levels_used} price level${decision.levels_used === 1 ? '' : 's'} walked` : 'top of book'}
+              {decision.expected_slippage_bps !== undefined && ` · ${decision.expected_slippage_bps.toFixed(2)} bps vs best price`}
+              {' '}· pre-trade estimate from the live order book
+            </div>
+            {shortfallBps !== null && (
+              <div style={{ fontSize: F.xs, color: C.muted, marginTop: 3 }}>
+                Actual fill <span style={{ color: C.text, fontWeight: 600 }}>{fmtPrice(fillPrice)}</span>
+                {' '}· shortfall{' '}
+                <span style={{ color: shortfallBps > 5 ? C.orange : C.green, fontWeight: 600 }}>
+                  {shortfallBps >= 0 ? '+' : ''}{shortfallBps.toFixed(2)} bps
+                </span>
+                {' '}vs expected (decision uses the real-market book; execution venue may differ slightly)
+              </div>
+            )}
           </div>
           {decision.total_savings > 0 && (
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>SAVED vs WORST VENUE</div>
               <div style={{ fontSize: F.lg, color: C.green, fontWeight: 700 }}>
-                +${decision.total_savings.toFixed(2)}
+                +{fmtUsd(decision.total_savings)}
               </div>
               <div style={{ fontSize: F.xs, color: C.muted }}>
-                (${decision.savings_per_share.toFixed(4)}/sh × {decision.total_allocated.toFixed(0)})
+                ({fmtPrice(decision.savings_per_share)}/{unit} × {fmtQty(decision.total_allocated)})
               </div>
             </div>
           )}
@@ -86,7 +111,7 @@ export function RoutingProof({ decision, symbol }: Props) {
                   borderRight: i < decision.winning_venues.length - 1 ? `1px solid ${C.bg}` : undefined,
                   minWidth: pct < 8 ? 'auto' : undefined,
                 }}>
-                  {pct > 10 ? `${c.venue_id} · ${c.allocated_qty.toFixed(0)}` : c.venue_id}
+                  {pct > 10 ? `${c.venue_id} · ${fmtQty(c.allocated_qty, 5)}` : c.venue_id}
                 </div>
               )
             })}
@@ -94,10 +119,10 @@ export function RoutingProof({ decision, symbol }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: F.xs, color: C.muted, marginTop: 4 }}>
             <span>
               {decision.candidates.filter((c) => c.is_winner).map((c) =>
-                `${c.allocated_qty.toFixed(0)}@$${c.price.toFixed(2)}`
+                `${fmtQty(c.allocated_qty, 5)} @ ${fmtPrice(c.price)}`
               ).join('  +  ')}
             </span>
-            <span>= avg ${decision.blended_avg_price.toFixed(4)}</span>
+            <span>= avg {fmtPrice(decision.blended_avg_price)}</span>
           </div>
         </div>
       )}
@@ -108,7 +133,7 @@ export function RoutingProof({ decision, symbol }: Props) {
         borderRadius: 6, overflow: 'hidden', marginBottom: 12,
       }}>
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>
-          VENUE COMPARISON · ranked by {isBuy ? 'lowest ask' : 'highest bid'}
+          VENUE COMPARISON · executable venues ranked by {isBuy ? 'lowest ask' : 'highest bid'}, then excluded venues
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -141,13 +166,13 @@ export function RoutingProof({ decision, symbol }: Props) {
                     {inelig && <span style={{ marginLeft: 6, color: C.red, fontSize: F.xs }}>EXCLUDED</span>}
                   </td>
                   <td style={{ ...td, textAlign: 'right', color: c.eligible ? (isBuy ? C.red : C.green) : C.dim }}>
-                    {c.price > 0 ? `$${c.price.toFixed(2)}` : '—'}
+                    {fmtPrice(c.price)}
                   </td>
                   <td style={{ ...td, textAlign: 'right', color: c.eligible ? C.muted : C.dim }}>
-                    {c.size.toFixed(0)}
+                    {fmtSize(c.size)}
                   </td>
                   <td style={{ ...td, textAlign: 'right', color: winner ? C.green : C.dim, fontWeight: winner ? 700 : 400 }}>
-                    {c.allocated_qty > 0 ? c.allocated_qty.toFixed(0) : '—'}
+                    {c.allocated_qty > 0 ? fmtQty(c.allocated_qty) : '—'}
                   </td>
                   <td style={{ ...td, color: C.muted, fontSize: F.sm }}>
                     {inelig

@@ -8,6 +8,7 @@ import { RiskManager } from './pages/RiskManager'
 import { KillSwitch } from './pages/KillSwitch'
 import { Wallet } from './pages/Wallet'
 import { HowItWorks } from './pages/HowItWorks'
+import { MarketData } from './pages/MarketData'
 import { useAuthStore } from './stores/authStore'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
           <Route index               element={<Dashboard />} />
           <Route path="wallet"       element={<Wallet />} />
           <Route path="howitworks"   element={<HowItWorks />} />
+          <Route path="market-data"  element={<MarketData />} />
           <Route path="venues"       element={<VenueHealth />} />
           <Route path="risk"         element={<RiskManager />} />
           <Route path="killswitch"   element={<KillSwitch />} />

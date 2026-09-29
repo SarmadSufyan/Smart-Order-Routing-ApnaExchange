@@ -1,13 +1,9 @@
 // Static cosmetic data only — real data comes from the dataStore via the API.
 import type { Venue, Order, Position, TokenBucket, RiskCheck, Alert, CircuitBreaker } from './types'
 
-// Skeleton venues used before first API response arrives.
+// Skeleton venue shown before the first API response arrives.
 export const MOCK_VENUES: Venue[] = [
-  { id: 1, name: 'V1 Alpha',   protocol: 'REST', status: 'Connected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
-  { id: 2, name: 'V2 Beta',    protocol: 'REST', status: 'Connected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
-  { id: 3, name: 'V3 Gamma',   protocol: 'REST', status: 'Degraded',  latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
-  { id: 4, name: 'V4 Delta',   protocol: 'REST', status: 'Connected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
-  { id: 5, name: 'V5 Epsilon', protocol: 'REST', status: 'Connected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
+  { id: 1, name: 'Binance', protocol: 'WS+REST', status: 'Disconnected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
 ]
 
 export const MOCK_ORDERS: Order[] = []
@@ -30,12 +26,12 @@ export const MOCK_ALERTS: Alert[] = []
 export const MOCK_CIRCUIT_BREAKERS: CircuitBreaker[] = []
 
 export const BOOT_LINES = [
-  '[boot] sor-engine v4.12.3 initializing…',
-  '[net]  5 venue gateways probed: V1..V5',
-  '[md]   aggregator: 5/5 venues subscribed',
+  '[boot] apnasor gateway initializing…',
+  '[net]  exchange adapters: binance (ws+rest)',
+  '[md]   local order books: snapshot + diff-stream sync',
   '[risk] pre-trade checks armed',
   '[auth] awaiting operator credentials',
 ]
 
-// Symbols supported by the backend price engine
-export const SYMBOLS = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA'] as const
+// Trading universe — mirrors the backend's SYMBOLS setting.
+export const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT'] as const

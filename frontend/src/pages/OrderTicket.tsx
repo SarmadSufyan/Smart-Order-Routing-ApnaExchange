@@ -4,6 +4,7 @@ import { Card, CardTitle, StateBadge, fmtAge } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendOrderToUi } from '../adapters'
 import { SYMBOLS } from '../mockData'
+import { fmtPrice } from '../format'
 import type { OrderSide } from '../types'
 
 export function OrderTicket() {
@@ -14,9 +15,9 @@ export function OrderTicket() {
   const submitOrder       = useDataStore((s) => s.submitOrder)
   const cancelOrder       = useDataStore((s) => s.cancelOrder)
 
-  const [symbol, setSymbol] = useState<string>('AAPL')
+  const [symbol, setSymbol] = useState<string>(SYMBOLS[0])
   const [side, setSide]     = useState<OrderSide>('BUY')
-  const [qty, setQty]       = useState<number>(100)
+  const [qty, setQty]       = useState<number>(0.0001)
   const [busy, setBusy]     = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err', msg: string } | null>(null)
 
@@ -38,7 +39,7 @@ export function OrderTicket() {
     if (order) {
       const status = order.status
       if (status === 'FILLED') {
-        setFeedback({ kind: 'ok', msg: `${side} ${qty} ${symbol} FILLED @ $${order.avg_fill_price.toFixed(2)}` })
+        setFeedback({ kind: 'ok', msg: `${side} ${qty} ${symbol} FILLED @ ${fmtPrice(order.avg_fill_price)}` })
       } else if (status === 'REJECTED') {
         setFeedback({ kind: 'err', msg: `Rejected: ${order.rejection_reason || 'unknown reason'}` })
       } else {
@@ -108,7 +109,7 @@ export function OrderTicket() {
             type="number"
             min={1}
             value={qty}
-            onChange={(e) => setQty(parseInt(e.target.value) || 0)}
+            onChange={(e) => setQty(parseFloat(e.target.value) || 0)}
             style={inputStyle}
           />
 
@@ -121,7 +122,7 @@ export function OrderTicket() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ color: C.muted }}>Price ({side === 'BUY' ? 'ASK' : 'BID'})</span>
               <span style={{ color: side === 'BUY' ? C.red : C.green }}>
-                {indicativePrice ? `$${indicativePrice.toFixed(2)}` : '—'}
+                {fmtPrice(indicativePrice)}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -201,7 +202,7 @@ export function OrderTicket() {
                           {o.filled_quantity}
                         </td>
                         <td style={{ padding: '6px 8px', textAlign: 'right', color: C.muted }}>
-                          {o.avg_fill_price > 0 ? `$${o.avg_fill_price.toFixed(2)}` : '—'}
+                          {fmtPrice(o.avg_fill_price)}
                         </td>
                         <td style={{ padding: '6px 8px' }}><StateBadge state={ui.state} /></td>
                         <td style={{ padding: '6px 8px', color: C.blue }}>{ui.venue}</td>
@@ -273,7 +274,7 @@ export function OrderTicket() {
                     </td>
                     <td style={{ padding: '6px 8px', textAlign: 'right' }}>{r.quantity}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.muted }}>
-                      {r.price > 0 ? `$${r.price.toFixed(2)}` : '—'}
+                      {fmtPrice(r.price)}
                     </td>
                     <td style={{ padding: '6px 8px', color: C.blue }}>{r.venue_id}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: r.venue_latency_ms > 100 ? C.orange : C.muted }}>

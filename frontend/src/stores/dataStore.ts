@@ -7,8 +7,12 @@ import {
   type RiskStatus,
   type ExecutionReport,
   type RoutingStats,
+  type WalletSnapshot,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
+
+// setupWebSocket can run again after a re-login; handlers must be wired once.
+let wsWired = false
 
 interface DataState {
   venues: VenueHealth[]
@@ -17,9 +21,12 @@ interface DataState {
   riskStatus: RiskStatus | null
   executionReports: ExecutionReport[]
   routingStats: RoutingStats | null
+  wallet: WalletSnapshot | null
   loading: boolean
   lastError: string | null
 
+  fetchWallet: () => Promise<void>
+  refreshWallet: () => Promise<void>
   fetchVenues: () => Promise<void>
   fetchAllNBBO: () => Promise<void>
   fetchOrders: () => Promise<void>
@@ -31,6 +38,8 @@ interface DataState {
   cancelOrder: (orderId: string) => Promise<void>
   blacklistVenue: (venueId: string, reason?: string) => Promise<void>
   unblacklistVenue: (venueId: string) => Promise<void>
+  degradeVenue: (venueId: string) => Promise<void>
+  recoverVenue: (venueId: string) => Promise<void>
   activateKillSwitch: (reason: string) => Promise<void>
   deactivateKillSwitch: () => Promise<void>
   setupWebSocket: () => void
@@ -43,8 +52,25 @@ export const useDataStore = create<DataState>((set, get) => ({
   riskStatus: null,
   executionReports: [],
   routingStats: null,
+  wallet: null,
   loading: false,
   lastError: null,
+
+  fetchWallet: async () => {
+    try {
+      set({ wallet: await api.getWallet() })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
+  refreshWallet: async () => {
+    try {
+      set({ wallet: await api.refreshWallet() })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
 
   fetchVenues: async () => {
     try {
@@ -109,6 +135,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       get().fetchRiskStatus(),
       get().fetchExecutionReports(),
       get().fetchRoutingStats(),
+      get().fetchWallet(),
     ])
     set({ loading: false })
   },
@@ -153,6 +180,24 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
 
+  degradeVenue: async (venueId) => {
+    try {
+      await api.degradeVenue(venueId)
+      await get().fetchVenues()
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
+  recoverVenue: async (venueId) => {
+    try {
+      await api.recoverVenue(venueId)
+      await get().fetchVenues()
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
   activateKillSwitch: async (reason) => {
     try {
       await api.activateKillSwitch(reason)
@@ -172,6 +217,11 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   setupWebSocket: () => {
+    if (wsWired) return
+    wsWired = true
+    wsClient.subscribe('wallet_update', () => {
+      get().fetchWallet()
+    })
     wsClient.subscribe('venue_health', () => {
       get().fetchVenues()
     })

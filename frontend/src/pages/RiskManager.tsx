@@ -4,9 +4,8 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle, ArcGauge } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendRiskToPositions } from '../adapters'
-
-const POSITION_LIMIT = 25000
-const NOTIONAL_LIMIT = 1_000_000
+import { SYMBOLS } from '../mockData'
+import { fmtPrice } from '../format'
 
 export function RiskManager() {
   const navigate = useNavigate()
@@ -19,8 +18,9 @@ export function RiskManager() {
   const positions = backendRiskToPositions(riskStatus)
   const filtered = positions.filter((p) => !search || p.sym.includes(search.toUpperCase()))
 
-  const netSharesAbs = positions.reduce((sum, p) => sum + Math.abs(p.net), 0)
+  const openPositions = positions.length  // units of different assets can't be summed
   const notional = riskStatus?.total_exposure ?? 0
+  const notionalLimit = riskStatus?.exposure_limit || 1_000_000
   const ordersToday = routingStats?.orders_routed_today ?? 0
 
   // Derive pre-trade check stats from recent_checks + orders
@@ -68,10 +68,10 @@ export function RiskManager() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
-          <ArcGauge value={netSharesAbs} max={POSITION_LIMIT * 5} label="Net Position" unit="shares" size={120} />
+          <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open Positions" unit="symbols" size={120} />
         </Card>
         <Card style={{ textAlign: 'center' }}>
-          <ArcGauge value={Math.round(notional)} max={NOTIONAL_LIMIT} label="Notional" unit="USD" size={120} />
+          <ArcGauge value={Math.round(notional)} max={notionalLimit} label="Notional" unit="USD" size={120} />
         </Card>
         <Card style={{ textAlign: 'center' }}>
           <ArcGauge value={ordersToday} max={500} label="Orders Routed" unit="today" size={120} />
@@ -220,7 +220,7 @@ export function RiskManager() {
                         {p.net.toLocaleString()}
                       </td>
                       <td style={{ padding: '6px', textAlign: 'right', color: C.muted }}>
-                        ${p.price.toFixed(2)}
+                        {fmtPrice(p.price)}
                       </td>
                       <td style={{ padding: '6px', textAlign: 'right', color: pc }}>{pct}%</td>
                     </tr>

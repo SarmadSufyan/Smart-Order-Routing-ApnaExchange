@@ -2,6 +2,9 @@ type WSHandler = (data: any) => void
 
 const WS_BASE = 'ws://127.0.0.1:8000'
 
+// The gateway only broadcasts a channel to connections that sent
+// {"type":"subscribe","channels":[...]}. Registering a local handler is not
+// enough — the client must tell the server which channels it wants.
 class WebSocketClient {
   private ws: WebSocket | null = null
   private token: string | null = null
@@ -15,6 +18,12 @@ class WebSocketClient {
     this._open()
   }
 
+  private _sendSubscribe(channels: string[]) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && channels.length > 0) {
+      this.ws.send(JSON.stringify({ type: 'subscribe', channels }))
+    }
+  }
+
   private _open() {
     if (!this.token) return
     try {
@@ -26,15 +35,15 @@ class WebSocketClient {
           clearTimeout(this.reconnectTimer)
           this.reconnectTimer = null
         }
+        // (Re)subscribe to every channel we have handlers for — also after reconnects.
+        this._sendSubscribe([...this.handlers.keys()])
       }
 
       this.ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data)
-          const type = msg.type
-          const data = msg.data
-          const handlers = this.handlers.get(type)
-          if (handlers) handlers.forEach((h) => h(data))
+          const handlers = this.handlers.get(msg.type)
+          if (handlers) handlers.forEach((h) => h(msg.data))
         } catch (e) {
           // ignore parse errors
         }
@@ -68,8 +77,10 @@ class WebSocketClient {
   }
 
   subscribe(type: string, handler: WSHandler) {
-    if (!this.handlers.has(type)) this.handlers.set(type, new Set())
+    const isNewChannel = !this.handlers.has(type)
+    if (isNewChannel) this.handlers.set(type, new Set())
     this.handlers.get(type)!.add(handler)
+    if (isNewChannel) this._sendSubscribe([type])
     return () => this.unsubscribe(type, handler)
   }
 

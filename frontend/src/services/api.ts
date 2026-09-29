@@ -64,6 +64,82 @@ export interface VenueHealth {
   uptime: number                  // 0..1
   last_checked: string
   error_count: number
+  orders_total?: number           // 0 -> fill/reject rates are undefined, show "—"
+  // Live-exchange diagnostics (measured, not estimated)
+  latency_p50_ms?: number
+  latency_p99_ms?: number
+  mode?: string                   // testnet | mainnet
+  feed_connected?: boolean
+  feed_age_ms?: number | null
+  books_synced?: number
+  books_total?: number
+  resyncs?: number
+  reconnects?: number
+  degraded_mode?: boolean
+  data_mode?: string              // where the order book comes from
+  execution_available?: boolean   // false = data-only venue (e.g. Coinbase: no real testnet)
+  trading_enabled?: boolean       // execution available AND API keys present
+  execution_note?: string | null  // why the venue can't trade, if it can't
+  // Per symbol: does the venue's execution (testnet) book track the real market?
+  execution_coherence?: Record<string, CoherenceState>
+}
+
+export interface CoherenceState {
+  status: 'OK' | 'DIVERGED' | 'EMPTY' | 'UNKNOWN' | 'SAME_BOOK'
+  divergence_bps: number | null
+  exec_bid?: number | null
+  exec_ask?: number | null
+  checked_at?: string | null
+}
+
+export interface WalletAsset {
+  asset: string
+  free: number
+  used: number
+  total: number
+  price_usdt: number | null
+  value_usdt: number | null
+}
+
+export interface VenueWallet {
+  venue_id: string
+  name: string
+  mode: string
+  assets: WalletAsset[]
+  total_value_usdt: number
+  other_assets_count: number
+  error: string | null
+  updated_at: string
+}
+
+export interface AssetTotal {
+  asset: string
+  total: number
+  free: number
+  value_usdt: number | null
+  by_venue: Record<string, number>
+}
+
+export interface WalletSnapshot {
+  as_of: string | null
+  mode: string
+  total_value_usdt: number
+  tracked_assets: string[]
+  venues: VenueWallet[]
+  assets: AssetTotal[]
+}
+
+export interface VenueQuote {
+  venue_id: string
+  symbol: string
+  bid_price: number
+  ask_price: number
+  bid_size: number
+  ask_size: number
+  last_price: number
+  volume: number
+  timestamp?: string
+  is_stale: boolean
 }
 
 export interface NBBO {
@@ -73,7 +149,10 @@ export interface NBBO {
   spread: number
   best_bid_venue: string
   best_ask_venue: string
+  best_bid_size: number
+  best_ask_size: number
   timestamp?: string
+  venue_quotes: Record<string, VenueQuote>
 }
 
 export interface ChildOrder {
@@ -83,6 +162,12 @@ export interface ChildOrder {
   filled_quantity: number
   fill_price: number | null
   status: string
+  limit_price?: number | null     // IOC limit actually sent (price protection)
+  client_order_id?: string | null // id sent to the venue (idempotency)
+  exchange_order_id?: string | null
+  fee?: number
+  fee_asset?: string | null
+  reject_reason?: string | null
 }
 
 export interface VenueCandidate {
@@ -108,6 +193,13 @@ export interface RoutingDecision {
   total_savings: number
   is_split: boolean
   notes: string[]
+  base_asset?: string
+  quote_asset?: string
+  arrival_mid?: number
+  best_price?: number
+  expected_slippage_bps?: number
+  levels_used?: number
+  quantity_rounded_from?: number | null
 }
 
 export interface Order {
@@ -248,6 +340,9 @@ export interface ExecutionReport {
   venue_latency_ms: number
   timestamp: string
   rejection_reason?: string | null
+  exchange_order_id?: string | null
+  fee?: number
+  fee_asset?: string | null
 }
 
 export const api = {
@@ -270,14 +365,24 @@ export const api = {
   unblacklistVenue: (venueId: string) =>
     request<unknown>(`/api/venues/${venueId}/unblacklist`, { method: 'POST' }),
 
+  degradeVenue: (venueId: string) =>
+    request<unknown>(`/api/venues/${venueId}/degrade`, { method: 'POST' }),
+
+  recoverVenue: (venueId: string) =>
+    request<unknown>(`/api/venues/${venueId}/recover`, { method: 'POST' }),
+
   getNBBO: (symbol: string) =>
-    request<NBBO>(`/api/market-data/nbbo?symbol=${symbol}`),
+    request<NBBO>(`/api/market-data/nbbo?symbol=${encodeURIComponent(symbol)}`),
 
   getAllNBBO: () =>
     request<{ nbbo: Record<string, NBBO> }>('/api/market-data/nbbo/all'),
 
   getQuotes: (symbol: string) =>
-    request<{ symbol: string; quotes: Record<string, any> }>(`/api/market-data/quotes?symbol=${symbol}`),
+    request<{ symbol: string; quotes: Record<string, VenueQuote> }>(`/api/market-data/quotes?symbol=${encodeURIComponent(symbol)}`),
+
+  getWallet: () => request<WalletSnapshot>('/api/wallet/'),
+
+  refreshWallet: () => request<WalletSnapshot>('/api/wallet/refresh', { method: 'POST' }),
 
   submitOrder: (
     symbol: string,

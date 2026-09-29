@@ -4,6 +4,8 @@ import { Card } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { api, type NBBO, type Order, type ExecutionReport } from '../services/api'
 import { SYMBOLS } from '../mockData'
+import { fmtPrice, fmtUsd, spreadBps } from '../format'
+import { LATENCY_WARN_MS } from '../adapters'
 import type { OrderSide } from '../types'
 
 type StepStatus = 'pending' | 'active' | 'done' | 'failed' | 'skipped'
@@ -27,38 +29,38 @@ const STEP_DEFS = [
   {
     key: 'risk',
     title: 'Pre-Trade Risk Check',
-    short: 'Four checks must pass',
-    what: 'Before the order goes anywhere, the Risk Engine validates: kill switch is off, order size is under the limit, position limit per symbol is not exceeded, and notional exposure is within the cap.',
+    short: 'Seven checks must pass',
+    what: 'Before the order goes anywhere, the deterministic Risk Engine validates: kill switch is off, order size and per-order notional are under their limits, the rate limit is respected, the per-symbol position limit and total exposure cap hold, and the symbol is not restricted.',
   },
   {
     key: 'md',
     title: 'Market Data Aggregation',
-    short: 'Pulls NBBO from all 5 venues',
-    what: 'The Market Data Aggregator queries every connected venue and computes the National Best Bid & Offer — the best bid across venues and the best ask across venues. This is the "best price anywhere".',
+    short: 'Live order books from real exchanges',
+    what: 'Each exchange adapter keeps a local copy of that exchange\'s order book: seeded from a REST snapshot, then kept in sync from the WebSocket depth stream, with update-ID gap detection that forces a resync if a single message is missed. The aggregator combines the top of every book into the NBBO — the best price anywhere.',
   },
   {
     key: 'sor',
     title: 'SOR Strategy Decision',
-    short: 'Best-Price algorithm picks a venue',
-    what: 'The Smart Order Router runs the Best-Price strategy. It looks at the NBBO and filters out blacklisted/degraded venues, then picks the venue with the best price for our side.',
+    short: 'Walks the consolidated order book',
+    what: 'The Best-Price strategy merges the price levels of every eligible exchange into one ladder, sorts it best-first and consumes it until the order is filled. The result is each venue\'s allocation plus the expected VWAP and slippage. Blacklisted, critical or disconnected venues are excluded.',
   },
   {
     key: 'route',
     title: 'Venue Routing',
-    short: 'Order sent to chosen venue',
-    what: 'The Order Manager transitions the order to ROUTING then WORKING. A child order is sent via HTTP to the selected venue\'s /execute-order endpoint.',
+    short: 'Child orders sent to the exchange(s)',
+    what: 'The order moves ROUTING → WORKING and every child goes out concurrently as a MARKET or IOC LIMIT order through the exchange\'s REST API. Each carries our child-order UUID as its clientOrderId, so a timed-out request is looked up and reconciled instead of blindly resent.',
   },
   {
     key: 'exec',
     title: 'Execution Report',
-    short: 'Venue responds with FILL or REJECT',
-    what: 'The venue simulates matching against its order book. It either fills the order (returns FILL with fill price and quantity) or rejects it. Latency is tracked.',
+    short: 'Exchange returns the real fill',
+    what: 'The exchange\'s own matching engine fills the order against its real book and returns the filled quantity, average price, fees and its own order ID. A rejection carries the exchange\'s reason. Round-trip latency is measured and fed to venue health.',
   },
   {
     key: 'position',
     title: 'Position Update',
-    short: 'Risk engine updates exposure',
-    what: 'On a fill, the Position Tracker updates the net position, the avg entry price, and the total notional exposure. The audit log gets the execution report.',
+    short: 'Risk + wallet update',
+    what: 'On a fill, the Position Tracker updates the net position, volume-weighted entry price and notional exposure, and the unified wallet immediately re-reads the real balances from the exchange.',
   },
 ]
 
@@ -72,9 +74,9 @@ const SPEEDS = [
 export function HowItWorks() {
   const fetchAll = useDataStore((s) => s.fetchAll)
 
-  const [symbol, setSymbol] = useState<string>('AAPL')
+  const [symbol, setSymbol] = useState<string>(SYMBOLS[0])
   const [side, setSide]     = useState<OrderSide>('BUY')
-  const [qty, setQty]       = useState<number>(50)
+  const [qty, setQty]       = useState<number>(0.0001)
   const [speedIdx, setSpeedIdx] = useState<number>(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentIdx, setCurrentIdx] = useState<number>(-1)
@@ -204,7 +206,7 @@ export function HowItWorks() {
       // Final summary
       const filled = order.filled_quantity
       if (order.status === 'FILLED') {
-        setSummary({ kind: 'ok',   msg: `Order FILLED: ${side} ${filled} ${symbol} @ avg $${order.avg_fill_price.toFixed(2)} on ${chosenVenue}.` })
+        setSummary({ kind: 'ok',   msg: `Order FILLED: ${side} ${filled} ${symbol} @ avg ${fmtPrice(order.avg_fill_price)} on ${chosenVenue}.` })
       } else if (order.status === 'REJECTED') {
         setSummary({ kind: 'fail', msg: `Order REJECTED: ${order.rejection_reason || 'see execution report'}` })
       } else {
@@ -244,7 +246,7 @@ export function HowItWorks() {
           </div>
           <div>
             <label style={lbl}>QTY</label>
-            <input type="number" min={1} value={qty} onChange={(e) => setQty(parseInt(e.target.value) || 0)} disabled={isPlaying} style={inp} />
+            <input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(parseFloat(e.target.value) || 0)} disabled={isPlaying} style={inp} />
           </div>
           <div>
             <label style={lbl}>SPEED</label>
@@ -460,9 +462,9 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
                   borderBottom: `1px solid ${tint(C.border, 40)}`,
                 }}>
                   <td style={td}>{vid}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.green }}>{q.bid_price?.toFixed(2) ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.red }}>{q.ask_price?.toFixed(2) ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.muted }}>{((q.ask_price - q.bid_price) || 0).toFixed(3)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.green }}>{fmtPrice(q.bid_price)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.red }}>{fmtPrice(q.ask_price)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.muted }}>{spreadBps(q.bid_price, q.ask_price).toFixed(2)} bps</td>
                   <td style={{ ...td, color: C.accent, fontSize: F.sm, fontWeight: 600 }}>{isWinner ? 'best' : ''}</td>
                 </tr>
               )
@@ -471,9 +473,9 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
         </table>
         {nbbo && (
           <div style={{ ...kvBox, marginTop: 10 }}>
-            <KV k="Best Bid" v={`${nbbo.best_bid?.toFixed(2)} @ ${nbbo.best_bid_venue}`} color={C.green} />
-            <KV k="Best Ask" v={`${nbbo.best_ask?.toFixed(2)} @ ${nbbo.best_ask_venue}`} color={C.red} />
-            <KV k="Spread"   v={(nbbo.spread || 0).toFixed(3)} />
+            <KV k="Best Bid" v={`${fmtPrice(nbbo.best_bid)} @ ${nbbo.best_bid_venue}`} color={C.green} />
+            <KV k="Best Ask" v={`${fmtPrice(nbbo.best_ask)} @ ${nbbo.best_ask_venue}`} color={C.red} />
+            <KV k="Spread"   v={`${spreadBps(nbbo.best_bid, nbbo.best_ask).toFixed(2)} bps`} />
           </div>
         )}
       </div>
@@ -497,7 +499,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: F.sm, color: C.muted, letterSpacing: '.1em' }}>{side === 'BUY' ? 'BUY @' : 'SELL @'}</div>
             <div style={{ fontSize: F.xl, fontWeight: 700, color: side === 'BUY' ? C.red : C.green, marginTop: 2 }}>
-              ${data.chosenPrice?.toFixed(2)}
+              {fmtPrice(data.chosenPrice)}
             </div>
           </div>
         </div>
@@ -531,9 +533,9 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
         <div style={kvBox}>
           <KV k="Exec Type" v={r.exec_type} color={r.exec_type === 'FILL' ? C.green : r.exec_type === 'REJECT' ? C.red : C.orange} />
           <KV k="Quantity"  v={r.quantity.toString()} />
-          <KV k="Price"     v={r.price > 0 ? `$${r.price.toFixed(2)}` : '—'} />
+          <KV k="Price"     v={fmtPrice(r.price)} />
           <KV k="Venue"     v={r.venue_id} />
-          <KV k="Latency"   v={`${r.venue_latency_ms?.toFixed(1) ?? '?'} ms`} color={r.venue_latency_ms > 100 ? C.orange : C.muted} />
+          <KV k="Latency"   v={`${r.venue_latency_ms?.toFixed(1) ?? '?'} ms`} color={r.venue_latency_ms > LATENCY_WARN_MS ? C.orange : C.muted} />
         </div>
         {o.rejection_reason && (
           <div style={{
@@ -573,14 +575,14 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
                   <td style={{ ...td, textAlign: 'right', color: p.net_quantity >= 0 ? C.green : C.red }}>
                     {p.net_quantity}
                   </td>
-                  <td style={{ ...td, textAlign: 'right', color: C.muted }}>${p.avg_price?.toFixed(2) ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>${p.market_value?.toFixed(0) ?? 0}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.muted }}>{fmtPrice(p.avg_price)}</td>
+                  <td style={{ ...td, textAlign: 'right' }}>{fmtUsd(p.market_value)}</td>
                 </tr>
               ))}
           </tbody>
         </table>
         <div style={{ marginTop: 10, fontSize: F.base, color: C.muted }}>
-          Total Exposure: <span style={{ color: C.text, fontWeight: 600 }}>${data.totalExposure?.toFixed(0).toLocaleString() ?? 0}</span>
+          Total Exposure: <span style={{ color: C.text, fontWeight: 600 }}>{fmtUsd(data.totalExposure)}</span>
         </div>
       </div>
     )

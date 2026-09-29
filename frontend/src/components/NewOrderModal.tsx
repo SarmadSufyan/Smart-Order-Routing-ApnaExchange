@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { C, F, tint } from '../theme'
 import { useDataStore } from '../stores/dataStore'
-import { backendVenueToUi, isVenueBlacklisted } from '../adapters'
+import { backendVenueToUi } from '../adapters'
 import { SYMBOLS } from '../mockData'
+import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { RoutingProof } from './RoutingProof'
 import type { Order as BackendOrder } from '../services/api'
 import type { OrderSide } from '../types'
@@ -13,8 +14,6 @@ interface NewOrderForm {
   orderType: 'Market' | 'Limit'
   qty:       string
   price:     string
-  venue:     string
-  tif:       'DAY' | 'GTC' | 'IOC' | 'FOK'
 }
 
 interface ValidationErrors {
@@ -34,20 +33,23 @@ interface NewOrderModalProps {
   banner?: string
 }
 
+// Mirrors the backend's pre-trade sequence (services/risk_engine/pre_trade.py).
 const RISK_CHECKS = [
-  'KillSwitch check',
-  'Symbol restriction check',
-  'Fat finger check',
-  'Position limit check',
-  'Notional limit check',
+  'Kill switch check',
+  'Fat finger (max size) check',
+  'Order notional check',
   'Rate limit check',
+  'Position limit check',
+  'Exposure limit check',
+  'Symbol restriction check',
+  'Venue balance (funding) check',
 ]
 
 type Stage = 'form' | 'checking' | 'routing' | 'done' | 'rejected'
 
 export function NewOrderModal({
   open, onClose,
-  initialSymbol = 'AAPL',
+  initialSymbol = SYMBOLS[0],
   initialSide = 'BUY',
   initialQty = '',
   banner,
@@ -66,8 +68,6 @@ export function NewOrderModal({
     orderType: 'Market',
     qty:       initialQty,
     price:     '',
-    venue:     'auto',
-    tif:       'DAY',
   })
 
   const [errors, setErrors] = useState<ValidationErrors>({})
@@ -84,7 +84,7 @@ export function NewOrderModal({
     if (open) {
       setForm({
         symbol: initialSymbol, side: initialSide, orderType: 'Market',
-        qty: initialQty, price: '', venue: 'auto', tif: 'DAY',
+        qty: initialQty, price: '',
       })
       setErrors({})
       setStage('form')
@@ -155,14 +155,13 @@ export function NewOrderModal({
   function validate(): boolean {
     const errs: ValidationErrors = {}
     if (!form.symbol) errs.symbol = 'Symbol is required'
-    const qty = parseInt(form.qty)
-    if (!form.qty || isNaN(qty) || qty <= 0) errs.qty = 'Enter a valid quantity'
-    if (qty > 100000) errs.qty = 'Quantity exceeds fat finger limit (100,000)'
+    const qty = parseFloat(form.qty)
+    if (!form.qty || isNaN(qty) || qty <= 0) errs.qty = 'Enter a quantity greater than 0'
     if (form.orderType === 'Limit') {
       const price = parseFloat(form.price)
       if (!form.price || isNaN(price) || price <= 0) errs.price = 'Enter a valid price for limit order'
-      if (price > 100000) errs.price = 'Price exceeds fat finger limit'
     }
+    // Size/notional limits are enforced (and explained) by the backend risk engine.
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -180,7 +179,7 @@ export function NewOrderModal({
       const order = await submitOrder(
         form.symbol,
         form.side,
-        parseInt(form.qty),
+        parseFloat(form.qty),
         form.orderType === 'Market' ? 'MARKET' : 'LIMIT',
         form.orderType === 'Limit' ? parseFloat(form.price) : undefined,
       )
@@ -334,10 +333,10 @@ export function NewOrderModal({
           {/* Qty + Price */}
           <div style={row2}>
             <div>
-              <span style={label}>Quantity (shares)</span>
+              <span style={label}>Quantity ({baseAsset(form.symbol)})</span>
               <input
-                type="number" min="1" max="100000"
-                placeholder="e.g. 500"
+                type="number" min="0" step="any"
+                placeholder={indicativePrice > 0 ? `e.g. ${fmtQty(50 / indicativePrice, 5)} (~$50)` : 'e.g. 0.001'}
                 value={form.qty}
                 onChange={(e) => update('qty', e.target.value)}
                 style={errors.qty ? inputErr : input}
@@ -346,11 +345,11 @@ export function NewOrderModal({
             </div>
             <div>
               <span style={label}>
-                {form.orderType === 'Market' ? 'Market (auto-price)' : 'Limit Price (USD)'}
+                {form.orderType === 'Market' ? 'Market (auto-price)' : 'Limit Price (USDT)'}
               </span>
               <input
-                type="number" min="0.01" step="0.01"
-                placeholder={form.orderType === 'Market' ? `~ ${indicativePrice.toFixed(2)}` : 'e.g. 182.50'}
+                type="number" min="0" step="any"
+                placeholder={indicativePrice > 0 ? `~ ${fmtPrice(indicativePrice)}` : 'price'}
                 value={form.price}
                 disabled={form.orderType === 'Market'}
                 onChange={(e) => update('price', e.target.value)}
@@ -363,27 +362,26 @@ export function NewOrderModal({
             </div>
           </div>
 
-          {/* Venue + TIF */}
+          {/* Routing (informational — the SOR always decides the venues) */}
           <div style={row2}>
             <div>
               <span style={label}>Venue routing</span>
-              <select value={form.venue} onChange={(e) => update('venue', e.target.value)} style={select}>
-                <option value="auto">⚡ Auto — Best Price (SOR)</option>
-                {venues.filter((v) => !v.blacklisted).map((v) => (
-                  <option key={v.id} value={v.shortName}>
-                    {v.name} {v.status === 'Degraded' ? '⚠ Degraded' : '● Connected'}
-                  </option>
-                ))}
-              </select>
+              <div
+                style={{ ...input, color: C.blue }}
+                title="Data-only venues count in the NBBO but can't receive orders"
+              >
+                ⚡ Best price · {venues.filter((v) => v.canTrade && !v.blacklisted).length} executable
+                {venues.some((v) => v.dataOnly) && ` + ${venues.filter((v) => v.dataOnly).length} data-only`}
+              </div>
             </div>
             <div>
-              <span style={label}>Time in Force</span>
-              <select value={form.tif} onChange={(e) => update('tif', e.target.value as NewOrderForm['tif'])} style={select}>
-                <option value="DAY">DAY</option>
-                <option value="GTC">GTC</option>
-                <option value="IOC">IOC</option>
-                <option value="FOK">FOK</option>
-              </select>
+              <span style={label}>Child orders</span>
+              <div
+                style={{ ...input, color: C.muted }}
+                title="Never rests on a venue. Market orders are capped at the planned price plus a small protection band, so a moved book makes the child expire instead of overpaying."
+              >
+                IOC {form.orderType === 'Market' ? '· price-protected' : '· at your limit'}
+              </div>
             </div>
           </div>
 
@@ -394,20 +392,20 @@ export function NewOrderModal({
               borderRadius: 4, padding: '10px 12px', marginBottom: 12,
               fontSize: F.sm, color: C.muted,
             }}>
-              <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>LIVE NBBO (across 5 venues)</div>
+              <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>
+                LIVE NBBO (across {Object.keys(nbbo.venue_quotes || {}).length} venue{Object.keys(nbbo.venue_quotes || {}).length === 1 ? '' : 's'})
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Best Bid: <span style={{ color: C.green }}>${nbbo.best_bid.toFixed(2)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_bid_venue}</span></span>
-                <span>Best Ask: <span style={{ color: C.red }}>${nbbo.best_ask.toFixed(2)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_ask_venue}</span></span>
+                <span>Best Bid: <span style={{ color: C.green }}>{fmtPrice(nbbo.best_bid)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_bid_venue}</span></span>
+                <span>Best Ask: <span style={{ color: C.red }}>{fmtPrice(nbbo.best_ask)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_ask_venue}</span></span>
               </div>
               {form.qty && (
                 <div style={{ marginTop: 6, fontSize: F.xs, color: C.dim }}>
                   Indicative {form.side === 'BUY' ? 'buy' : 'sell'} @{' '}
-                  <span style={{ color: C.text }}>${indicativePrice.toFixed(2)}</span>{' '}
+                  <span style={{ color: C.text }}>{fmtPrice(indicativePrice)}</span>{' '}
                   on <span style={{ color: C.blue }}>{indicativeVenue}</span>{' '}
                   · Est. notional{' '}
-                  <span style={{ color: C.text }}>
-                    ${(parseInt(form.qty || '0') * indicativePrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                  <span style={{ color: C.text }}>{fmtUsd((parseFloat(form.qty) || 0) * indicativePrice)}</span>
                 </div>
               )}
             </div>
@@ -422,13 +420,12 @@ export function NewOrderModal({
             }}>
               <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>ORDER PREVIEW</div>
               <span style={{ color: form.side === 'BUY' ? C.green : C.red, fontWeight: 700 }}>{form.side} </span>
-              <span style={{ color: C.text }}>{parseInt(form.qty || '0').toLocaleString()} </span>
+              <span style={{ color: C.text }}>{fmtQty(parseFloat(form.qty) || 0)} </span>
               <span style={{ color: C.text }}>{form.symbol} </span>
               {form.orderType === 'Limit' && form.price && (
-                <span>@ <span style={{ color: C.text }}>${parseFloat(form.price).toFixed(2)} </span></span>
+                <span>@ <span style={{ color: C.text }}>{fmtPrice(parseFloat(form.price))} </span></span>
               )}
-              <span style={{ color: C.blue }}>{form.orderType} </span>
-              <span style={{ color: C.dim }}>{form.tif}</span>
+              <span style={{ color: C.blue }}>{form.orderType}</span>
             </div>
           )}
 
@@ -447,7 +444,7 @@ export function NewOrderModal({
           </button>
 
           <div style={{ textAlign: 'center', fontSize: F.xs, color: C.dim, marginTop: 8 }}>
-            Order will pass 6 pre-trade risk checks before routing
+            Order will pass {RISK_CHECKS.length} pre-trade risk checks before routing
           </div>
         </div>
       </div>
@@ -463,8 +460,8 @@ export function NewOrderModal({
         </div>
         <div style={{ padding: 20 }}>
           <div style={{ marginBottom: 16, fontSize: F.sm, color: C.dim }}>
-            {form.side} {parseInt(form.qty).toLocaleString()} {form.symbol}
-            {form.orderType === 'Limit' && ` @ $${parseFloat(form.price).toFixed(2)}`}
+            {form.side} {fmtQty(parseFloat(form.qty) || 0)} {form.symbol}
+            {form.orderType === 'Limit' && ` @ ${fmtPrice(parseFloat(form.price))}`}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {RISK_CHECKS.map((check, i) => {
@@ -508,7 +505,7 @@ export function NewOrderModal({
           <div style={{ fontSize: F.xxl, marginBottom: 12 }}>⚡</div>
           <div style={{ fontSize: F.md, fontWeight: 700, marginBottom: 6 }}>Routing Order</div>
           <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16 }}>
-            All 6 pre-trade checks passed
+            All {RISK_CHECKS.length} pre-trade checks passed
           </div>
           <div style={{ fontSize: F.base, color: C.dim }}>
             {resultOrder
@@ -549,7 +546,8 @@ export function NewOrderModal({
               <div>
                 <div style={{ fontSize: F.md, color: stateColor, fontWeight: 700 }}>Order {stateLabel}</div>
                 <div style={{ fontSize: F.xs, color: C.dim }}>
-                  {resultOrder.id.slice(0, 8).toUpperCase()} · {resultOrder.symbol} · {resultOrder.side} {resultOrder.quantity.toFixed(0)}
+                  {resultOrder.id.slice(0, 8).toUpperCase()} · {resultOrder.symbol} · {resultOrder.side} {fmtQty(resultOrder.quantity)}
+                  {resultOrder.avg_fill_price > 0 && ` · filled @ ${fmtPrice(resultOrder.avg_fill_price)}`}
                 </div>
               </div>
             </div>
@@ -559,7 +557,11 @@ export function NewOrderModal({
           <div style={{ padding: '14px 18px' }}>
 
             {resultOrder.routing_decision ? (
-              <RoutingProof decision={resultOrder.routing_decision} symbol={resultOrder.symbol} />
+              <RoutingProof
+                decision={resultOrder.routing_decision}
+                symbol={resultOrder.symbol}
+                fillPrice={resultOrder.avg_fill_price}
+              />
             ) : (
               <div style={{ padding: 20, textAlign: 'center', color: C.dim, fontSize: 11 }}>
                 No routing decision attached to this order.
@@ -618,7 +620,7 @@ export function NewOrderModal({
             Order Rejected
           </div>
           <div style={{ fontSize: F.sm, color: C.dim, marginBottom: 16 }}>
-            Pre-trade risk engine blocked the order
+            Blocked by pre-trade risk or refused by the venue — nothing was executed
           </div>
 
           <div style={{

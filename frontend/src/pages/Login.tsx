@@ -151,7 +151,7 @@ export function Login() {
                 type="password"
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
-                placeholder="¢¢¢¢¢¢¢¢¢¢¢¢"
+                placeholder="••••••••••••"
                 autoFocus
                 style={{ ...inputStyle, letterSpacing: 3 }}
                 autoComplete="current-password"
@@ -207,7 +207,7 @@ export function Login() {
             marginTop: 28, paddingTop: 12, borderTop: `1px solid ${C.border2}`,
             display: 'flex', justifyContent: 'space-between', fontSize: F.xs, color: C.dim,
           }}>
-            <span>Â© 2026 DEIRCP PLATFORM</span>
+            <span>© 2026 APNASOR · APNA EXCHANGE</span>
             <span>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: C.green, marginRight: 4 }} />
               Connected to localhost:8000

@@ -3,19 +3,18 @@
 import type { Venue, Order as UiOrder, Position, VenueStatus, OrderSide, OrderState } from './types'
 import type { VenueHealth, Order as BackendOrder, RiskStatus } from './services/api'
 
-const VENUE_SHORT_NAMES: Record<string, string> = {
-  V1: 'V1', V2: 'V2', V3: 'V3', V4: 'V4', V5: 'V5',
+// A real exchange round-trip from Pakistan is ~400 ms; warn well above that.
+export const LATENCY_WARN_MS = 900
+
+const VENUE_NAMES: Record<string, string> = {
+  V1: 'Binance', V2: 'Coinbase', V3: 'Kraken', V4: 'Bybit', V5: 'OKX', V6: 'Gate',
 }
 
-const VENUE_LONG_NAMES: Record<string, string> = {
-  V1: 'V1 Alpha',
-  V2: 'V2 Beta',
-  V3: 'V3 Gamma',
-  V4: 'V4 Delta',
-  V5: 'V5 Epsilon',
-}
+const VENUE_NUMERIC_ID: Record<string, number> = { V1: 1, V2: 2, V3: 3, V4: 4, V5: 5, V6: 6 }
 
-const VENUE_NUMERIC_ID: Record<string, number> = { V1: 1, V2: 2, V3: 3, V4: 4, V5: 5 }
+export function venueName(venueId: string, venues?: VenueHealth[]): string {
+  return venues?.find((v) => v.venue_id === venueId)?.name || VENUE_NAMES[venueId] || venueId
+}
 
 export function isVenueBlacklisted(v: VenueHealth): boolean {
   return (v.status || '').toUpperCase() === 'BLACKLISTED'
@@ -23,37 +22,50 @@ export function isVenueBlacklisted(v: VenueHealth): boolean {
 
 function statusFromBackend(v: VenueHealth): VenueStatus {
   const s = (v.status || '').toUpperCase()
-  if (s === 'BLACKLISTED' || s === 'OFFLINE') return 'Disconnected'
   if (s === 'HEALTHY') return 'Connected'
   if (s === 'DEGRADED') return 'Degraded'
-  // Fallback to health_score
-  if ((v.health_score ?? 0) >= 0.8) return 'Connected'
-  if ((v.health_score ?? 0) >= 0.5) return 'Degraded'
-  return 'Disconnected'
+  return 'Disconnected' // BLACKLISTED | CRITICAL | DISCONNECTED
 }
 
 export interface UiVenue extends Venue {
   shortName: string
   backend: VenueHealth
   blacklisted: boolean
+  canTrade: boolean   // can receive orders right now
+  dataOnly: boolean   // streams real data but has no execution path (e.g. Coinbase)
+  hasOrders: boolean  // false -> fill/reject rates are undefined (show "—", not 0%)
+}
+
+/** "—" when a venue has no order history; a 0% there would read as "all orders failed". */
+export function fmtRate(v: UiVenue, rate: number): string {
+  return v.hasOrders ? `${rate}%` : '—'
+}
+
+export function isVenueTradable(v: VenueHealth): boolean {
+  return v.trading_enabled ?? false
 }
 
 export function backendVenueToUi(v: VenueHealth): UiVenue {
   const status = statusFromBackend(v)
+  const round1 = (x: number) => Math.round(x * 10) / 10
   return {
     id: VENUE_NUMERIC_ID[v.venue_id] ?? 0,
-    name: VENUE_LONG_NAMES[v.venue_id] ?? v.name ?? v.venue_id,
-    shortName: VENUE_SHORT_NAMES[v.venue_id] ?? v.venue_id,
-    protocol: v.cloud || 'REST',
+    name: v.name || VENUE_NAMES[v.venue_id] || v.venue_id,
+    shortName: v.venue_id,
+    protocol: v.cloud || 'WS+REST',
     status,
-    latencyEma: Math.round((v.latency_ms || 0) * 10) / 10,
-    p99: Math.round((v.latency_ms || 0) * 2.5 * 10) / 10,
+    // Real measured percentiles — no derived/estimated numbers.
+    latencyEma: round1(v.latency_p50_ms || v.latency_ms || 0),
+    p99: round1(v.latency_p99_ms || v.latency_ms || 0),
     fillRate: Math.round((v.fill_rate || 0) * 1000) / 10,
     rejectRate: Math.round((v.reject_rate || 0) * 1000) / 10,
     ordersToday: 0,
     circuitBreaker: isVenueBlacklisted(v) ? 'TRIPPED' : status === 'Degraded' ? 'LATENCY' : 'OK',
     backend: v,
     blacklisted: isVenueBlacklisted(v),
+    canTrade: isVenueTradable(v),
+    dataOnly: v.execution_available === false,
+    hasOrders: (v.orders_total ?? 0) > 0,
   }
 }
 
@@ -76,7 +88,7 @@ export function backendOrderToUi(o: BackendOrder): UiOrder {
     side: o.side.toUpperCase() as OrderSide,
     qty: o.quantity,
     state: orderStateFromBackend(o.status),
-    venue: VENUE_SHORT_NAMES[venueId] ?? venueId,
+    venue: venueId,
     ageMs,
   }
 }

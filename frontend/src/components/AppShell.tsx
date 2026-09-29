@@ -8,12 +8,13 @@ import { useThemeStore } from '../stores/themeStore'
 import { backendVenueToUi } from '../adapters'
 
 const NAV = [
-  { path: '/',           label: 'Dashboard'            },
-  { path: '/wallet',     label: 'Wallet'               },
-  { path: '/howitworks', label: 'How It Works'         },
-  { path: '/venues',     label: 'Venue Connectivity'   },
-  { path: '/risk',       label: 'Risk Manager'         },
-  { path: '/killswitch', label: 'Kill Switch & Alerts' },
+  { path: '/',            label: 'Dashboard'            },
+  { path: '/market-data', label: 'Market Data'          },
+  { path: '/wallet',      label: 'Wallet'               },
+  { path: '/howitworks',  label: 'How It Works'         },
+  { path: '/venues',      label: 'Venue Connectivity'   },
+  { path: '/risk',        label: 'Risk Manager'         },
+  { path: '/killswitch',  label: 'Kill Switch & Alerts' },
 ]
 
 export function AppShell() {
@@ -63,6 +64,7 @@ export function AppShell() {
   const venuesForDots = venues.length > 0
     ? venues.map((v) => backendVenueToUi(v))
     : []
+  const exchangeMode = venues[0]?.mode
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text }}>
@@ -80,10 +82,20 @@ export function AppShell() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ color: C.blue, fontSize: F.xl }}>⚡</span>
-          <span style={{ fontSize: F.md, fontWeight: 600 }}>SOR</span>
-          <span style={{ background: C.surface2, borderRadius: 3, padding: '3px 9px', fontSize: F.xs, color: C.muted }}>
-            sor-prod-01
-          </span>
+          <span style={{ fontSize: F.md, fontWeight: 600 }}>ApnaSOR</span>
+          {exchangeMode && (
+            <span
+              title={exchangeMode === 'mainnet' ? 'Orders use REAL funds' : 'Exchange testnet — fake funds, real order books'}
+              style={{
+                borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
+                background: tint(exchangeMode === 'mainnet' ? C.red : C.orange, 16),
+                color: exchangeMode === 'mainnet' ? C.red : C.orange,
+                border: `1px solid ${exchangeMode === 'mainnet' ? C.red : C.orange}`,
+              }}
+            >
+              {exchangeMode === 'mainnet' ? 'MAINNET · REAL FUNDS' : 'TESTNET'}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
