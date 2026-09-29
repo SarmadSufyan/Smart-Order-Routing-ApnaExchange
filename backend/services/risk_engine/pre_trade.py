@@ -1,5 +1,12 @@
+"""Deterministic pre-trade risk gate. Every order passes through here —
+manual orders today, and later the TWAP bot and the LLM copilot too.
+
+Checks run in order and stop at the first failure:
+    kill_switch -> size_limit -> order_notional -> rate_limit
+    -> position_limit -> notional_limit -> symbol_restriction
+"""
+
 import time
-from collections import defaultdict
 from datetime import UTC, datetime
 
 from backend.shared.events.event_bus import event_bus
@@ -20,10 +27,11 @@ class PreTradeRiskEngine:
         self,
         kill_switch: KillSwitch,
         position_tracker: PositionTracker,
+        limits: RiskLimits | None = None,
     ) -> None:
         self._kill_switch = kill_switch
         self._positions = position_tracker
-        self._limits = RiskLimits()
+        self._limits = limits or RiskLimits()
         self._recent_checks: list[RiskCheckDetail] = []
         self._order_timestamps: list[float] = []
 
@@ -47,61 +55,60 @@ class PreTradeRiskEngine:
     def recent_checks(self) -> list[RiskCheckDetail]:
         return list(self._recent_checks)
 
-    async def check_order(self, order: Order, mid_price: float = 0.0) -> RiskCheckDetail:
-        start = time.perf_counter_ns()
-        checks_passed: list[str] = []
-        checks_failed: list[str] = []
-        result = RiskCheckResult.APPROVED
+    def _evaluate(self, order: Order, mid_price: float) -> tuple[RiskCheckResult, list[str], list[str], str | None]:
+        lim = self._limits
+        passed: list[str] = []
+
+        def fail(result: RiskCheckResult, check: str, message: str):
+            return result, passed, [check], message
 
         if self._kill_switch.is_active:
-            result = RiskCheckResult.REJECTED_KILL_SWITCH
-            checks_failed.append("kill_switch")
-        else:
-            checks_passed.append("kill_switch")
+            return fail(RiskCheckResult.REJECTED_KILL_SWITCH, "kill_switch", "Kill switch is active")
+        passed.append("kill_switch")
 
-        if result == RiskCheckResult.APPROVED:
-            if order.quantity > self._limits.max_order_size:
-                result = RiskCheckResult.REJECTED_SIZE_LIMIT
-                checks_failed.append("size_limit")
-            else:
-                checks_passed.append("size_limit")
+        if order.quantity > lim.max_order_size:
+            return fail(RiskCheckResult.REJECTED_SIZE_LIMIT, "size_limit",
+                        f"Quantity {order.quantity:g} exceeds the max order size {lim.max_order_size:g}")
+        passed.append("size_limit")
 
-        if result == RiskCheckResult.APPROVED:
-            now = time.monotonic()
-            self._order_timestamps = [
-                t for t in self._order_timestamps if now - t < 1.0
-            ]
-            if len(self._order_timestamps) >= self._limits.max_orders_per_second:
-                result = RiskCheckResult.REJECTED_RATE_LIMIT
-                checks_failed.append("rate_limit")
-            else:
-                checks_passed.append("rate_limit")
+        order_notional = order.quantity * mid_price
+        if mid_price > 0 and order_notional > lim.max_order_notional:
+            return fail(RiskCheckResult.REJECTED_ORDER_NOTIONAL_LIMIT, "order_notional",
+                        f"Order notional ${order_notional:,.2f} exceeds the per-order limit ${lim.max_order_notional:,.2f}")
+        passed.append("order_notional")
 
-        if result == RiskCheckResult.APPROVED:
-            pos = self._positions.get_position(order.symbol)
-            projected = abs(pos.net_position + order.quantity)
-            if projected > self._limits.max_position_per_symbol:
-                result = RiskCheckResult.REJECTED_POSITION_LIMIT
-                checks_failed.append("position_limit")
-            else:
-                checks_passed.append("position_limit")
+        now = time.monotonic()
+        self._order_timestamps = [t for t in self._order_timestamps if now - t < 1.0]
+        if len(self._order_timestamps) >= lim.max_orders_per_second:
+            return fail(RiskCheckResult.REJECTED_RATE_LIMIT, "rate_limit",
+                        f"More than {lim.max_orders_per_second} orders in the last second")
+        passed.append("rate_limit")
 
-        if result == RiskCheckResult.APPROVED and mid_price > 0:
-            order_notional = order.quantity * mid_price
-            total_notional = self._positions.get_total_notional() + order_notional
-            if total_notional > self._limits.max_notional_exposure:
-                result = RiskCheckResult.REJECTED_NOTIONAL_LIMIT
-                checks_failed.append("notional_limit")
-            else:
-                checks_passed.append("notional_limit")
+        pos = self._positions.get_position(order.symbol)
+        signed = order.quantity if order.side.value == "BUY" else -order.quantity
+        projected = abs(pos.net_position + signed)
+        if projected > lim.max_position_per_symbol:
+            return fail(RiskCheckResult.REJECTED_POSITION_LIMIT, "position_limit",
+                        f"Projected {order.symbol} position {projected:g} exceeds {lim.max_position_per_symbol:g}")
+        passed.append("position_limit")
 
-        if result == RiskCheckResult.APPROVED:
-            if order.symbol in self._limits.restricted_symbols:
-                result = RiskCheckResult.REJECTED_SYMBOL_RESTRICTED
-                checks_failed.append("symbol_restriction")
-            else:
-                checks_passed.append("symbol_restriction")
+        if mid_price > 0:
+            total = self._positions.get_total_notional() + order_notional
+            if total > lim.max_notional_exposure:
+                return fail(RiskCheckResult.REJECTED_NOTIONAL_LIMIT, "notional_limit",
+                            f"Total exposure ${total:,.2f} would exceed ${lim.max_notional_exposure:,.2f}")
+            passed.append("notional_limit")
 
+        if order.symbol in lim.restricted_symbols:
+            return fail(RiskCheckResult.REJECTED_SYMBOL_RESTRICTED, "symbol_restriction",
+                        f"Symbol {order.symbol} is restricted")
+        passed.append("symbol_restriction")
+
+        return RiskCheckResult.APPROVED, passed, [], None
+
+    async def check_order(self, order: Order, mid_price: float = 0.0) -> RiskCheckDetail:
+        start = time.perf_counter_ns()
+        result, passed, failed, message = self._evaluate(order, mid_price)
         latency_us = (time.perf_counter_ns() - start) / 1000
 
         if result == RiskCheckResult.APPROVED:
@@ -110,12 +117,12 @@ class PreTradeRiskEngine:
         detail = RiskCheckDetail(
             order_id=str(order.id),
             result=result,
-            checks_passed=checks_passed,
-            checks_failed=checks_failed,
+            checks_passed=passed,
+            checks_failed=failed,
             timestamp=datetime.now(UTC),
             latency_us=round(latency_us, 1),
+            message=message,
         )
-
         self._recent_checks.append(detail)
         if len(self._recent_checks) > MAX_RECENT_CHECKS:
             self._recent_checks = self._recent_checks[-MAX_RECENT_CHECKS:]
@@ -125,12 +132,12 @@ class PreTradeRiskEngine:
             {
                 "order_id": str(order.id),
                 "result": result.value,
-                "checks_passed": checks_passed,
-                "checks_failed": checks_failed,
+                "checks_passed": passed,
+                "checks_failed": failed,
+                "message": message,
                 "latency_us": detail.latency_us,
             },
         )
-
         logger.info(
             "risk_check_completed",
             order_id=str(order.id),

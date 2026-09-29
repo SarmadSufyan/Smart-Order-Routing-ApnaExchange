@@ -18,6 +18,7 @@ VALID_CHANNELS = {
     "risk_check",
     "kill_switch",
     "execution_report",
+    "wallet_update",
 }
 
 

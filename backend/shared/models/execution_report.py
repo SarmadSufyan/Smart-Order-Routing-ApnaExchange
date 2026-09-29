@@ -27,6 +27,9 @@ class ExecutionReport(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     venue_latency_ms: float = 0.0
     rejection_reason: str | None = None
+    exchange_order_id: str | None = None
+    fee: float = 0.0
+    fee_asset: str | None = None
 
 
 class ExecutionReportResponse(BaseModel):

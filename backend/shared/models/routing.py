@@ -38,6 +38,14 @@ class RoutingDecision(BaseModel):
     total_savings: float                          # savings_per_share * total_allocated
     is_split: bool                                # True if order touched 2+ venues
     notes: list[str] = []                         # human-readable explanation strings
+    # Depth-walk details (real order books)
+    base_asset: str = ""
+    quote_asset: str = ""
+    arrival_mid: float = 0.0                      # NBBO mid when the decision was made
+    best_price: float = 0.0                       # best touch price across eligible venues
+    expected_slippage_bps: float = 0.0            # expected VWAP vs best touch, in basis points
+    levels_used: int = 0                          # price levels consumed across all venues
+    quantity_rounded_from: float | None = None    # original qty if lot-size rounding changed it
 
 
 class RoutingResult(BaseModel):

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from backend.exchanges.precision import is_close
 from backend.shared.events.event_bus import event_bus
 from backend.shared.exceptions import InvalidStateTransitionError, OrderNotFoundError
 from backend.shared.models.order import (
@@ -25,6 +26,13 @@ class OrderManager:
         if not order:
             raise OrderNotFoundError(str(order_id))
         return order
+
+    def active_orders(self) -> list[Order]:
+        """Orders that could still receive fills."""
+        return [
+            o for o in self._orders.values()
+            if o.status in (OrderStatus.WORKING, OrderStatus.PARTIALLY_FILLED)
+        ]
 
     def list_orders(
         self,
@@ -131,17 +139,23 @@ class OrderManager:
             if child.id == child_order_id:
                 child.filled_quantity = fill_qty
                 child.fill_price = fill_price
-                child.status = OrderStatus.FILLED
+                # An IOC child can come back partially filled — say so.
+                child.status = (
+                    OrderStatus.FILLED
+                    if fill_qty >= child.quantity or is_close(fill_qty, child.quantity)
+                    else OrderStatus.PARTIALLY_FILLED
+                )
                 child.filled_at = datetime.now(UTC)
                 break
 
         total_filled = sum(c.filled_quantity for c in order.child_orders)
         total_cost = sum(c.filled_quantity * c.fill_price for c in order.child_orders if c.fill_price > 0)
         order.filled_quantity = total_filled
-        order.avg_fill_price = round(total_cost / total_filled, 6) if total_filled > 0 else 0.0
+        order.avg_fill_price = round(total_cost / total_filled, 8) if total_filled > 0 else 0.0
         order.updated_at = datetime.now(UTC)
 
-        if total_filled >= order.quantity:
+        # Float sums of lot-rounded quantities need a tolerance, not ==.
+        if total_filled >= order.quantity or is_close(total_filled, order.quantity):
             await self.transition(order.id, OrderStatus.FILLED)
         elif total_filled > 0 and order.status == OrderStatus.WORKING:
             await self.transition(order.id, OrderStatus.PARTIALLY_FILLED)

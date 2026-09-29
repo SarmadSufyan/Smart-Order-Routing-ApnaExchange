@@ -24,10 +24,21 @@ class PositionTracker:
         self, symbol: str, side: OrderSide, quantity: float, price: float
     ) -> None:
         pos = self.get_position(symbol)
+        prev = pos.net_position
         signed_qty = quantity if side == OrderSide.BUY else -quantity
-        pos.net_position += signed_qty
-        pos.notional = pos.net_position * price
-        pos.avg_entry_price = price
+        new = prev + signed_qty
+
+        if abs(new) < 1e-12:
+            new, pos.avg_entry_price = 0.0, 0.0  # flat
+        elif prev == 0 or (prev > 0) == (signed_qty > 0):
+            # Opening or adding: volume-weighted average entry.
+            pos.avg_entry_price = (abs(prev) * pos.avg_entry_price + quantity * price) / abs(new)
+        elif (prev > 0) != (new > 0):
+            pos.avg_entry_price = price  # flipped through zero: new position at this price
+        # else: reducing without flipping — entry price is unchanged
+
+        pos.net_position = new
+        pos.notional = new * price
 
         logger.info(
             "position_updated",

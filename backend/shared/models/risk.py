@@ -8,6 +8,7 @@ class RiskCheckResult(str, Enum):
     APPROVED = "APPROVED"
     REJECTED_KILL_SWITCH = "REJECTED_KILL_SWITCH"
     REJECTED_SIZE_LIMIT = "REJECTED_SIZE_LIMIT"
+    REJECTED_ORDER_NOTIONAL_LIMIT = "REJECTED_ORDER_NOTIONAL_LIMIT"
     REJECTED_RATE_LIMIT = "REJECTED_RATE_LIMIT"
     REJECTED_POSITION_LIMIT = "REJECTED_POSITION_LIMIT"
     REJECTED_NOTIONAL_LIMIT = "REJECTED_NOTIONAL_LIMIT"
@@ -16,7 +17,8 @@ class RiskCheckResult(str, Enum):
 
 
 class RiskLimits(BaseModel):
-    max_order_size: float = 10_000.0
+    max_order_size: float = 10_000.0  # base-asset units
+    max_order_notional: float = 10_000.0  # USDT per order — the meaningful cap for crypto
     max_position_per_symbol: float = 50_000.0
     max_notional_exposure: float = 1_000_000.0
     max_orders_per_second: int = 50
@@ -31,6 +33,7 @@ class RiskCheckDetail(BaseModel):
     checks_failed: list[str] = []
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     latency_us: float = 0.0
+    message: str | None = None  # human-readable reason when rejected
 
 
 class PositionInfo(BaseModel):

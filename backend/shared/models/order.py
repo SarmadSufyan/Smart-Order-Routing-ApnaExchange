@@ -56,9 +56,9 @@ class RoutingStrategy(str, Enum):
 
 
 class OrderCreate(BaseModel):
-    symbol: str = Field(..., min_length=1, max_length=10, examples=["AAPL"])
+    symbol: str = Field(..., min_length=1, max_length=20, examples=["BTC/USDT"])
     side: OrderSide
-    quantity: float = Field(..., gt=0, examples=[100.0])
+    quantity: float = Field(..., gt=0, examples=[0.001])
     order_type: OrderType = OrderType.MARKET
     limit_price: float | None = Field(None, gt=0)
     strategy: RoutingStrategy = RoutingStrategy.BEST_PRICE
@@ -69,12 +69,18 @@ class ChildOrder(BaseModel):
     parent_order_id: UUID
     venue_id: str
     quantity: float
-    price: float
+    price: float  # expected VWAP at this venue (from the routing decision)
+    limit_price: float | None = None  # IOC limit actually sent (price protection)
+    client_order_id: str | None = None  # id sent to the venue (idempotency / reconciliation)
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
     fill_price: float = 0.0
     sent_at: datetime | None = None
     filled_at: datetime | None = None
+    exchange_order_id: str | None = None
+    fee: float = 0.0
+    fee_asset: str | None = None
+    reject_reason: str | None = None
 
 
 class Order(BaseModel):

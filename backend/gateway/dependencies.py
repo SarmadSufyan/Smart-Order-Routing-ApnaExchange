@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from backend.exchanges.registry import ExchangeRegistry
+from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.market_data.aggregator import MarketDataAggregator
 from backend.services.market_data.collector import MarketDataCollector
@@ -8,17 +10,23 @@ from backend.services.risk_engine.kill_switch import KillSwitch
 from backend.services.risk_engine.position_tracker import PositionTracker
 from backend.services.risk_engine.pre_trade import PreTradeRiskEngine
 from backend.services.routing_engine.engine import RoutingEngine
+from backend.services.venue_monitor.coherence import CoherenceMonitor
 from backend.services.venue_monitor.health_checker import VenueHealthMonitor
+from backend.services.wallet import WalletService
+from backend.shared.models.risk import RiskLimits
 
 
 @dataclass
 class Services:
+    exchange_registry: ExchangeRegistry
     venue_monitor: VenueHealthMonitor
+    coherence_monitor: CoherenceMonitor
     market_data_collector: MarketDataCollector
     market_data_aggregator: MarketDataAggregator
     order_manager: OrderManager
     risk_engine: PreTradeRiskEngine
     routing_engine: RoutingEngine
+    wallet_service: WalletService
     ws_manager: WebSocketManager
 
 
@@ -28,32 +36,72 @@ _services: Services | None = None
 def init_services() -> Services:
     global _services
 
-    venue_monitor = VenueHealthMonitor()
-    collector = MarketDataCollector()
+    registry = ExchangeRegistry.from_settings(settings)
+    venue_monitor = VenueHealthMonitor(
+        registry,
+        check_interval_s=settings.venue_health_check_interval_s,
+        feed_staleness_threshold_ms=settings.feed_staleness_threshold_ms,
+    )
+    collector = MarketDataCollector(
+        registry,
+        settings.symbol_list,
+        publish_interval_ms=settings.market_data_publish_interval_ms,
+        staleness_threshold_ms=settings.feed_staleness_threshold_ms,
+    )
     aggregator = MarketDataAggregator(collector, venue_monitor)
+    coherence = CoherenceMonitor(
+        registry,
+        collector,
+        settings.symbol_list,
+        threshold_bps=settings.coherence_threshold_bps,
+        interval_s=settings.coherence_check_interval_s,
+    )
+    venue_monitor.set_coherence(coherence)
     order_manager = OrderManager()
 
-    kill_switch = KillSwitch()
-    position_tracker = PositionTracker()
-    risk_engine = PreTradeRiskEngine(kill_switch, position_tracker)
+    risk_engine = PreTradeRiskEngine(
+        KillSwitch(),
+        PositionTracker(),
+        RiskLimits(
+            max_order_size=settings.default_max_order_size,
+            max_order_notional=settings.default_max_order_notional,
+            max_position_per_symbol=settings.default_max_position,
+            max_notional_exposure=settings.default_max_notional,
+            max_orders_per_second=settings.default_max_orders_per_second,
+        ),
+    )
 
+    wallet_service = WalletService(
+        registry,
+        collector,
+        settings.symbol_list,
+        mode=settings.exchange_mode,
+        refresh_interval_s=settings.wallet_refresh_interval_s,
+    )
     routing_engine = RoutingEngine(
         market_data_aggregator=aggregator,
+        market_data_collector=collector,
         risk_engine=risk_engine,
         venue_monitor=venue_monitor,
         order_manager=order_manager,
+        registry=registry,
+        depth_levels=settings.routing_depth_levels,
+        price_protection_bps=settings.child_price_protection_bps,
+        coherence=coherence,
+        wallet=wallet_service,  # per-venue balances cap each venue's slice
     )
 
-    ws_manager = WebSocketManager()
-
     _services = Services(
+        exchange_registry=registry,
         venue_monitor=venue_monitor,
+        coherence_monitor=coherence,
         market_data_collector=collector,
         market_data_aggregator=aggregator,
         order_manager=order_manager,
         risk_engine=risk_engine,
         routing_engine=routing_engine,
-        ws_manager=ws_manager,
+        wallet_service=wallet_service,
+        ws_manager=WebSocketManager(),
     )
     return _services
 

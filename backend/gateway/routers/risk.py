@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.gateway.middleware.auth import User, UserRole, get_current_user, require_role
+from backend.services.risk_engine.kill_switch import engage_kill_switch
 from backend.shared.models.risk import (
     KillSwitchActivateRequest,
     KillSwitchState,
@@ -43,31 +44,16 @@ async def activate_kill_switch(
     body: KillSwitchActivateRequest,
     user: Annotated[User, Depends(get_current_user)],
 ):
-    risk = _get_risk_engine()
-    order_manager = None
-    try:
-        from backend.gateway.dependencies import get_services
-        order_manager = get_services().order_manager
-    except Exception:
-        pass
+    from backend.gateway.dependencies import get_services
 
-    cancelled = 0
-    if order_manager:
-        from backend.shared.models.order import OrderStatus
-        for oid, order in list(order_manager._orders.items()):
-            if order.status in (OrderStatus.WORKING, OrderStatus.PARTIALLY_FILLED):
-                try:
-                    await order_manager.cancel_order(oid)
-                    cancelled += 1
-                except Exception:
-                    pass
-
-    state = await risk.kill_switch.activate(
+    svc = get_services()
+    return await engage_kill_switch(
+        svc.risk_engine.kill_switch,
+        svc.order_manager,
+        svc.exchange_registry,
         reason=body.reason,
-        activated_by=user.username,
-        orders_cancelled=cancelled,
+        operator=user.username,
     )
-    return state
 
 
 @router.post(

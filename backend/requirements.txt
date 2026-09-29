@@ -1,30 +1,24 @@
-# Runtime dependencies for the backend gateway + platform services.
-# Pinned for reproducibility. Bump intentionally, not opportunistically.
+# Runtime dependencies for the gateway + platform services.
+# Pinned to the versions verified end-to-end against Binance testnet on
+# Python 3.14 (2026-09-28). Bump intentionally, not opportunistically.
 
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-pydantic==2.7.4
-pydantic-settings==2.3.4
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+pydantic==2.13.4
+pydantic-settings==2.14.1   # also reads .env (pulls in python-dotenv)
+python-dotenv==1.2.2        # used directly by scripts/check_binance_testnet.py
 
-# HTTP client for calling venue REST APIs
-httpx==0.27.0
+# Exchange connectivity
+ccxt==4.5.81                # REST execution/balances; installs aiohttp for async
+websockets==16.0            # WebSocket depth streams (websockets.asyncio API)
 
 # Structured logging
-structlog==24.2.0
+structlog==26.1.0
 
 # Auth
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.5.0
 
-# Numerics — used by risk metrics and (later) anomaly detection
-numpy==1.26.4
-
-# WebSocket (FastAPI uses starlette's, but explicit dep is safer)
-websockets==12.0
-
-# === M3+ dependencies — not used in POC, kept here so install is one-shot ===
-# sqlalchemy[asyncio]==2.0.31
-# asyncpg==0.29.0
-# redis[hiredis]==5.0.7
-# alembic==1.13.1
-# scipy==1.13.1
+# === Planned — not imported yet, kept so install stays one-shot ===
+# numpy==2.4.4              # risk analytics / anomaly detection (Phase 6)
+# redis[hiredis]            # cross-process state + pub/sub (Phase 2+)
+# asyncpg / sqlalchemy      # TimescaleDB audit log (Phase 4)

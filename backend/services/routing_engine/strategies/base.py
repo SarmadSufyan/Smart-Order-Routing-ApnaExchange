@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
 
+from backend.exchanges.orderbook import Level
 from backend.shared.models.market_data import NBBO
 from backend.shared.models.order import Order
 from backend.shared.models.routing import RoutingResult
+
+# venue_id -> {"bids": [(price, qty), ...best first], "asks": [...]}
+VenueDepth = dict[str, dict[str, list[Level]]]
 
 
 class RoutingStrategy(ABC):
@@ -16,4 +20,25 @@ class RoutingStrategy(ABC):
         order: Order,
         nbbo: NBBO,
         routable_venues: list[str],
-    ) -> RoutingResult: ...
+        depth: VenueDepth | None = None,
+        lot_steps: dict[str, float] | None = None,
+        venue_names: dict[str, str] | None = None,
+        exclusion_reasons: dict[str, str] | None = None,
+        capacity: dict[str, float] | None = None,
+    ) -> RoutingResult:
+        """Decide how to split ``order`` across venues.
+
+        Args:
+            order: Parent order (quantity already normalised to lot size).
+            nbbo: Current NBBO; ``venue_quotes`` lists every quoting venue.
+            routable_venues: Venues that may receive orders (healthy AND able
+                to execute). Other quoting venues are shown but skipped.
+            depth: Live book levels per venue. When absent, strategies fall
+                back to top-of-book only.
+            lot_steps: Per-venue quantity step; allocations are floored to it.
+            venue_names: Display names for the human-readable notes.
+            exclusion_reasons: Why a quoting venue is not routable (shown in
+                the routing proof), e.g. "no real testnet".
+            capacity: Per venue, the most base asset it can trade given its
+                balance (coins to sell, or USDT/price to buy). Missing = no cap.
+        """
