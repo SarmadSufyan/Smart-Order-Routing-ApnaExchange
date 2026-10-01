@@ -16,7 +16,7 @@
 | V6 | **Gate** | Spot **TestNet** | API v4 key with account type **Testnet** | Normal Gate account | `GATE_TESTNET_API_KEY`, `GATE_TESTNET_API_SECRET` | ✅ Yes |
 | V2 | Coinbase | none — data only | **No key needed** | — | — | ❌ No |
 | V3 | Kraken | not usable | **No key** (no spot testnet exists) | — | — | ❌ No |
-| — | Anthropic (LLM copilot) | — | Anthropic API key | Anthropic Console account | `ANTHROPIC_API_KEY` | ⏳ Phase 5 |
+| — | Google Gemini (LLM copilot) | free tier — **don't enable billing** | Gemini API key | Google account (AI Studio) | `GEMINI_API_KEY` | ✅ For the copilot (the app runs without it; the copilot then says it's unavailable) |
 
 **Market data never needs a key.** Every order book ApnaSOR shows comes from each exchange's *public* real-market feed. Keys are only for **placing orders and reading balances**. Without a venue's keys, ApnaSOR still shows its prices, but won't route orders to it (the UI says "no … API keys configured").
 
@@ -38,6 +38,8 @@ We decide where to route on **real-market** order books and execute in **test en
 | Coinbase sandbox | static, pre-written responses — no matching engine | ❌ fake execution |
 | Kraken | no spot testnet at all | ❌ |
 | Phemex / HitBTC / Poloniex testnets | BTC at $49k / $21k / sandbox down | ❌ |
+| Bitget Demo Trading (`paptrading: 1` header, separate demo key) — measured 2026-10-02 | BTC −4 bps, ETH +0.2 bps; **SOL a separate market** (−6,049 bps); **no BNB / XRP** | ⚠️ BTC + ETH only; no adapter yet (candidate extra venue) |
+| KuCoin sandbox | offline since July 2023 | ❌ |
 
 ApnaSOR re-checks this every 5 seconds (the *coherence monitor*, shown as green/red chips on the Venue Connectivity page). A venue/symbol whose test prices drift more than ±50 bps from the real market is automatically excluded from routing.
 
@@ -173,7 +175,7 @@ The script reads keys through the gateway's own settings and **never prints them
 
 | Phase | What | Keys | Notes |
 |---|---|---|---|
-| **Phase 5** | LLM natural-language copilot | `ANTHROPIC_API_KEY` from the **Anthropic Console → API Keys** | The copilot only turns English into order parameters. Every order still passes the same risk checks. |
+| **Phase 5** | LLM natural-language copilot | `GEMINI_API_KEY` from **Google AI Studio → Get API key** (https://aistudio.google.com/apikey). Each person creates their own; no card, no billing. Optional: `GEMINI_MODEL` (default `gemini-3.1-flash-lite`) | The copilot only turns English into order parameters. Every order still passes the same risk checks. On the free tier Google may use prompts to improve its products: only the trader's sentence and the coin list are sent, never keys or balances. |
 | **Phase 8** | Live demo with small real money ($10–20) | `BINANCE_MAINNET_API_KEY` / `_SECRET` (and mainnet keys for any other venue used live) | See the safety rules below. The app refuses to start in mainnet mode unless **both** `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true` are set. |
 
 **Mainnet key safety rules (Phase 8):**
@@ -220,7 +222,7 @@ GATE_TESTNET_API_KEY=
 GATE_TESTNET_API_SECRET=
 
 # ── Later ──
-ANTHROPIC_API_KEY=               # Phase 5
+GEMINI_API_KEY=                  # LLM copilot (free, Google AI Studio)
 BINANCE_MAINNET_API_KEY=         # Phase 8 only
 BINANCE_MAINNET_API_SECRET=      # Phase 8 only
 ```

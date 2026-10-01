@@ -32,9 +32,9 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
 ```
  Frontend (React 18 + TS + Vite, Zustand) ── REST + one WebSocket ──┐
                                                                     ▼
- Gateway (FastAPI, async) ── routers: orders · algos · venues · market-data · wallet · risk · audit · routing · auth
+ Gateway (FastAPI, async) ── routers: orders · algos · copilot · venues · market-data · wallet · risk · audit · routing · auth
    │
-   ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, future LLM copilot)
+   ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, LLM copilot)
    │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → best-price depth walk
    │                        → IOC LIMIT children (price-protected) sent concurrently → fills applied
    ├─ PreTradeRiskEngine (7 checks) · KillSwitch (persisted) · PositionTracker
@@ -42,6 +42,8 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    ├─ MarketDataCollector + Aggregator (NBBO) · VenueHealthMonitor · CoherenceMonitor
    ├─ WalletService (real balances) · PnLService (opening balances + fills → P&L, reconciliation)
    ├─ TwapEngine (algo orders) · AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
+   ├─ Copilot: sentence → LLM (Gemini free tier) fills a strict form → code validates → proposal
+   │            → user confirms → OrderEntry / TwapEngine (the LLM never submits)
    │
  Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync
    V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
@@ -84,6 +86,7 @@ backend/
     wallet/             portfolio.py (balances), ledger.py (pure P&L math), pnl.py (P&L + reconciliation)
     audit/              recorder.py (event bus → audit log)
     algos/              twap.py (TWAP engine; pure schedule math at the top)
+    agents/             copilot.py (propose / confirm / cancel), llm.py (one LLM interface; GeminiClient)
     consensus/          EMPTY — Phase 6 home for the RAFT cluster
     execution/ policy/ risk/ routing/ venue_health/   empty legacy placeholders (unused)
   shared/               models/ (Pydantic v2), database/store.py (AuditStore), events/event_bus.py,
@@ -114,7 +117,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (107 as of 2026-10-01)
+python -m unittest discover -s backend/tests -t .   # all backend tests (147 as of 2026-10-02)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 ```
 
@@ -126,7 +129,7 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 
 ## Non-negotiable design rules
 
-1. **One way in.** Every order — button, TWAP, future copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly.
+1. **One way in.** Every order — button, TWAP, copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly.
 2. **Testnet / demo only** until Phase 8. Mainnet needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay empty in dev.
 3. **Children are IOC LIMIT, price-protected.** No resting orders; MARKET parents are capped at the worst planned price ± `CHILD_PRICE_PROTECTION_BPS` (and the venue's own price-limit rule).
 4. **Reality wins.** A fill reported by an exchange is always recorded (even on a cancelled parent). Never "fix" a mismatch by editing the ledger — reconciliation shows it; an operator accepts exchange balances (audited).
@@ -157,7 +160,7 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 - **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
 - **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
 - **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
-- **OKX**: some ISPs' default DNS refuses `okx.com` — don't depend on OKX for a demo unless that network reaches it.
+- **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network). Do it on the demo laptop too.
 - **Gate**: its documented test funds go to the *futures* testnet and can't move to spot; ApnaSOR trades Gate spot.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 
