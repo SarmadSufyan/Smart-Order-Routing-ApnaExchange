@@ -82,6 +82,18 @@ class Settings(BaseSettings):
     # never mix. ":memory:" keeps nothing (tests).
     database_path: str = ""
 
+    # ─── LLM copilot ──────────────────────────────────────────────
+    # The model only turns a sentence into order parameters; it never sees
+    # exchange keys and never submits anything. "off" disables the copilot.
+    llm_provider: Literal["gemini", "off"] = "gemini"
+    gemini_api_key: SecretStr | None = None  # free key from Google AI Studio
+    gemini_model: str = "gemini-3.1-flash-lite"  # fast + on the free tier (2026-10-02)
+    llm_timeout_s: float = 30.0
+    copilot_proposal_ttl_s: float = 120.0  # a proposal not confirmed in time expires
+    # Confirm refuses if the mid moved further than this since the proposal:
+    # the trader agreed to a price, not to whatever the market does next.
+    copilot_max_price_move_bps: float = 100.0
+
     # ─── Auth ─────────────────────────────────────────────────────
     jwt_secret: str = "apna-exchange-poc-secret-change-in-prod"
     jwt_algorithm: str = "HS256"

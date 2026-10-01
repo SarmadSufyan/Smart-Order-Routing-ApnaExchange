@@ -12,6 +12,7 @@ from backend.gateway.routers import (
     algos,
     audit,
     auth,
+    copilot,
     execution_reports,
     market_data,
     orders,
@@ -175,6 +176,10 @@ async def domain_error_handler(request, exc: DomainError):
         "UNSUPPORTED_SYMBOL": 400,
         "ALGO_NOT_FOUND": 404,
         "ALGO_REJECTED": 409,
+        "COPILOT_UNAVAILABLE": 503,
+        "LLM_UNAVAILABLE": 503,
+        "PROPOSAL_NOT_FOUND": 404,
+        "PROPOSAL_NOT_ACTIONABLE": 409,
     }
     return JSONResponse(
         status_code=status_map.get(exc.code, 500),
@@ -183,7 +188,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos):
+                      algos, copilot):
     app.include_router(router_module.router)
 
 

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
+from backend.services.agents import Copilot, build_llm_client
 from backend.services.algos import TwapEngine
 from backend.services.audit import AuditRecorder
 from backend.services.market_data.aggregator import MarketDataAggregator
@@ -39,6 +40,7 @@ class Services:
     audit_store: AuditStore
     audit_recorder: AuditRecorder
     ws_manager: WebSocketManager
+    copilot: Copilot
 
 
 _services: Services | None = None
@@ -121,6 +123,14 @@ def init_services() -> Services:
         order_entry, order_manager, aggregator, collector, routing_engine, registry,
         risk_engine, wallet_service, store=store,
     )
+    # The copilot only proposes; a confirmed proposal goes through order_entry
+    # (or the TWAP engine, which uses order_entry for every slice).
+    llm, llm_unavailable = build_llm_client(settings)
+    copilot = Copilot(
+        llm, order_entry, twap_engine, aggregator, collector, routing_engine, registry, risk_engine,
+        unavailable_reason=llm_unavailable, ttl_s=settings.copilot_proposal_ttl_s,
+        max_price_move_bps=settings.copilot_max_price_move_bps,
+    )
 
     _services = Services(
         exchange_registry=registry,
@@ -139,6 +149,7 @@ def init_services() -> Services:
         audit_store=store,
         audit_recorder=AuditRecorder(store, order_manager, kill_switch),
         ws_manager=WebSocketManager(),
+        copilot=copilot,
     )
     return _services
 
