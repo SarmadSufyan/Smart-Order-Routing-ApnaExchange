@@ -38,7 +38,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 
 ## Next workstreams, with "done" criteria
 
-Each can be built in parallel. They touch different folders (see CONTRIBUTING.md for branch names).
+Backend items (5b, 6, 5c, backend parts of 7) are done in order by the backend relay on `feature/backend-v2`; frontend items by Mahnoor and Maham on `feature/frontend-v2` (see CONTRIBUTING.md).
 
 ### 5b — LLM copilot (backend + a frontend panel)
 
@@ -97,7 +97,7 @@ Switch 2–3 exchanges to mainnet (`EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true
 | Gate spot testnet funds | Sarmad | Key works; spot wallet empty; Gate documents test funds only for futures |
 | OKX | Sarmad | Passphrase missing; okx.com blocked by some ISPs' DNS |
 | Production database | team | SQLite now; PostgreSQL/TimescaleDB later (Phase 7) |
-| Workstream owners | team | Fill in the "Who is working on what" table in PROGRESS.md |
+| Workstream owners | decided 2026-10-01 | Backend relay Fizza ⇄ Sarmad (`feature/backend-v2`): §5b → §6 → §5c → §7. Frontend Mahnoor + Maham (`feature/frontend-v2`). Details in PROGRESS.md |
 | Rotate exchange keys | Sarmad | After testing; never commit keys |
 
 ## Claims we make (and don't)

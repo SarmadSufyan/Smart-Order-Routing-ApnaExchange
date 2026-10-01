@@ -15,7 +15,7 @@
 | Group | CS14 — Usman Institute of Technology (UITU), Final Year Project, 4 members |
 | Supervisors | Sir Usman Javed, Miss Shiza |
 | Domain | Crypto trading infrastructure: smart order routing, pre-trade risk, execution algos |
-| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**) — base branch `feature/crypto-pivot`; workstream branches PR into it |
+| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**). Default branch `feature/crypto-pivot` (Sarmad merges into it at milestones). Working branches: `feature/backend-v2` (Fizza ⇄ Sarmad **relay**, one at a time) and `feature/frontend-v2` (Mahnoor + Maham, split by page) |
 
 Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070-CS) · Mahnoor Nadeem (23SP-065-CS) · Maham Ikram (23SP-101-CS).
 
@@ -141,14 +141,14 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 
 **TypeScript**: strict mode; functional components; named exports; no `any`; styling is **inline styles with the theme tokens** `C` / `F` from `theme.ts` (no Tailwind, no CSS files); numbers through `format.ts`; server state in `dataStore.ts`, REST in `services/api.ts`.
 
-**Git**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`); branch per workstream (see CONTRIBUTING.md); PRs reviewed and merged by Sarmad; no direct pushes to `main`. **No AI/tool attribution anywhere** — no co-author trailers, no "generated with …" lines in commits, PRs, code or docs.
+**Git**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`); work only on your team's branch (`feature/backend-v2` or `feature/frontend-v2`, see CONTRIBUTING.md); only Sarmad merges into `feature/crypto-pivot`, with merge commits (never squash the long-lived branches); no pushes to `main`. **No AI/tool attribution anywhere** — no co-author trailers, no "generated with …" lines in commits, PRs, code or docs.
 
 ## Session protocol (every working session, human or assistant)
 
-1. **Start:** pull your branch; read this file, `PROGRESS.md` (check *Who is working on what* — don't touch someone else's claimed area), and the relevant `ROADMAP.md` section.
+1. **Start:** `git pull` your branch (and `git merge origin/feature/crypto-pivot`); read this file, `PROGRESS.md` (*Who is working on what* — frontend: stay in your own pages; backend relay: read the **newest handoff note** first and continue from it), and the relevant `ROADMAP.md` section.
 2. **Plan before building:** read the real code (docs can lag), list contradictions/risks, then build.
 3. **Verify:** run the tests + type-check; exercise the feature live on testnet with a small order.
-4. **End:** update `PROGRESS.md` (state, what's next, your claim row) and append a dated entry to `DEVELOPMENT_JOURNAL.md` (what, why, design choices, files). Commit with a conventional message; push only your branch.
+4. **End:** update your row in `PROGRESS.md` (backend relay: add a handoff note — done, half-done with file/function, exact next step) and append a dated entry to `DEVELOPMENT_JOURNAL.md` (what, why, design choices, files). Commit with a conventional message; push your branch. Never leave uncommitted work behind.
 
 ## Gotchas (each one cost us time)
 

@@ -8,27 +8,36 @@
 
 ## Last updated
 
-**2026-10-01** — Phases 0–4 and the TWAP bot (5a) are built and verified live on Binance testnet + Bybit demo. Repo made **private**; team works locally from clones (each with their own `.env`) on workstream branches → PRs into `feature/crypto-pivot` → Sarmad merges and syncs. New teammates: [`ONBOARDING.md`](ONBOARDING.md). Next: Phase 5b (LLM copilot), Phase 6 (parallelism + RAFT), 5c (arbitrage detector) — in parallel workstreams.
+**2026-10-01** — Phases 0–4 and the TWAP bot (5a) are built and verified live on Binance testnet + Bybit demo. Repo made **private**; `feature/crypto-pivot` is the default branch. Team split: **backend** = Fizza ⇄ Sarmad relay on `feature/backend-v2`; **frontend** = Mahnoor + Maham on `feature/frontend-v2`. Everyone works locally with their own `.env`. New teammates: [`ONBOARDING.md`](ONBOARDING.md). Next: Phase 5b (LLM copilot), Phase 6 (parallelism + RAFT), 5c (arbitrage detector) — in parallel workstreams.
 
 ---
 
 ## Who is working on what
 
-Claim a row **before** you start (owner + branch). Only edit your own row. Two people or two assistant sessions must never build the same workstream.
+Team split (decided 2026-10-01). Update **your own** row's status at the end of every session.
 
-| | Workstream | Owner | Branch | Status | Last update |
+| Area | People | Branch | Scope | Status | Last update |
 |---|---|---|---|---|---|
-| A | LLM copilot (ROADMAP §5b) | *unclaimed* | `feature/copilot` | not started | — |
-| B | Frontend: copilot panel, How It Works update, polish (§5b UI, §7) | *unclaimed* | `feature/frontend-v2` | not started | — |
-| C | Parallelism: multiprocessing risk + RAFT cluster (§6) | *unclaimed* | `feature/raft` | not started | — |
-| D | Arbitrage detector + CI + doc rewrite (§5c, §7) | *unclaimed* | `feature/arb-docs` | not started | — |
-| — | Integration, reviews, merges, exchange keys | Sarmad | `feature/crypto-pivot` → `main` | ongoing | 2026-10-01 |
+| **Backend** (relay) | **Fizza ⇄ Sarmad** — one at a time, never together | `feature/backend-v2` | In order: 5b LLM copilot API → 6 multiprocessing risk + RAFT → 5c arbitrage detector → 7 CI + doc rewrite (ROADMAP) | not started | 2026-10-01 |
+| **Frontend** — pages | **Mahnoor** | `feature/frontend-v2` | How It Works (rewrite for the crypto design), Dashboard (+ running-TWAP widget), Market Data, Login; the **copilot chat panel** once the copilot API is merged | not started | — |
+| **Frontend** — pages | **Maham** | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; narrow-screen / responsive fixes | not started | — |
+| Integration | Sarmad | `feature/crypto-pivot` (default) | Merge `backend-v2` and `frontend-v2` at milestones; reviews; exchange keys | ongoing | 2026-10-01 |
+
+Mahnoor and Maham may swap pages; just update the table. **Shared frontend files** (`services/api.ts`, `stores/dataStore.ts`, `App.tsx`, `components/AppShell.tsx`, `components/shared.tsx`, `theme.ts`, `format.ts`): `git pull` right before editing, push right after, and tell the other.
+
+### Backend relay — handoff notes (newest on top)
+
+Fizza and Sarmad never work at the same time. **Before starting:** message the other ("taking backend"), then `git pull` on `feature/backend-v2` and read the newest note here. **Before stopping:** tests pass, push everything (never leave uncommitted work), and add a note here: what you finished, what is half-done (file + function), the exact next step, anything that surprised you.
+
+| Date | By | Done | Half-done / next step |
+|---|---|---|---|
+| 2026-10-01 | Sarmad | Phases 0–4 + TWAP (5a) on `feature/crypto-pivot`; branches `feature/backend-v2` and `feature/frontend-v2` created from it | Next: start 5b LLM copilot API (ROADMAP §5b) — `backend/services/agents/copilot.py` + `backend/gateway/routers/copilot.py`; needs `ANTHROPIC_API_KEY` in `.env` |
 
 ---
 
 ## Picking this up cold?
 
-1. New machine? Follow [`ONBOARDING.md`](ONBOARDING.md) (clone `-b feature/crypto-pivot`, deps, your own `.env`, checks). Otherwise `git checkout feature/crypto-pivot && git pull`, then create/checkout your workstream branch.
+1. New machine? Follow [`ONBOARDING.md`](ONBOARDING.md) (clone straight onto your branch, deps, your own `.env`, checks). Otherwise `git checkout feature/backend-v2` or `feature/frontend-v2` and `git pull`; backend relay: read the newest handoff note below first.
 2. Set up your **own** exchange keys (`project-info/API_KEYS_GUIDE.md`) → `python scripts/check_exchange_keys.py` → `python start_all.py` → log in as `admin` / `admin`.
 3. Run `python -m unittest discover -s backend/tests -t .` — expect **107 passing**.
 4. Read the ROADMAP section for your workstream; it lists what "done" means.
@@ -79,10 +88,9 @@ The simulated system (June POC) is preserved on the `archive/venue-simulators` b
 
 See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" criteria.
 
-1. **5b LLM copilot** (workstream A + B) — needs an LLM API key in each developer's `.env` (`ANTHROPIC_API_KEY`).
-2. **6 Parallelism + RAFT** (workstream C).
-3. **5c Arbitrage detector, CI, doc rewrite** (workstream D).
-4. Merge `feature/crypto-pivot` → `main` via PR so every workstream branches from `main`.
+1. **Backend relay (Fizza ⇄ Sarmad):** 5b LLM copilot API (needs `ANTHROPIC_API_KEY`) → 6 parallelism + RAFT → 5c arbitrage detector → 7 CI + doc rewrite.
+2. **Frontend (Mahnoor + Maham):** How It Works rewrite, page polish, running-TWAP widget, responsive fixes; then the copilot chat panel once the copilot API is merged into `feature/crypto-pivot`.
+3. Merge `backend-v2` / `frontend-v2` into `feature/crypto-pivot` at milestones; much later `feature/crypto-pivot` → `main`.
 5. Gate spot funds; OKX passphrase + a network that reaches okx.com.
 6. Production DB decision (SQLite now; PostgreSQL/TimescaleDB later).
 7. Remove the unused `venues/` folder from the active branch (kept on `archive/venue-simulators`) — waiting for the team's go-ahead.
@@ -100,7 +108,7 @@ See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" cr
 
 ## Branch / commit state
 
-All work through Phase 5a is committed and pushed on **`feature/crypto-pivot`** (2026-10-01) — the base branch every workstream branches from and PRs into. The repo is **private** (collaborators: Sarmad admin; Fizza, Mahnoor, Maham write). `main` still has the June simulated POC; `feature/crypto-pivot` → `main` happens later via PR.
+All work through Phase 5a is on **`feature/crypto-pivot`**, the repo's **default branch** (2026-10-01). Working branches cut from it: `feature/backend-v2` (Fizza ⇄ Sarmad relay) and `feature/frontend-v2` (Mahnoor + Maham); both merge back into `feature/crypto-pivot` at milestones. The repo is **private** (Sarmad admin; Fizza, Mahnoor, Maham write). `main` still has the June simulated POC; `feature/crypto-pivot` → `main` happens later via PR.
 
 Not in git on purpose: `.env` (keys), `data/` (local audit database), `PLAN.md` and `notes/` (Sarmad's personal notes), `notes.zip`, the old `sor-poc-frontend/` copy, log files.
 
