@@ -3,7 +3,7 @@
 > The single source of truth for anyone (teammate or coding assistant) working on this repo.
 > **Then read [`PROGRESS.md`](PROGRESS.md)** (current state + who is working on what) and
 > **[`project-info/ROADMAP.md`](project-info/ROADMAP.md)** (what's next, with acceptance criteria).
-> Team workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md). History and the *why* behind every change: [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md).
+> Team workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md). New machine / new teammate: [`ONBOARDING.md`](ONBOARDING.md). History and the *why* behind every change: [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md).
 
 ---
 
@@ -15,7 +15,7 @@
 | Group | CS14 — Usman Institute of Technology (UITU), Final Year Project, 4 members |
 | Supervisors | Sir Usman Javed, Miss Shiza |
 | Domain | Crypto trading infrastructure: smart order routing, pre-trade risk, execution algos |
-| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange — active branch `feature/crypto-pivot` |
+| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**) — base branch `feature/crypto-pivot`; workstream branches PR into it |
 
 Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070-CS) · Mahnoor Nadeem (23SP-065-CS) · Maham Ikram (23SP-101-CS).
 

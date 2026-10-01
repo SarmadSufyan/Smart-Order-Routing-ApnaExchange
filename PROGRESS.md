@@ -8,7 +8,7 @@
 
 ## Last updated
 
-**2026-10-01** — Phases 0–4 and the TWAP bot (5a) are built and verified live on Binance testnet + Bybit demo. Docs rewritten for team hand-off (project guide, roadmap, contributing). Next: Phase 5b (LLM copilot), Phase 6 (parallelism + RAFT), 5c (arbitrage detector) — in parallel workstreams.
+**2026-10-01** — Phases 0–4 and the TWAP bot (5a) are built and verified live on Binance testnet + Bybit demo. Repo made **private**; team works locally from clones (each with their own `.env`) on workstream branches → PRs into `feature/crypto-pivot` → Sarmad merges and syncs. New teammates: [`ONBOARDING.md`](ONBOARDING.md). Next: Phase 5b (LLM copilot), Phase 6 (parallelism + RAFT), 5c (arbitrage detector) — in parallel workstreams.
 
 ---
 
@@ -28,7 +28,7 @@ Claim a row **before** you start (owner + branch). Only edit your own row. Two p
 
 ## Picking this up cold?
 
-1. `git checkout feature/crypto-pivot && git pull` (or `main` once the crypto-pivot PR is merged), then create/checkout your workstream branch.
+1. New machine? Follow [`ONBOARDING.md`](ONBOARDING.md) (clone `-b feature/crypto-pivot`, deps, your own `.env`, checks). Otherwise `git checkout feature/crypto-pivot && git pull`, then create/checkout your workstream branch.
 2. Set up your **own** exchange keys (`project-info/API_KEYS_GUIDE.md`) → `python scripts/check_exchange_keys.py` → `python start_all.py` → log in as `admin` / `admin`.
 3. Run `python -m unittest discover -s backend/tests -t .` — expect **107 passing**.
 4. Read the ROADMAP section for your workstream; it lists what "done" means.
@@ -100,7 +100,7 @@ See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" cr
 
 ## Branch / commit state
 
-All work through Phase 5a is committed and pushed on **`feature/crypto-pivot`** (2026-10-01). `main` still has the June simulated POC; next step is a PR `feature/crypto-pivot` → `main`.
+All work through Phase 5a is committed and pushed on **`feature/crypto-pivot`** (2026-10-01) — the base branch every workstream branches from and PRs into. The repo is **private** (collaborators: Sarmad admin; Fizza, Mahnoor, Maham write). `main` still has the June simulated POC; `feature/crypto-pivot` → `main` happens later via PR.
 
 Not in git on purpose: `.env` (keys), `data/` (local audit database), `PLAN.md` and `notes/` (Sarmad's personal notes), `notes.zip`, the old `sor-poc-frontend/` copy, log files.
 

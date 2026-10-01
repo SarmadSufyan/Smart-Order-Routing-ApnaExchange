@@ -1,6 +1,7 @@
 # Contributing — Team Workflow
 
 > Simple workflow for our 4-person team. Read once, follow the loop.
+> **New on the team? Start with [`ONBOARDING.md`](ONBOARDING.md)** (clone, `.env`, first run, your branch).
 > Before any work: [`CLAUDE.md`](CLAUDE.md) (project guide and rules) → [`PROGRESS.md`](PROGRESS.md) (state + who is working on what) → [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means).
 
 ---
@@ -8,15 +9,16 @@
 ## The model in one picture
 
 ```
-main  ◄── PR ── feature/copilot      (workstream A: LLM copilot)
-      ◄── PR ── feature/frontend-v2  (workstream B: frontend)
-      ◄── PR ── feature/raft         (workstream C: parallelism + RAFT)
-      ◄── PR ── feature/arb-docs     (workstream D: arbitrage detector, CI, docs)
+feature/crypto-pivot  ◄── PR ── feature/copilot      (workstream A: LLM copilot)
+   (base for now;     ◄── PR ── feature/frontend-v2  (workstream B: frontend)
+    later: main)      ◄── PR ── feature/raft         (workstream C: parallelism + RAFT)
+                      ◄── PR ── feature/arb-docs     (workstream D: arbitrage detector, CI, docs)
 ```
 
 - **One branch per workstream.** Work freely on it, push often.
-- **One PR when a chunk is done**, into `main`. Sarmad reviews and squash-merges.
-- **Base branch:** `main` once the `feature/crypto-pivot` PR is merged. Until then, branch from `feature/crypto-pivot`.
+- **One PR when a chunk is done**, into the base branch. Sarmad reviews and squash-merges.
+- **Base branch:** `feature/crypto-pivot` for now: branch from it and target your PRs at it. When Sarmad merges it into `main`, he'll announce it and `main` becomes the base.
+- The repo is **private**; collaborators sign in with their own GitHub account.
 - Before starting, **claim your workstream** in the *Who is working on what* table in `PROGRESS.md`, so two people (or two assistant sessions) never build the same thing.
 
 ### Suggested workstreams (owners: fill in PROGRESS.md)
@@ -34,10 +36,11 @@ main  ◄── PR ── feature/copilot      (workstream A: LLM copilot)
 
 ## Setup (each person, once)
 
+Full step-by-step version with checks and troubleshooting: [`ONBOARDING.md`](ONBOARDING.md).
+
 ```powershell
-git clone https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git
-cd Smart-Order-Routing-ApnaExchange
-git checkout feature/crypto-pivot          # or main after the merge
+git clone -b feature/crypto-pivot https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
+cd apnasor
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -64,7 +67,8 @@ Your local audit database (`data/apnasor-testnet.db`) is created automatically a
 ```powershell
 git checkout feature/<your-workstream>
 git pull                                    # what your teammate pushed
-git merge origin/main                       # stay close to the base (fewer surprises at PR time)
+git fetch origin
+git merge origin/feature/crypto-pivot       # stay close to the base (fewer surprises at PR time)
 # ...work...
 python -m unittest discover -s backend/tests -t .
 npx --prefix frontend tsc --noEmit -p frontend
@@ -73,7 +77,7 @@ git commit -m "feat(copilot): parse notional orders"
 git push
 ```
 
-When the chunk is done: GitHub → **Pull requests** → **New** → base `main` ← your branch → short title + bullets → reviewer Sarmad.
+When the chunk is done: GitHub → **Pull requests** → **New** → base `feature/crypto-pivot` ← your branch → short title + bullets → reviewer Sarmad.
 
 **Before you push:** tests pass, type-check passes, `PROGRESS.md` row updated, journal entry appended for anything non-trivial.
 
@@ -109,7 +113,9 @@ When the chunk is done: GitHub → **Pull requests** → **New** → base `main`
 2. Check: anything outside the workstream's folders? Any `.env`, keys, `data/` or logs committed? Tests and type-check pass?
 3. Good → **Squash and merge** → delete the branch. Needs work → comment; they fix and push again.
 
-Branch protection for `main` (set once): Settings → Branches → require a pull request before merging; approvals not required (single reviewer).
+Branch protection for `main` and `feature/crypto-pivot` (set once): Settings → Branches → require a pull request before merging; approvals not required (single reviewer).
+
+**Syncing everyone's work:** fetch all branches (`git fetch origin`), review and merge the open PRs into `feature/crypto-pivot`, run the tests and a live check, then tell the team to run their `git merge origin/feature/crypto-pivot`.
 
 ---
 
@@ -129,7 +135,7 @@ test(raft): leader re-election after the leader process dies
 git status                    # what's changed
 git log --oneline -5          # last 5 commits
 git pull                      # latest of your branch
-git merge origin/main         # bring in what's been merged
+git merge origin/feature/crypto-pivot   # bring in what's been merged
 git stash / git stash pop     # shelve changes temporarily
 ```
 

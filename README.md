@@ -13,6 +13,7 @@ ApnaSOR keeps live order books from real exchanges (Binance, Bybit, Gate, OKX), 
 
 | Read | For |
 |---|---|
+| [`ONBOARDING.md`](ONBOARDING.md) | **New teammate?** Clone, `.env`, first run, your branch |
 | [`CLAUDE.md`](CLAUDE.md) | Project guide: architecture, repo map, rules, gotchas — **read first** |
 | [`PROGRESS.md`](PROGRESS.md) | Where things stand, who is working on what |
 | [`project-info/ROADMAP.md`](project-info/ROADMAP.md) | What's next and what "done" means |
