@@ -3,17 +3,56 @@ import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle, ArcGauge } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
+import { useAuthStore } from '../stores/authStore'
 import { backendRiskToPositions } from '../adapters'
 import { SYMBOLS } from '../mockData'
-import { fmtPrice } from '../format'
+import { fmtPnl, fmtPrice, fmtUsd } from '../format'
+
+const PORTFOLIO_LIMITS = [
+  { key: 'max_trading_loss_usdt', label: 'Trading loss limit', unit: 'USDT', hint: '0 = off. Breach engages the kill switch.' },
+  { key: 'max_asset_concentration_pct', label: 'Max share of one asset', unit: '%', hint: 'Non-stable assets only.' },
+  { key: 'max_venue_concentration_pct', label: 'Max share on one exchange', unit: '%', hint: 'Counterparty risk.' },
+  { key: 'max_algo_notional_usdt', label: 'Max TWAP order value', unit: 'USDT', hint: 'Whole parent order, so slicing can\'t dodge the per-order limit.' },
+] as const
+
+type PortfolioLimitKey = typeof PORTFOLIO_LIMITS[number]['key']
 
 export function RiskManager() {
   const navigate = useNavigate()
   const riskStatus = useDataStore((s) => s.riskStatus)
   const orders     = useDataStore((s) => s.orders)
   const routingStats = useDataStore((s) => s.routingStats)
+  const updateRiskLimits = useDataStore((s) => s.updateRiskLimits)
+  const isAdmin = useAuthStore((s) => s.user?.role) === 'ADMIN'
 
   const [search, setSearch] = useState('')
+  const [draft, setDraft] = useState<Partial<Record<PortfolioLimitKey, string>>>({})
+  const [saving, setSaving] = useState(false)
+  const [limitMsg, setLimitMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const portfolio = riskStatus?.portfolio ?? null
+  const limits = riskStatus?.limits ?? null
+  const lossUsed = Math.max(0, -(portfolio?.trading_pnl ?? 0))
+
+  async function saveLimits() {
+    if (!limits) return
+    const next = { ...limits }
+    for (const { key } of PORTFOLIO_LIMITS) {
+      const raw = draft[key]
+      if (raw === undefined || raw === '') continue
+      const val = Number(raw)
+      if (!isFinite(val) || val < 0) {
+        setLimitMsg({ ok: false, text: `Invalid value for ${key}` })
+        return
+      }
+      next[key] = val
+    }
+    setSaving(true)
+    const err = await updateRiskLimits(next)
+    setSaving(false)
+    setLimitMsg(err ? { ok: false, text: err } : { ok: true, text: 'Saved — applies immediately and survives restarts.' })
+    if (!err) setDraft({})
+  }
 
   const positions = backendRiskToPositions(riskStatus)
   const filtered = positions.filter((p) => !search || p.sym.includes(search.toUpperCase()))
@@ -118,6 +157,104 @@ export function RiskManager() {
         </button>
       </Card>
 
+      {/* Portfolio controls — watched continuously by the risk monitor */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr', gap: 12, marginBottom: 12 }}>
+        <Card style={{ textAlign: 'center' }}>
+          <CardTitle>TRADING LOSS LIMIT</CardTitle>
+          {portfolio && portfolio.loss_limit_usdt > 0 ? (
+            <>
+              <ArcGauge value={Math.round(lossUsed * 100) / 100} max={portfolio.loss_limit_usdt}
+                        label={`of ${fmtUsd(portfolio.loss_limit_usdt, 0)} limit`} unit="USDT lost" size={130} />
+              <div style={{ fontSize: F.sm, marginTop: 6 }}>
+                Trading P&L{' '}
+                <span style={{ color: (portfolio.trading_pnl ?? 0) < 0 ? C.red : C.green, fontWeight: 700 }}>
+                  {fmtPnl(portfolio.trading_pnl)}
+                </span>
+              </div>
+              <div style={{ fontSize: F.xs, color: portfolio.loss_limit_breached ? C.red : C.dim, marginTop: 4 }}>
+                {portfolio.loss_limit_breached
+                  ? 'BREACHED — kill switch engaged automatically'
+                  : 'A breach engages the kill switch automatically'}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: F.sm, color: C.dim, padding: '24px 0' }}>
+              {portfolio ? 'Loss limit is off (0).' : 'Waiting for the risk monitor…'}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle>CONCENTRATION</CardTitle>
+          {(portfolio?.concentration ?? []).length === 0 ? (
+            <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
+              Waiting for wallet balances…
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {portfolio!.concentration.filter((c) => c.share_pct >= 1 || c.breached).map((c) => (
+                <div key={`${c.kind}-${c.key}`}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: F.xs, marginBottom: 3 }}>
+                    <span style={{ color: C.muted }}>
+                      {c.kind === 'venue' ? 'Exchange' : 'Asset'} · <span style={{ color: C.text }}>{c.name}</span>
+                    </span>
+                    <span style={{ color: c.breached ? C.red : C.text, fontWeight: c.breached ? 700 : 400 }}>
+                      {c.share_pct.toFixed(1)}% / {c.limit_pct}%
+                    </span>
+                  </div>
+                  <div style={{ position: 'relative', height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, c.share_pct)}%`, background: c.breached ? C.red : C.blue }} />
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${c.limit_pct}%`, width: 2, background: C.text, opacity: 0.6 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle>PORTFOLIO LIMITS</CardTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {PORTFOLIO_LIMITS.map((l) => (
+              <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: F.sm, color: C.text }}>{l.label}</div>
+                  <div style={{ fontSize: F.xs, color: C.dim }}>{l.hint}</div>
+                </div>
+                {isAdmin ? (
+                  <input
+                    value={draft[l.key] ?? (limits ? String(limits[l.key]) : '')}
+                    onChange={(e) => setDraft((d) => ({ ...d, [l.key]: e.target.value }))}
+                    style={{
+                      width: 90, padding: '4px 6px', borderRadius: 3, textAlign: 'right',
+                      background: C.surface, border: `1px solid ${C.border}`, color: C.text,
+                      fontSize: F.sm, fontFamily: 'inherit', outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <span style={{ fontSize: F.sm, color: C.text }}>{limits ? limits[l.key].toLocaleString() : '—'}</span>
+                )}
+                <span style={{ fontSize: F.xs, color: C.dim, width: 34 }}>{l.unit}</span>
+              </div>
+            ))}
+            {isAdmin ? (
+              <button onClick={saveLimits} disabled={saving || !limits || Object.keys(draft).length === 0} style={{
+                marginTop: 4, padding: '6px 12px', borderRadius: 4, border: 'none',
+                background: C.blue, color: '#fff', fontSize: F.sm, fontFamily: 'inherit',
+                cursor: saving ? 'wait' : 'pointer', opacity: Object.keys(draft).length === 0 ? 0.5 : 1,
+              }}>
+                {saving ? 'Saving…' : 'Save limits'}
+              </button>
+            ) : (
+              <div style={{ fontSize: F.xs, color: C.dim }}>Only an admin can change limits.</div>
+            )}
+            {limitMsg && (
+              <div style={{ fontSize: F.xs, color: limitMsg.ok ? C.green : C.red }}>{limitMsg.text}</div>
+            )}
+          </div>
+        </Card>
+      </div>
+
       <Card style={{ marginBottom: 12 }}>
         <CardTitle>PRE-TRADE CHECK BREAKDOWN</CardTitle>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
@@ -182,7 +319,7 @@ export function RiskManager() {
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <CardTitle>POSITION TRACKER</CardTitle>
+            <CardTitle>NET TRADED SINCE OPENING BALANCES</CardTitle>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -196,7 +333,7 @@ export function RiskManager() {
           </div>
           {filtered.length === 0 ? (
             <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
-              No open positions.
+              Nothing traded since the opening balances. Holdings are on the Wallet page.
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>

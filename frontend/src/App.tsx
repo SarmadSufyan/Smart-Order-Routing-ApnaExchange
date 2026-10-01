@@ -9,6 +9,8 @@ import { KillSwitch } from './pages/KillSwitch'
 import { Wallet } from './pages/Wallet'
 import { HowItWorks } from './pages/HowItWorks'
 import { MarketData } from './pages/MarketData'
+import { AuditLog } from './pages/AuditLog'
+import { AlgoOrders } from './pages/AlgoOrders'
 import { useAuthStore } from './stores/authStore'
 
 export default function App() {
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="venues"       element={<VenueHealth />} />
           <Route path="risk"         element={<RiskManager />} />
           <Route path="killswitch"   element={<KillSwitch />} />
+          <Route path="audit"        element={<AuditLog />} />
+          <Route path="algos"        element={<AlgoOrders />} />
           <Route path="order"        element={<Navigate to="/" replace />} />
         </Route>
 

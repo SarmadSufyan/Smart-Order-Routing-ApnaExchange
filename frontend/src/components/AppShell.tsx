@@ -10,11 +10,13 @@ import { backendVenueToUi } from '../adapters'
 const NAV = [
   { path: '/',            label: 'Dashboard'            },
   { path: '/market-data', label: 'Market Data'          },
+  { path: '/algos',       label: 'Algo Orders (TWAP)'   },
   { path: '/wallet',      label: 'Wallet'               },
   { path: '/howitworks',  label: 'How It Works'         },
   { path: '/venues',      label: 'Venue Connectivity'   },
   { path: '/risk',        label: 'Risk Manager'         },
   { path: '/killswitch',  label: 'Kill Switch & Alerts' },
+  { path: '/audit',       label: 'Audit Log'            },
 ]
 
 export function AppShell() {

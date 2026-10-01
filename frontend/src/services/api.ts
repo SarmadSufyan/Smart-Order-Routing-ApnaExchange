@@ -129,6 +129,155 @@ export interface WalletSnapshot {
   assets: AssetTotal[]
 }
 
+// ── Portfolio book of record (P&L + reconciliation) ─────────────────
+export interface AssetPnL {
+  asset: string
+  quantity: number                 // expected holdings from our ledger
+  opening_quantity: number
+  avg_cost: number | null
+  mark: number | null
+  value_usdt: number | null
+  realized_pnl: number
+  unrealized_pnl: number | null
+  fees_usdt: number
+  total_pnl: number | null
+  hold_pnl: number | null
+  by_venue: Record<string, number>
+}
+
+export type ReconStatus = 'OK' | 'BREAK' | 'PENDING' | 'UNKNOWN' | 'NO_BASELINE'
+
+export interface ReconItem {
+  asset: string
+  expected: number
+  actual: number | null
+  difference: number | null
+  difference_usdt: number | null
+  status: ReconStatus
+}
+
+export interface VenueReconciliation {
+  venue_id: string
+  name: string
+  status: ReconStatus
+  baseline_at: string | null
+  baseline_set_by: string | null
+  note: string | null
+  items: ReconItem[]
+}
+
+export interface PortfolioPnL {
+  as_of: string
+  mode: string
+  since: string | null
+  complete: boolean
+  unpriced_assets: string[]
+  opening_value_usdt: number | null
+  value_usdt: number | null
+  total_pnl: number | null
+  hold_pnl: number | null
+  trading_pnl: number | null
+  realized_pnl: number | null
+  unrealized_pnl: number | null
+  fees_usdt: number
+  fills_applied: number
+  fills_before_baseline: number
+  assets: AssetPnL[]
+  reconciliation: VenueReconciliation[]
+  notes: string[]
+}
+
+export interface ConcentrationItem {
+  kind: 'asset' | 'venue'
+  key: string
+  name: string
+  value_usdt: number
+  share_pct: number
+  limit_pct: number
+  breached: boolean
+}
+
+export interface PortfolioRiskState {
+  as_of: string | null
+  trading_pnl: number | null
+  loss_limit_usdt: number
+  loss_used_pct: number | null
+  loss_limit_breached: boolean
+  concentration: ConcentrationItem[]
+  alerts: string[]
+}
+
+export interface AuditEvent {
+  seq: number
+  ts: string
+  event_type: string
+  actor: string | null
+  order_id: string | null
+  venue_id: string | null
+  symbol: string | null
+  summary: string
+  payload: Record<string, unknown>
+}
+
+export interface AuditEventList {
+  events: AuditEvent[]
+  has_more: boolean
+  store: string
+}
+
+// ── Algo (parent) orders — TWAP ──────────────────────────────────────
+export type AlgoStatus = 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED'
+
+export interface TwapParams {
+  symbol: string
+  side: string
+  quantity: number
+  duration_s: number
+  slices: number
+  limit_price?: number | null
+  jitter_pct?: number
+}
+
+export interface TwapSlice {
+  index: number
+  scheduled_at: string
+  target_cumulative: number
+  sent_at: string | null
+  quantity: number
+  filled: number
+  avg_price: number
+  mid_at_send: number | null
+  order_id: string | null
+  venues: string[]
+  status: 'PENDING' | 'FILLED' | 'PARTIAL' | 'UNFILLED' | 'SKIPPED'
+  note: string | null
+}
+
+export interface TwapState {
+  id: string
+  kind: string
+  created_by: string
+  created_at: string
+  updated_at: string
+  status: AlgoStatus
+  status_reason: string | null
+  params: TwapParams
+  interval_s: number
+  nominal_slice: number
+  lot_step: number
+  started_at: string | null
+  ended_at: string | null
+  arrival_mid: number | null
+  filled_quantity: number
+  avg_fill_price: number
+  fees_usdt: number
+  slices: TwapSlice[]
+  arrival_slippage_bps: number | null
+  interval_twap: number | null
+  vs_interval_twap_bps: number | null
+  notes: string[]
+}
+
 export interface VenueQuote {
   venue_id: string
   symbol: string
@@ -216,6 +365,22 @@ export interface Order {
   updated_at: string
   child_orders: ChildOrder[]
   routing_decision?: RoutingDecision | null
+  submitted_by?: string | null
+  parent_id?: string | null   // the algo order (e.g. TWAP) this is a slice of
+}
+
+export interface RiskLimits {
+  max_order_size: number
+  max_order_notional: number
+  max_algo_notional_usdt: number
+  max_position_per_symbol: number
+  max_notional_exposure: number
+  max_orders_per_second: number
+  restricted_symbols: string[]
+  restricted_venues: string[]
+  max_trading_loss_usdt: number
+  max_asset_concentration_pct: number
+  max_venue_concentration_pct: number
 }
 
 // Backend risk status shape (raw)
@@ -236,14 +401,7 @@ export interface BackendRiskStatus {
     unrealized_pnl: number
   }>
   total_notional_exposure: number
-  risk_limits: {
-    max_order_size: number
-    max_position_per_symbol: number
-    max_notional_exposure: number
-    max_orders_per_second: number
-    restricted_symbols: string[]
-    restricted_venues: string[]
-  }
+  risk_limits: RiskLimits
   recent_checks: Array<{
     order_id: string
     result: string                // APPROVED | REJECTED_*
@@ -252,6 +410,7 @@ export interface BackendRiskStatus {
     timestamp: string
     latency_us: number
   }>
+  portfolio?: PortfolioRiskState | null
 }
 
 // UI-friendly normalized version
@@ -274,6 +433,8 @@ export interface RiskStatus {
     reason?: string | null
     check_duration_ms: number
   }>
+  limits: RiskLimits | null
+  portfolio: PortfolioRiskState | null
 }
 
 export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
@@ -302,6 +463,8 @@ export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
       reason: c.checks_failed?.length ? c.checks_failed.join(', ') : null,
       check_duration_ms: (c.latency_us ?? 0) / 1000,
     })),
+    limits: r.risk_limits ?? null,
+    portfolio: r.portfolio ?? null,
   }
 }
 
@@ -383,6 +546,32 @@ export const api = {
   getWallet: () => request<WalletSnapshot>('/api/wallet/'),
 
   refreshWallet: () => request<WalletSnapshot>('/api/wallet/refresh', { method: 'POST' }),
+
+  getPnl: () => request<PortfolioPnL>('/api/wallet/pnl'),
+
+  // Accept the exchanges' current balances as the new opening balances.
+  resetBaseline: (venueId?: string) =>
+    request<PortfolioPnL>('/api/wallet/baseline', {
+      method: 'POST',
+      body: JSON.stringify({ venue_id: venueId ?? null }),
+    }),
+
+  getAudit: (params: { order_id?: string; event_type?: string; before_seq?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') q.set(k, String(v))
+    return request<AuditEventList>(`/api/audit/?${q.toString()}`)
+  },
+
+  getAlgos: () => request<{ algos: TwapState[] }>('/api/algos/'),
+
+  startTwap: (p: TwapParams) =>
+    request<TwapState>('/api/algos/twap', { method: 'POST', body: JSON.stringify(p) }),
+
+  controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') =>
+    request<TwapState>(`/api/algos/${id}/${action}`, { method: 'POST' }),
+
+  updateRiskLimits: (limits: RiskLimits) =>
+    request<RiskLimits>('/api/risk/limits', { method: 'PUT', body: JSON.stringify(limits) }),
 
   submitOrder: (
     symbol: string,

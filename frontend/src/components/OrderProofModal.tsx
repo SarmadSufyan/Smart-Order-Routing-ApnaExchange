@@ -2,6 +2,7 @@ import React from 'react'
 import { C, F, tint } from '../theme'
 import { fmtPrice, fmtQty } from '../format'
 import { RoutingProof } from './RoutingProof'
+import { AuditTimeline } from './AuditTimeline'
 import type { Order as BackendOrder } from '../services/api'
 
 /**
@@ -25,6 +26,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
   const partial = order.status === 'PARTIALLY_FILLED'
   const working = order.status === 'WORKING'
   const rejected = order.status === 'REJECTED'
+  const cancelled = order.status === 'CANCELLED'
   const stateColor =
     filled ? C.green
     : partial ? C.orange
@@ -36,6 +38,8 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
     : partial ? 'Partially Filled'
     : working ? 'Working'
     : rejected ? 'Rejected'
+    : cancelled && order.filled_quantity > 0 ? 'Cancelled (partly filled)'
+    : cancelled ? 'Cancelled'
     : order.status
 
   const overlay: React.CSSProperties = {
@@ -75,7 +79,12 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
                 {order.avg_fill_price > 0 && ` · filled @ ${fmtPrice(order.avg_fill_price)}`}
                 {order.child_orders[0]?.exchange_order_id && ` · exchange id ${order.child_orders[0].exchange_order_id}`}
                 {resolvedVenue && ` · ${resolvedVenue}`}
+                {order.submitted_by && ` · by ${order.submitted_by}`}
+                {order.parent_id && ` · slice of ${order.parent_id}`}
               </div>
+              {(rejected || cancelled) && order.rejection_reason && (
+                <div style={{ fontSize: F.sm, color: rejected ? C.red : C.muted, marginTop: 2 }}>{order.rejection_reason}</div>
+              )}
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.dim, cursor: 'pointer', fontSize: F.xl }}>✕</button>
@@ -95,6 +104,13 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
               </div>
             </div>
           )}
+
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 6, letterSpacing: '.05em' }}>
+              AUDIT TRAIL — EVERY STEP, AS RECORDED
+            </div>
+            <AuditTimeline orderId={order.id} />
+          </div>
 
           <button
             onClick={onClose}

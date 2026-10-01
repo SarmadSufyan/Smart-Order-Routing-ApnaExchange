@@ -23,6 +23,7 @@ export function KillSwitch() {
   const [step, setStep]     = useState(0)
   const [reason, setReason] = useState('')
   const [busy, setBusy]     = useState(false)
+  const [error, setError]   = useState<string | null>(null)
 
   async function activate() {
     if (step === 0) { setStep(1); return }
@@ -35,10 +36,13 @@ export function KillSwitch() {
 
   async function deactivate() {
     setBusy(true)
-    await deactivateKillSwitch()
+    const err = await deactivateKillSwitch()  // refused while the loss limit is still breached
     setBusy(false)
-    setReason('')
-    setStep(0)
+    setError(err)
+    if (!err) {
+      setReason('')
+      setStep(0)
+    }
   }
 
   // Build live alerts from system state
@@ -66,6 +70,21 @@ export function KillSwitch() {
           status: 'Active', time: '—',
         })
       }
+    })
+    const portfolio = riskStatus?.portfolio
+    if (portfolio?.loss_limit_breached) {
+      list.push({
+        sev: 'Critical', sys: 'Risk Monitor',
+        msg: `Trading loss ${portfolio.trading_pnl?.toFixed(2)} USDT beyond the ${portfolio.loss_limit_usdt} USDT limit`,
+        status: 'Active', time: portfolio.as_of?.slice(11, 19) || '—',
+      })
+    }
+    ;(portfolio?.concentration ?? []).filter((c) => c.breached).forEach((c) => {
+      list.push({
+        sev: 'Warning', sys: 'Risk Monitor',
+        msg: `${c.kind === 'venue' ? 'Exchange' : 'Asset'} ${c.name} is ${c.share_pct.toFixed(1)}% of the portfolio (limit ${c.limit_pct}%)`,
+        status: 'Active', time: '—',
+      })
     })
     const recentRejects = executionReports.filter((r) => r.exec_type === 'REJECT').slice(0, 3)
     recentRejects.forEach((r) => {
@@ -144,7 +163,10 @@ export function KillSwitch() {
               Activated at: {riskStatus?.kill_switch_activated_at?.replace('T', ' ').slice(0, 19) || '—'}
             </div>
             <div style={{ color: '#ffffffcc', fontSize: F.md, marginTop: 16 }}>
-              All new orders are being rejected by pre-trade check.
+              All new orders are rejected, and no further child order is sent to any exchange.
+            </div>
+            <div style={{ color: '#ffffffaa', fontSize: F.sm, marginTop: 4 }}>
+              Stays engaged across gateway restarts until someone releases it.
             </div>
             <button onClick={deactivate} disabled={busy} style={{
               marginTop: 20, padding: '10px 28px', borderRadius: 5,
@@ -153,6 +175,14 @@ export function KillSwitch() {
             }}>
               {busy ? 'Deactivating…' : 'Deactivate Kill Switch'}
             </button>
+            {error && (
+              <div style={{
+                margin: '14px auto 0', maxWidth: 560, padding: '8px 12px', borderRadius: 4,
+                background: '#ffffff', color: C.red, fontSize: F.sm, fontWeight: 600,
+              }}>
+                {error}
+              </div>
+            )}
           </>
         ) : (
           <>

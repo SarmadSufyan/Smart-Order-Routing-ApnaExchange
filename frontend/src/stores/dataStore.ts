@@ -8,6 +8,10 @@ import {
   type ExecutionReport,
   type RoutingStats,
   type WalletSnapshot,
+  type PortfolioPnL,
+  type RiskLimits,
+  type TwapParams,
+  type TwapState,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
 
@@ -22,11 +26,22 @@ interface DataState {
   executionReports: ExecutionReport[]
   routingStats: RoutingStats | null
   wallet: WalletSnapshot | null
+  pnl: PortfolioPnL | null
+  algos: TwapState[]
   loading: boolean
   lastError: string | null
 
+  fetchAlgos: () => Promise<void>
+  // Resolve to [the algo, null] or [null, error message].
+  startTwap: (p: TwapParams) => Promise<[TwapState | null, string | null]>
+  controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') => Promise<string | null>
+
   fetchWallet: () => Promise<void>
   refreshWallet: () => Promise<void>
+  fetchPnl: () => Promise<void>
+  // Operator actions below resolve to an error message, or null on success.
+  resetBaseline: (venueId?: string) => Promise<string | null>
+  updateRiskLimits: (limits: RiskLimits) => Promise<string | null>
   fetchVenues: () => Promise<void>
   fetchAllNBBO: () => Promise<void>
   fetchOrders: () => Promise<void>
@@ -41,7 +56,7 @@ interface DataState {
   degradeVenue: (venueId: string) => Promise<void>
   recoverVenue: (venueId: string) => Promise<void>
   activateKillSwitch: (reason: string) => Promise<void>
-  deactivateKillSwitch: () => Promise<void>
+  deactivateKillSwitch: () => Promise<string | null>
   setupWebSocket: () => void
 }
 
@@ -53,8 +68,66 @@ export const useDataStore = create<DataState>((set, get) => ({
   executionReports: [],
   routingStats: null,
   wallet: null,
+  pnl: null,
+  algos: [],
   loading: false,
   lastError: null,
+
+  fetchAlgos: async () => {
+    try {
+      set({ algos: (await api.getAlgos()).algos })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
+  startTwap: async (p) => {
+    try {
+      const algo = await api.startTwap(p)
+      await get().fetchAlgos()
+      return [algo, null]
+    } catch (e) {
+      return [null, (e as Error).message]
+    }
+  },
+
+  controlAlgo: async (id, action) => {
+    try {
+      await api.controlAlgo(id, action)
+      await get().fetchAlgos()
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  fetchPnl: async () => {
+    try {
+      set({ pnl: await api.getPnl() })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
+  resetBaseline: async (venueId) => {
+    try {
+      set({ pnl: await api.resetBaseline(venueId) })
+      await Promise.all([get().fetchWallet(), get().fetchRiskStatus()])
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  updateRiskLimits: async (limits) => {
+    try {
+      await api.updateRiskLimits(limits)
+      await get().fetchRiskStatus()
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
 
   fetchWallet: async () => {
     try {
@@ -136,6 +209,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       get().fetchExecutionReports(),
       get().fetchRoutingStats(),
       get().fetchWallet(),
+      get().fetchPnl(),
+      get().fetchAlgos(),
     ])
     set({ loading: false })
   },
@@ -211,8 +286,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.deactivateKillSwitch()
       await get().fetchRiskStatus()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      // e.g. the trading-loss limit still holds the kill switch
+      return (e as Error).message
     }
   },
 
@@ -221,6 +298,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     wsWired = true
     wsClient.subscribe('wallet_update', () => {
       get().fetchWallet()
+      get().fetchPnl()
     })
     wsClient.subscribe('venue_health', () => {
       get().fetchVenues()
@@ -230,10 +308,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     })
     wsClient.subscribe('kill_switch', () => {
       get().fetchRiskStatus()
+      get().fetchAlgos()  // the kill switch pauses running TWAPs
+    })
+    wsClient.subscribe('algo_update', () => {
+      get().fetchAlgos()
     })
     wsClient.subscribe('execution_report', () => {
       get().fetchExecutionReports()
       get().fetchRiskStatus()
+      get().fetchPnl()
     })
   },
 }))

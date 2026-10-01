@@ -27,6 +27,13 @@ export function fmtUsd(v: number | null | undefined, digits = 2): string {
   return sign + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
+/** Signed P&L: +$12.30 / -$4.10 / $0.00. Hides float noise below half a cent. */
+export function fmtPnl(v: number | null | undefined, digits = 2): string {
+  if (v === null || v === undefined || !isFinite(v)) return '—'
+  if (Math.abs(v) < 0.005) return fmtUsd(0, digits)
+  return (v > 0 ? '+' : '') + fmtUsd(v, digits)
+}
+
 export function spreadBps(bid: number, ask: number): number {
   const mid = (bid + ask) / 2
   return mid > 0 ? ((ask - bid) / mid) * 10_000 : 0
