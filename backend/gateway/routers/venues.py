@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.gateway.middleware.auth import User, UserRole, get_current_user, require_role
+from backend.shared.events.event_bus import audit
 from backend.shared.models.venue import VenueDetail, VenueHealth, VenueListResponse
 
 router = APIRouter(prefix="/api/venues", tags=["venues"])
@@ -50,9 +51,9 @@ async def get_venue(venue_id: str, user: Annotated[User, Depends(get_current_use
     response_model=VenueHealth,
     dependencies=[Depends(require_role(UserRole.RISK_MANAGER, UserRole.ADMIN))],
 )
-async def blacklist_venue(venue_id: str):
+async def blacklist_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     svc, _ = _require_venue(venue_id)
-    await svc.venue_monitor.blacklist_venue(venue_id)
+    await svc.venue_monitor.blacklist_venue(venue_id, actor=user.username)
     return svc.venue_monitor.get_venue_health(venue_id)
 
 
@@ -61,9 +62,9 @@ async def blacklist_venue(venue_id: str):
     response_model=VenueHealth,
     dependencies=[Depends(require_role(UserRole.RISK_MANAGER, UserRole.ADMIN))],
 )
-async def unblacklist_venue(venue_id: str):
+async def unblacklist_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     svc, _ = _require_venue(venue_id)
-    await svc.venue_monitor.unblacklist_venue(venue_id)
+    await svc.venue_monitor.unblacklist_venue(venue_id, actor=user.username)
     return svc.venue_monitor.get_venue_health(venue_id)
 
 
@@ -71,7 +72,7 @@ async def unblacklist_venue(venue_id: str):
     "/{venue_id}/degrade",
     dependencies=[Depends(require_role(UserRole.RISK_MANAGER, UserRole.ADMIN))],
 )
-async def degrade_venue(venue_id: str):
+async def degrade_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     """Demo control: add artificial latency to OUR connection to the venue.
 
     A real exchange can't be forced into a degraded state; the health monitor
@@ -79,6 +80,8 @@ async def degrade_venue(venue_id: str):
     """
     _, adapter = _require_venue(venue_id)
     adapter.set_degraded(True)
+    await audit("venue_degraded", f"{venue_id}: artificial latency added by {user.username} (demo control)",
+                actor=user.username, venue_id=venue_id)
     return {"venue_id": venue_id, "degraded": True}
 
 
@@ -86,7 +89,9 @@ async def degrade_venue(venue_id: str):
     "/{venue_id}/recover",
     dependencies=[Depends(require_role(UserRole.RISK_MANAGER, UserRole.ADMIN))],
 )
-async def recover_venue(venue_id: str):
+async def recover_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     _, adapter = _require_venue(venue_id)
     adapter.set_degraded(False)
+    await audit("venue_recovered", f"{venue_id}: artificial latency removed by {user.username}",
+                actor=user.username, venue_id=venue_id)
     return {"venue_id": venue_id, "degraded": False}

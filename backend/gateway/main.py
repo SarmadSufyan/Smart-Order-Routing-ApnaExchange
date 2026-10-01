@@ -1,15 +1,16 @@
 import asyncio
 from contextlib import asynccontextmanager
-from uuid import UUID
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.gateway.config import settings
-from backend.gateway.dependencies import get_services, init_services
+from backend.gateway.dependencies import Services, default_risk_limits, get_services, init_services
 from backend.gateway.routers import (
     admin,
+    algos,
+    audit,
     auth,
     execution_reports,
     market_data,
@@ -19,11 +20,11 @@ from backend.gateway.routers import (
     venues,
     wallet,
 )
-from backend.gateway.routers.execution_reports import record_execution_report
-from backend.shared.events.event_bus import event_bus
+from backend.gateway.routers.execution_reports import record_execution_report, report_from_event
+from backend.shared.events.event_bus import audit as record_audit, event_bus
 from backend.shared.exceptions import DomainError
-from backend.shared.models.execution_report import ExecType, ExecutionReport
-from backend.shared.models.order import OrderSide
+from backend.shared.models.execution_report import ExecType
+from backend.shared.models.risk import KillSwitchState, RiskLimits
 from backend.shared.utils.logger import get_logger, setup_logging
 
 logger = get_logger("gateway")
@@ -39,7 +40,37 @@ WS_CHANNELS = [
     "kill_switch",
     "execution_report",
     "wallet_update",
+    "algo_update",
 ]
+
+
+async def restore_state(svc: Services) -> None:
+    """Reload what the previous run left in the audit store.
+
+    Order matters: the kill switch comes back FIRST, so a gateway that was
+    halted stays halted before anything else can happen.
+    """
+    store = svc.audit_store
+    if saved := await store.kv_get("kill_switch"):
+        svc.risk_engine.kill_switch.restore(KillSwitchState.model_validate(saved))
+    if saved := await store.kv_get("risk_limits"):
+        # Defaults first, so limits added in a newer version get their default.
+        svc.risk_engine.limits = RiskLimits.model_validate({**default_risk_limits().model_dump(), **saved})
+
+    orders = await store.load_orders(limit=500)
+    for order in svc.order_manager.restore(orders):
+        store.upsert_order(order)
+        store.append_event(
+            "order_status", f"Recovered after restart -> {order.status.value}: {order.rejection_reason}",
+            actor="system", order_id=str(order.id), symbol=order.symbol,
+        )
+    svc.routing_engine.restore_stats(orders)
+    for payload in await store.recent_payloads("execution_report", limit=1000):
+        try:
+            record_execution_report(report_from_event(payload))
+        except (KeyError, ValueError):
+            continue
+    await svc.pnl_service.load()
 
 
 @asynccontextmanager
@@ -52,6 +83,12 @@ async def lifespan(app: FastAPI):
         symbols=settings.symbol_list,
     )
     svc = init_services()
+    await svc.audit_store.open()
+    await restore_state(svc)
+    svc.audit_recorder.start()
+    svc.pnl_service.start()
+    await svc.twap_engine.load()  # after the recorder: interrupted TWAPs are paused, and that is audited
+    svc.twap_engine.start()
 
     # Fan every internal event out to WebSocket subscribers of that channel.
     for channel in WS_CHANNELS:
@@ -61,23 +98,7 @@ async def lifespan(app: FastAPI):
         event_bus.subscribe(channel, forward)
 
     async def store_execution_report(data: dict) -> None:
-        record_execution_report(
-            ExecutionReport(
-                order_id=UUID(data["order_id"]),
-                child_order_id=UUID(data["child_order_id"]) if data.get("child_order_id") else None,
-                venue_id=data["venue_id"],
-                exec_type=ExecType(data["exec_type"]),
-                symbol=data["symbol"],
-                side=OrderSide(data["side"]),
-                quantity=data.get("quantity", 0),
-                price=data.get("price", 0),
-                venue_latency_ms=data.get("venue_latency_ms", 0),
-                rejection_reason=data.get("rejection_reason"),
-                exchange_order_id=data.get("exchange_order_id"),
-                fee=data.get("fee") or 0.0,
-                fee_asset=data.get("fee_asset"),
-            )
-        )
+        record_execution_report(report_from_event(data))
 
     async def refresh_wallet_after_fill(data: dict) -> None:
         if data.get("exec_type") in (ExecType.FILL.value, ExecType.PARTIAL.value):
@@ -86,17 +107,33 @@ async def lifespan(app: FastAPI):
     event_bus.subscribe("execution_report", store_execution_report)
     event_bus.subscribe("execution_report", refresh_wallet_after_fill)
 
+    ks = svc.risk_engine.kill_switch.get_state()
+    await record_audit(
+        "gateway_started",
+        f"Gateway started ({settings.exchange_mode}; venues {', '.join(settings.enabled_exchange_list)})"
+        + (f" — kill switch still ENGAGED: {ks.reason}" if ks.active else ""),
+        actor="system",
+        payload={"exchange_mode": settings.exchange_mode, "exchanges": settings.enabled_exchange_list,
+                 "symbols": settings.symbol_list, "kill_switch_active": ks.active},
+    )
+
     # Exchanges first (they feed everything else), then the services reading them.
     await svc.exchange_registry.start_all()
     await svc.routing_engine.start()
-    for service in (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor, svc.wallet_service):
+    background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
+                  svc.wallet_service, svc.risk_monitor)
+    for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
-    logger.info("apnasor_ready", port=settings.api_port)
+    logger.info("apnasor_ready", port=settings.api_port, audit_store=svc.audit_store.path)
     yield
 
     logger.info("shutting_down")
-    for service in (svc.wallet_service, svc.coherence_monitor, svc.market_data_collector, svc.venue_monitor):
+    # Algos first: running TWAPs are paused and an in-flight slice finishes
+    # while the exchanges and the router are still up.
+    await svc.twap_engine.stop()
+    await record_audit("gateway_stopped", "Gateway stopped", actor="system")
+    for service in reversed(background):
         await service.stop()
     await svc.routing_engine.stop()
     for task in _background_tasks:
@@ -104,6 +141,9 @@ async def lifespan(app: FastAPI):
     await asyncio.gather(*_background_tasks, return_exceptions=True)
     _background_tasks.clear()
     await svc.exchange_registry.stop_all()
+    svc.pnl_service.stop()
+    svc.audit_recorder.stop()
+    await svc.audit_store.close()
     logger.info("shutdown_complete")
 
 
@@ -133,6 +173,8 @@ async def domain_error_handler(request, exc: DomainError):
         "RISK_CHECK_FAILED": 400,
         "KILL_SWITCH_ACTIVE": 503,
         "UNSUPPORTED_SYMBOL": 400,
+        "ALGO_NOT_FOUND": 404,
+        "ALGO_REJECTED": 409,
     }
     return JSONResponse(
         status_code=status_map.get(exc.code, 500),
@@ -140,7 +182,8 @@ async def domain_error_handler(request, exc: DomainError):
     )
 
 
-for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet):
+for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
+                      algos):
     app.include_router(router_module.router)
 
 
@@ -168,7 +211,9 @@ async def health_check():
             "order_state": "up",
             "venue_monitor": "up",
             "wallet": "up",
+            "audit_store": "up" if svc.audit_store.is_open else "down",
         },
+        "audit_store": svc.audit_store.path,
         "exchanges": exchanges,
         "websocket_connections": svc.ws_manager.connection_count,
     }

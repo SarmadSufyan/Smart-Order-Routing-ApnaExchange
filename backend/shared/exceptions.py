@@ -21,11 +21,11 @@ class VenueNotFoundError(DomainError):
 
 
 class InvalidStateTransitionError(DomainError):
-    def __init__(self, order_id: str, from_state: str, to_state: str):
-        super().__init__(
-            f"Invalid transition {from_state} -> {to_state} for order {order_id}",
-            "INVALID_STATE_TRANSITION",
-        )
+    def __init__(self, order_id: str, from_state: str, to_state: str, reason: str | None = None):
+        message = f"Invalid transition {from_state} -> {to_state} for order {order_id}"
+        if reason:
+            message = f"Order {order_id} can't move {from_state} -> {to_state}: {reason}"
+        super().__init__(message, "INVALID_STATE_TRANSITION")
 
 
 class RiskCheckFailedError(DomainError):

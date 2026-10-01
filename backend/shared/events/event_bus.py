@@ -38,3 +38,24 @@ class EventBus:
 
 
 event_bus = EventBus()
+
+
+async def audit(
+    event_type: str,
+    summary: str,
+    *,
+    actor: str | None = None,
+    order_id: str | None = None,
+    venue_id: str | None = None,
+    symbol: str | None = None,
+    payload: dict[str, Any] | None = None,
+    persist: dict[str, Any] | None = None,
+) -> None:
+    """Record an action in the audit trail (picked up by the AuditRecorder).
+
+    ``persist={"key", "value"}`` also saves state that must survive a restart.
+    """
+    await event_bus.publish("audit", {
+        "event_type": event_type, "summary": summary, "actor": actor, "order_id": order_id,
+        "venue_id": venue_id, "symbol": symbol, "payload": payload, "persist": persist,
+    })

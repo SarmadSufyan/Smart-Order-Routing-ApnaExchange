@@ -9,11 +9,16 @@ greedily until the order is filled:
     for price, qty, venue in levels:            # O(L)
         take = floor_to_lot(min(remaining, qty))
         allocate take to venue; remaining -= take
+    while some venue's share < its minimum order (lot or value):
+        drop the smallest such venue and walk again   # at most V extra walks
 
 The result is one child order per venue whose size is exactly the liquidity
 that venue offers at prices better than any alternative — the textbook SOR
 allocation. With a single venue it degenerates to walking that venue's book,
 which still yields an honest expected VWAP and slippage estimate.
+
+The minimum-size pass matters for small orders (TWAP slices): a split must
+never hand a venue a sliver it will reject.
 """
 
 from collections import defaultdict
@@ -84,10 +89,12 @@ class BestPriceStrategy(RoutingStrategy):
         venue_names: dict[str, str] | None = None,
         exclusion_reasons: dict[str, str] | None = None,
         capacity: dict[str, float] | None = None,
+        min_sizes: dict[str, tuple[float, float]] | None = None,
     ) -> RoutingResult:
         is_buy = order.side == OrderSide.BUY
         names = venue_names or {}
         exclusions = exclusion_reasons or {}
+        minimums = min_sizes or {}
         base, quote = split_symbol(order.symbol)
         funding_asset = quote if is_buy else base
         cap_left = dict(capacity or {})  # base-asset units each venue can still fund
@@ -147,32 +154,65 @@ class BestPriceStrategy(RoutingStrategy):
             ladder = [lv for lv in ladder if (lv[0] <= lim if is_buy else lv[0] >= lim)]
 
         # ── 3. Greedy walk
-        alloc: dict[str, float] = defaultdict(float)
-        notional: dict[str, float] = defaultdict(float)
-        worst_level: dict[str, float] = {}  # deepest price consumed per venue
-        remaining = order.quantity
-        levels_used = 0
-        for price, size, vid in ladder:
-            if remaining <= EPS:
+        capacity_start = dict(cap_left)
+
+        def walk(skip: set[str]):
+            cap = dict(capacity_start)
+            alloc: dict[str, float] = defaultdict(float)
+            notional: dict[str, float] = defaultdict(float)
+            worst_level: dict[str, float] = {}  # deepest price consumed per venue
+            remaining = order.quantity
+            used = 0
+            for price, size, vid in ladder:
+                if remaining <= EPS:
+                    break
+                if vid in skip:
+                    continue
+                # A venue can only sell the coins / spend the USDT it actually holds.
+                take = min(remaining, size, cap.get(vid, float("inf")))
+                step = (lot_steps or {}).get(vid)
+                if step:
+                    take = floor_to_step(take, step)
+                if take <= 0:
+                    continue
+                if vid in cap:
+                    cap[vid] = round(cap[vid] - take, 12)
+                alloc[vid] = round(alloc[vid] + take, 12)  # keep sums on the lot grid
+                notional[vid] += take * price
+                worst_level[vid] = price  # ladder is sorted, so the last one is the worst
+                remaining = max(round(remaining - take, 12), 0.0)
+                used += 1
+            return alloc, notional, worst_level, remaining, used, cap
+
+        # A venue rejects an order below its own minimum lot or value, so a
+        # share that small must go elsewhere: drop the smallest offender and
+        # walk again (at most once per venue).
+        too_small: dict[str, str] = {}
+        while True:
+            alloc, notional, worst_level, remaining, levels_used, cap_left = walk(set(too_small))
+            offenders: dict[str, str] = {}
+            for vid, qty in alloc.items():
+                min_qty, min_value = minimums.get(vid, (0.0, 0.0))
+                if min_qty and qty < min_qty - EPS:
+                    offenders[vid] = f"its share {fmt_qty(qty)} {base} is below its minimum order {fmt_qty(min_qty)} {base}"
+                elif min_value and notional[vid] < min_value - 1e-9:
+                    offenders[vid] = (f"its share ({fmt_qty(qty)} {base}, {fmt_price(notional[vid])}) is below "
+                                      f"its minimum order value {fmt_price(min_value)}")
+            if not offenders:
                 break
-            # A venue can only sell the coins / spend the USDT it actually holds.
-            take = min(remaining, size, cap_left.get(vid, float("inf")))
-            step = (lot_steps or {}).get(vid)
-            if step:
-                take = floor_to_step(take, step)
-            if take <= 0:
-                continue
-            if vid in cap_left:
-                cap_left[vid] = round(cap_left[vid] - take, 12)
-            alloc[vid] = round(alloc[vid] + take, 12)  # keep sums on the lot grid
-            notional[vid] += take * price
-            worst_level[vid] = price  # ladder is sorted, so the last one is the worst
-            remaining = max(round(remaining - take, 12), 0.0)
-            levels_used += 1
+            smallest = min(offenders, key=lambda v: notional[v])
+            too_small[smallest] = offenders[smallest]
+        for r in rows:
+            if r["venue_id"] in too_small:
+                r["eligible"] = False
+                r["excluded_reason"] = f"order too small for this venue: {too_small[r['venue_id']]}"
 
         if not alloc:
             reason = ("No liquidity at or better than the limit price"
                       if order.order_type == OrderType.LIMIT else "No available liquidity across venues")
+            if too_small and len(too_small) == len(eligible):
+                reason = ("Order is below every venue's minimum order size: "
+                          + "; ".join(f"{vid} {why}" for vid, why in too_small.items()))
             return RoutingResult(
                 status=RoutingStatus.REJECTED, rejection_reason=reason,
                 decision=RoutingDecision(
@@ -203,7 +243,8 @@ class BestPriceStrategy(RoutingStrategy):
 
         total_allocated = sum(alloc.values())
         blended = sum(notional.values()) / total_allocated
-        best_price = eligible[0]["price"]
+        usable = [r for r in eligible if r["venue_id"] not in too_small]  # never empty here
+        best_price = usable[0]["price"]
 
         # "Savings" = SOR VWAP vs sending the whole order to the worst venue alone.
         standalone = {
@@ -220,7 +261,9 @@ class BestPriceStrategy(RoutingStrategy):
         # ── 5. Human-readable explanation
         winners = [c.venue_id for c in child_orders]
         side_word = "ask" if is_buy else "bid"
-        notes = [f"{label(eligible[0]['venue_id'])} had the best executable {side_word} at {fmt_price(best_price)}"]
+        notes = [f"{label(usable[0]['venue_id'])} had the best executable {side_word} at {fmt_price(best_price)}"]
+        for vid, why in too_small.items():
+            notes.append(f"{label(vid)} skipped for this order: {why} — re-routed to the other venues")
         # Be explicit when a venue we can't trade on quoted a better price.
         better_elsewhere = [
             r for r in ineligible
@@ -233,7 +276,7 @@ class BestPriceStrategy(RoutingStrategy):
                 f"{label(r['venue_id'])} quoted a better {side_word} ({fmt_price(r['price'])}, "
                 f"{gap_bps:.1f} bps better) but was skipped: {r['excluded_reason']}"
             )
-        if len(eligible) == 1:
+        if len(eligible) == 1 and not too_small:
             notes.append(
                 "Only one venue can execute this order"
                 + (f" ({len(ineligible)} more quoting but not executable)" if ineligible else "")

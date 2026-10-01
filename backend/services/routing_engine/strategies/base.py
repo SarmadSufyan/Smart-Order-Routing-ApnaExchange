@@ -25,6 +25,7 @@ class RoutingStrategy(ABC):
         venue_names: dict[str, str] | None = None,
         exclusion_reasons: dict[str, str] | None = None,
         capacity: dict[str, float] | None = None,
+        min_sizes: dict[str, tuple[float, float]] | None = None,
     ) -> RoutingResult:
         """Decide how to split ``order`` across venues.
 
@@ -41,4 +42,6 @@ class RoutingStrategy(ABC):
                 the routing proof), e.g. "no real testnet".
             capacity: Per venue, the most base asset it can trade given its
                 balance (coins to sell, or USDT/price to buy). Missing = no cap.
+            min_sizes: Per venue, its (minimum lot, minimum order value in
+                quote). A venue's share must meet both or go elsewhere.
         """

@@ -7,7 +7,8 @@ in USDT using live mid prices from ApnaSOR's OWN order books.
 Refreshes on a timer and immediately after any fill (``request_refresh``),
 then publishes a ``wallet_update`` event.
 
-Phase 4 extends this into the pre-trade "can this order be funded?" check.
+Per-venue balances cap each venue's slice in routing (the funding gate), and
+the P&L service reconciles its ledger against them.
 """
 
 import asyncio
@@ -76,7 +77,8 @@ class WalletService:
                 return 0.0 if asset in self._assets else None
         return None
 
-    def _price_usdt(self, asset: str, venue_id: str) -> float | None:
+    def price_usdt(self, asset: str, venue_id: str) -> float | None:
+        """Live mid in USDT from our own books: this venue's, else any venue's."""
         if asset in STABLE_QUOTES:
             return 1.0
         symbol = f"{asset}/USDT"
@@ -116,7 +118,7 @@ class WalletService:
                     wallet.other_assets_count = res.other_nonzero_assets
                     wallet.updated_at = res.fetched_at
                     for bal in res.assets:
-                        price = self._price_usdt(bal.asset, adapter.venue_id)
+                        price = self.price_usdt(bal.asset, adapter.venue_id)
                         value = bal.total * price if price is not None else None
                         wallet.assets.append(WalletAsset(
                             asset=bal.asset, free=bal.free, used=bal.used, total=bal.total,

@@ -18,6 +18,16 @@ class KillSwitch:
     def get_state(self) -> KillSwitchState:
         return self._state.model_copy()
 
+    def restore(self, state: KillSwitchState) -> None:
+        """Reload the state saved before a restart.
+
+        Fail-safe: a kill switch that was engaged stays engaged — restarting
+        the gateway must never silently re-enable trading.
+        """
+        self._state = state.model_copy()
+        if state.active:
+            logger.warning("kill_switch_restored_active", reason=state.reason, activated_by=state.activated_by)
+
     async def activate(self, reason: str, activated_by: str, orders_cancelled: int = 0) -> KillSwitchState:
         self._state.active = True
         self._state.last_activated = datetime.now(UTC)
@@ -71,17 +81,21 @@ async def engage_kill_switch(
     Order matters: the gate closes FIRST so no new order can slip through
     while the cleanup (which does network I/O) is still running.
 
-      1. Activate -> every new order is rejected by pre-trade risk.
-      2. Cancel parent orders still WORKING / PARTIALLY_FILLED in our OMS.
+      1. Activate -> every new order is rejected by pre-trade risk, and the
+         routing engine sends no further child orders (checked per child).
+      2. Cancel orders being executed right now. An IOC child already at the
+         exchange can't be recalled; if it fills, the fill is still recorded.
       3. Sweep every venue for resting orders (e.g. placed manually on the
          exchange's own UI) — defense in depth, since our children are IOC.
+
+    The state is persisted: a restart keeps the kill switch engaged.
     """
     await kill_switch.activate(reason=reason, activated_by=operator)
 
     cancelled = 0
     for order in order_manager.active_orders():
         try:
-            await order_manager.cancel_order(order.id)
+            await order_manager.cancel_order(order.id, reason=f"Kill switch: {reason}")
             cancelled += 1
         except Exception:  # noqa: BLE001 — a race with a final fill is fine
             pass

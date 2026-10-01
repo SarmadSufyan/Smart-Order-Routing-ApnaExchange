@@ -4,13 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.gateway.middleware.auth import User, UserRole, get_current_user, require_role
-from backend.shared.exceptions import (
-    DomainError,
-    InvalidStateTransitionError,
-    KillSwitchActiveError,
-    OrderNotFoundError,
-    RiskCheckFailedError,
-)
+from backend.shared.exceptions import InvalidStateTransitionError, KillSwitchActiveError, OrderNotFoundError
 from backend.shared.models.order import OrderCreate, OrderListResponse, OrderResponse
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -22,31 +16,19 @@ def _get_order_manager():
     return get_services().order_manager
 
 
-def _get_routing_engine():
-    from backend.gateway.dependencies import get_services
-
-    return get_services().routing_engine
-
-
 @router.post("/", response_model=OrderResponse, status_code=201)
 async def submit_order(
     order_in: OrderCreate,
     user: Annotated[User, Depends(get_current_user)],
 ):
-    order_manager = _get_order_manager()
-    routing_engine = _get_routing_engine()
+    from backend.gateway.dependencies import get_services
 
-    order = await order_manager.create_order(order_in)
-    try:
-        result = await routing_engine.route_order(order)
-        updated = order_manager.get_order(order.id)
-        return OrderResponse.from_order(updated)
-    except KillSwitchActiveError:
+    order, error = await get_services().order_entry.submit(order_in, submitted_by=user.username)
+    if isinstance(error, KillSwitchActiveError):
         raise HTTPException(status_code=503, detail="Kill switch is active - all orders rejected")
-    except RiskCheckFailedError as e:
-        raise HTTPException(status_code=400, detail=e.message)
-    except DomainError as e:
-        raise HTTPException(status_code=400, detail=e.message)
+    if error is not None:
+        raise HTTPException(status_code=400, detail=error.message)
+    return OrderResponse.from_order(order)
 
 
 @router.get("/", response_model=OrderListResponse)
@@ -84,7 +66,7 @@ async def cancel_order(
 ):
     order_manager = _get_order_manager()
     try:
-        order = await order_manager.cancel_order(order_id)
+        order = await order_manager.cancel_order(order_id, reason=f"Cancelled by {user.username}")
         return OrderResponse.from_order(order)
     except OrderNotFoundError:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")

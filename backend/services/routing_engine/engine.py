@@ -96,6 +96,7 @@ class RoutingEngine:
         self._wallet = wallet
         self._strategy = BestPriceStrategy()
         self._orders_routed_today = 0
+        self._timed_orders = 0  # routed by this process (restored ones have no timing)
         self._total_routing_time_ms = 0.0
         self._venue_allocation: dict[str, int] = {}
 
@@ -105,12 +106,21 @@ class RoutingEngine:
     async def stop(self) -> None:
         return None
 
+    def restore_stats(self, orders: list[Order]) -> None:
+        """Recount today's routed orders from the history restored after a restart."""
+        today = datetime.now(UTC).date()
+        for o in orders:
+            if o.child_orders and o.created_at.date() == today:
+                self._orders_routed_today += 1
+                for child in o.child_orders:
+                    self._venue_allocation[child.venue_id] = self._venue_allocation.get(child.venue_id, 0) + 1
+
     @property
     def stats(self) -> dict:
         total = max(self._orders_routed_today, 1)
         return {
             "orders_routed_today": self._orders_routed_today,
-            "avg_routing_time_ms": round(self._total_routing_time_ms / total, 2),
+            "avg_routing_time_ms": round(self._total_routing_time_ms / max(self._timed_orders, 1), 2),
             "venue_allocation": {
                 vid: round(count / total, 2) for vid, count in self._venue_allocation.items()
             },
@@ -176,6 +186,14 @@ class RoutingEngine:
         await self._orders.transition(order.id, OrderStatus.REJECTED, rejection_reason=reason)
 
     async def route_order(self, order: Order) -> RoutingResult:
+        # In flight until every child has a final answer from its venue.
+        self._orders.begin_execution(order.id)
+        try:
+            return await self._route(order)
+        finally:
+            self._orders.end_execution(order.id)
+
+    async def _route(self, order: Order) -> RoutingResult:
         start = time.monotonic()
         await self._orders.transition(order.id, OrderStatus.VALIDATED)
 
@@ -190,11 +208,13 @@ class RoutingEngine:
 
         # ── Lot-size normalisation (coarsest step among routable venues)
         steps: dict[str, float] = {}
+        minimums: dict[str, tuple[float, float]] = {}  # venue -> (min lot, min order value)
         for vid in routable:
             adapter = self._registry.get(vid)
             rules = adapter.rules(order.symbol) if adapter else None
             if rules:
                 steps[vid] = rules.amount_step
+                minimums[vid] = (rules.min_amount, rules.min_notional)
         original_qty = order.quantity
         if steps:
             normalized = floor_to_step(order.quantity, max(steps.values()))
@@ -246,7 +266,7 @@ class RoutingEngine:
         names = {a.venue_id: a.name for a in self._registry.all()}
         result = await self._strategy.route(
             order, nbbo, routable, depth=depth, lot_steps=steps, venue_names=names,
-            exclusion_reasons=self.excluded_venues(order.symbol), capacity=capacity,
+            exclusion_reasons=self.excluded_venues(order.symbol), capacity=capacity, min_sizes=minimums,
         )
         result.routing_time_ms = round((time.monotonic() - start) * 1000, 2)
 
@@ -258,6 +278,7 @@ class RoutingEngine:
                 )
             # Persist the decision so the UI can show exactly why it routed this way.
             self._orders.get_order(order.id).routing_decision = result.decision.model_dump()
+        await event_bus.publish("routing_decision", self._decision_event(order, result))
 
         if result.status == RoutingStatus.REJECTED:
             await self._reject(order, result.rejection_reason or "Routing rejected")
@@ -268,6 +289,7 @@ class RoutingEngine:
         await self._orders.transition(order.id, OrderStatus.WORKING)
 
         self._orders_routed_today += 1
+        self._timed_orders += 1
         self._total_routing_time_ms += result.routing_time_ms
         for child in result.child_orders:
             self._venue_allocation[child.venue_id] = self._venue_allocation.get(child.venue_id, 0) + 1
@@ -287,9 +309,50 @@ class RoutingEngine:
             await self._reject(order, reasons or "All venue executions rejected")
         return result
 
+    def _decision_event(self, order: Order, result: RoutingResult) -> dict:
+        base = order.symbol.split("/")[0]
+        d = result.decision
+        if result.status == RoutingStatus.REJECTED:
+            summary = f"Routing rejected: {result.rejection_reason}"
+        else:
+            legs = ", ".join(
+                f"{c.venue_id} {fmt_qty(c.quantity)} @ {fmt_price(c.price)}" for c in result.child_orders
+            )
+            total = sum(c.quantity for c in result.child_orders)
+            summary = f"Routed {fmt_qty(total)} {base} -> {legs}"
+            if d is not None:
+                summary += (f" · expected VWAP {fmt_price(d.blended_avg_price)}"
+                            f" ({d.expected_slippage_bps:.1f} bps vs best)")
+        return {
+            "order_id": str(order.id),
+            "symbol": order.symbol,
+            "side": order.side.value,
+            "status": result.status.value,
+            "summary": summary,
+            "routing_time_ms": result.routing_time_ms,
+            "children": [
+                {"child_order_id": str(c.id), "venue_id": c.venue_id, "quantity": c.quantity, "price": c.price}
+                for c in result.child_orders
+            ],
+            "expected_vwap": d.blended_avg_price if d else None,
+            "expected_slippage_bps": d.expected_slippage_bps if d else None,
+            "excluded": self.excluded_venues(order.symbol),
+            "notes": d.notes if d else [],
+        }
+
     async def _send_child(self, order: Order, child: ChildOrder) -> ExecutionResult:
         adapter = self._registry.get(child.venue_id)
         child.sent_at = datetime.now(UTC)
+        # Last gate before money moves: the kill switch (or an operator cancel)
+        # may have been engaged after this order passed pre-trade risk.
+        halted = (
+            "kill switch engaged before this child was sent" if self._risk.kill_switch.is_active
+            else "order cancelled before this child was sent"
+            if self._orders.get_order(order.id).status == OrderStatus.CANCELLED
+            else None
+        )
+        if halted:
+            return ExecutionResult(exec_type=ExecType.REJECT, requested_qty=child.quantity, reason=halted)
         if adapter is None:
             return ExecutionResult(
                 exec_type=ExecType.REJECT, requested_qty=child.quantity,

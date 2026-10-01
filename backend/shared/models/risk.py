@@ -3,6 +3,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from backend.shared.models.portfolio import PortfolioRiskState
+
 
 class RiskCheckResult(str, Enum):
     APPROVED = "APPROVED"
@@ -19,11 +21,18 @@ class RiskCheckResult(str, Enum):
 class RiskLimits(BaseModel):
     max_order_size: float = 10_000.0  # base-asset units
     max_order_notional: float = 10_000.0  # USDT per order — the meaningful cap for crypto
+    # USDT for a whole algo (parent) order. Without it, slicing a $50k order
+    # into $5k pieces would walk straight past the per-order limit.
+    max_algo_notional_usdt: float = 50_000.0
     max_position_per_symbol: float = 50_000.0
     max_notional_exposure: float = 1_000_000.0
     max_orders_per_second: int = 50
     restricted_symbols: list[str] = []
     restricted_venues: list[str] = []
+    # Portfolio-level controls, watched continuously by the risk monitor.
+    max_trading_loss_usdt: float = 1_000.0  # trading P&L below -this engages the kill switch; 0 = off
+    max_asset_concentration_pct: float = 60.0  # one non-stable asset's share of the portfolio
+    max_venue_concentration_pct: float = 80.0  # one exchange's share (counterparty risk)
 
 
 class RiskCheckDetail(BaseModel):
@@ -63,3 +72,4 @@ class RiskStatusResponse(BaseModel):
     total_notional_exposure: float = 0.0
     risk_limits: RiskLimits
     recent_checks: list[RiskCheckDetail] = []
+    portfolio: PortfolioRiskState | None = None

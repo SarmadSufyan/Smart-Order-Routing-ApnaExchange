@@ -139,6 +139,28 @@ class BestPriceDepthTest(unittest.IsolatedAsyncioTestCase):
         v4 = next(c for c in result.decision.candidates if c.venue_id == "V4")
         self.assertIn("no USDT balance", v4.excluded_reason)
 
+    async def test_sliver_below_a_venues_minimum_is_rerouted(self) -> None:
+        # Best ask on V1 has only 0.00003; the split would hand V1 a $3 sliver
+        # it rejects (min $5), leaving a TWAP slice partly unfilled.
+        depth = {"V1": {"asks": [(100_000.0, 0.00003), (100_050.0, 1.0)], "bids": []},
+                 "V4": {"asks": [(100_010.0, 1.0)], "bids": []}}
+        nbbo = nbbo_of(quote("V1", 99_990.0, 100_000.0, ask_size=0.00003), quote("V4", 99_980.0, 100_010.0))
+        result = await self.strategy.route(
+            order(0.0002), nbbo, ["V1", "V4"], depth=depth, lot_steps={"V1": 0.00001, "V4": 0.00001},
+            min_sizes={"V1": (0.00001, 5.0), "V4": (0.00001, 1.0)},
+        )
+        self.assertEqual({c.venue_id: c.quantity for c in result.child_orders}, {"V4": 0.0002})
+        v1 = next(c for c in result.decision.candidates if c.venue_id == "V1")
+        self.assertIn("too small", v1.excluded_reason)
+        self.assertTrue(any("re-routed" in n for n in result.decision.notes))
+
+    async def test_order_below_every_minimum_is_rejected_with_reason(self) -> None:
+        depth = {"V1": {"asks": [(100.0, 5.0)], "bids": []}}
+        result = await self.strategy.route(order(0.02), nbbo_of(quote("V1", 99.0, 100.0)), ["V1"],
+                                           depth=depth, min_sizes={"V1": (0.001, 5.0)})
+        self.assertEqual(result.status, RoutingStatus.REJECTED)
+        self.assertIn("below every venue's minimum", result.rejection_reason)
+
     async def test_no_depth_falls_back_to_top_of_book(self) -> None:
         result = await self.strategy.route(order(3.0), nbbo_of(quote("V1", 99.0, 100.0, ask_size=1.0)), ["V1"])
         self.assertEqual(result.status, RoutingStatus.PARTIAL)

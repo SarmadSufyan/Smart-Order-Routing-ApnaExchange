@@ -1,16 +1,40 @@
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
 from backend.gateway.middleware.auth import User, get_current_user
-from backend.shared.models.execution_report import ExecutionReport, ExecutionReportResponse
+from backend.shared.models.execution_report import ExecType, ExecutionReport, ExecutionReportResponse
+from backend.shared.models.order import OrderSide
 
 router = APIRouter(prefix="/api/execution-reports", tags=["execution-reports"])
 
 
 _reports: list[ExecutionReport] = []
 MAX_REPORTS = 10_000
+
+
+def report_from_event(data: dict) -> ExecutionReport:
+    """An ``execution_report`` event (live, or replayed from the audit log)."""
+    report = ExecutionReport(
+        order_id=UUID(data["order_id"]),
+        child_order_id=UUID(data["child_order_id"]) if data.get("child_order_id") else None,
+        venue_id=data["venue_id"],
+        exec_type=ExecType(data["exec_type"]),
+        symbol=data["symbol"],
+        side=OrderSide(data["side"]),
+        quantity=data.get("quantity", 0),
+        price=data.get("price", 0),
+        venue_latency_ms=data.get("venue_latency_ms", 0),
+        rejection_reason=data.get("rejection_reason"),
+        exchange_order_id=data.get("exchange_order_id"),
+        fee=data.get("fee") or 0.0,
+        fee_asset=data.get("fee_asset"),
+    )
+    if data.get("timestamp"):
+        report.timestamp = datetime.fromisoformat(data["timestamp"])
+    return report
 
 
 def record_execution_report(report: ExecutionReport) -> None:

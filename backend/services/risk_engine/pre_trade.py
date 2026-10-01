@@ -9,7 +9,7 @@ Checks run in order and stop at the first failure:
 import time
 from datetime import UTC, datetime
 
-from backend.shared.events.event_bus import event_bus
+from backend.shared.events.event_bus import audit, event_bus
 from backend.shared.models.order import Order
 from backend.shared.models.risk import RiskCheckDetail, RiskCheckResult, RiskLimits
 from backend.shared.utils.logger import get_logger
@@ -50,6 +50,23 @@ class PreTradeRiskEngine:
     @limits.setter
     def limits(self, new_limits: RiskLimits) -> None:
         self._limits = new_limits
+
+    async def update_limits(self, new_limits: RiskLimits, actor: str) -> RiskLimits:
+        """Change the limits, audited and persisted (they survive a restart)."""
+        old = self._limits.model_dump()
+        self._limits = new_limits
+        new = new_limits.model_dump()
+        changed = {k: {"from": old.get(k), "to": v} for k, v in new.items() if old.get(k) != v}
+        await audit(
+            "risk_limits_changed",
+            ("Risk limits changed: " + ", ".join(f"{k} {c['from']} -> {c['to']}" for k, c in changed.items()))
+            if changed else "Risk limits saved (no change)",
+            actor=actor,
+            payload={"changed": changed, "limits": new},
+            persist={"key": "risk_limits", "value": new},
+        )
+        logger.info("risk_limits_updated", actor=actor, changed=list(changed))
+        return self._limits
 
     @property
     def recent_checks(self) -> list[RiskCheckDetail]:

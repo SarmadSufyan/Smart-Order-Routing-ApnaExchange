@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 
 from backend.exchanges.base import ExchangeAdapter
 from backend.exchanges.registry import ExchangeRegistry
-from backend.shared.events.event_bus import event_bus
+from backend.shared.events.event_bus import audit, event_bus
 from backend.shared.models.venue import (
     HealthScoreConfig,
     VenueHealth,
@@ -138,19 +138,23 @@ class VenueHealthMonitor:
             stats["rejects"] += 1
             stats["total"] += 1
 
-    async def blacklist_venue(self, venue_id: str) -> None:
+    async def blacklist_venue(self, venue_id: str, actor: str | None = None) -> None:
         if venue_id in self._health:
             self._health[venue_id].status = VenueStatus.BLACKLISTED
             self._health[venue_id].last_checked = datetime.now(UTC)
             await event_bus.publish("venue_health", self._health[venue_id].model_dump(mode="json"))
+            await audit("venue_blacklisted", f"{venue_id} blacklisted by {actor}: no new orders will route there",
+                        actor=actor, venue_id=venue_id)
             logger.info("venue_blacklisted", venue_id=venue_id)
 
-    async def unblacklist_venue(self, venue_id: str) -> None:
+    async def unblacklist_venue(self, venue_id: str, actor: str | None = None) -> None:
         if venue_id in self._health:
             # Re-enter as DISCONNECTED; the next check assigns the real status.
             self._health[venue_id].status = VenueStatus.DISCONNECTED
             self._health[venue_id].last_checked = datetime.now(UTC)
             await event_bus.publish("venue_health", self._health[venue_id].model_dump(mode="json"))
+            await audit("venue_unblacklisted", f"{venue_id} removed from the blacklist by {actor}",
+                        actor=actor, venue_id=venue_id)
             logger.info("venue_unblacklisted", venue_id=venue_id)
 
     # ── scoring ─────────────────────────────────────────────────────

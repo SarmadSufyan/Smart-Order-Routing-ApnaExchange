@@ -99,6 +99,8 @@ class Order(BaseModel):
     rejection_reason: str | None = None
     child_orders: list[ChildOrder] = []
     routing_decision: dict | None = None  # RoutingDecision snapshot — stored as dict to avoid circular import
+    submitted_by: str | None = None  # the user whose authority placed it — for the audit trail
+    parent_id: str | None = None  # algo order (e.g. a TWAP) this is a slice of
 
     def can_transition_to(self, new_status: OrderStatus) -> bool:
         return new_status in VALID_TRANSITIONS.get(self.status, set())
@@ -117,11 +119,17 @@ class OrderResponse(BaseModel):
     rejection_reason: str | None = None
     child_orders: list[ChildOrder] = []
     routing_decision: dict | None = None
+    submitted_by: str | None = None
+    parent_id: str | None = None
     created_at: datetime
+    updated_at: datetime | None = None
 
     @classmethod
     def from_order(cls, order: Order) -> "OrderResponse":
         return cls(
+            submitted_by=order.submitted_by,
+            parent_id=order.parent_id,
+            updated_at=order.updated_at,
             id=order.id,
             symbol=order.symbol,
             side=order.side,

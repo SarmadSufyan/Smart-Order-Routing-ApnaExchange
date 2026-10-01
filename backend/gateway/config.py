@@ -5,10 +5,13 @@ Every setting can be overridden from the environment or the project-root
 up in reprs, logs, or validation errors.
 """
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -62,11 +65,22 @@ class Settings(BaseSettings):
     wallet_refresh_interval_s: float = 15.0
 
     # ─── Risk defaults (units = base asset, notionals = USDT) ─────
+    # Limits changed in the UI are saved and override these after a restart.
     default_max_order_size: float = 10_000.0
     default_max_order_notional: float = 10_000.0
     default_max_position: float = 50_000.0
     default_max_notional: float = 1_000_000.0
     default_max_orders_per_second: int = 50
+    default_max_algo_notional: float = 50_000.0  # a whole TWAP (parent) order
+    default_max_trading_loss: float = 1_000.0  # 0 = off
+    default_max_asset_concentration_pct: float = 60.0
+    default_max_venue_concentration_pct: float = 80.0
+    risk_monitor_interval_s: float = 2.0
+
+    # ─── Audit log / book of record ───────────────────────────────
+    # Empty = data/apnasor-<exchange_mode>.db, so testnet and mainnet records
+    # never mix. ":memory:" keeps nothing (tests).
+    database_path: str = ""
 
     # ─── Auth ─────────────────────────────────────────────────────
     jwt_secret: str = "apna-exchange-poc-secret-change-in-prod"
@@ -92,6 +106,15 @@ class Settings(BaseSettings):
     def symbol_list(self) -> list[str]:
         """Unified symbols, e.g. ``["BTC/USDT", "ETH/USDT"]``."""
         return [s.strip().upper() for s in self.symbols.split(",") if s.strip()]
+
+    @property
+    def resolved_database_path(self) -> str:
+        if self.database_path == ":memory:":
+            return self.database_path
+        if self.database_path:
+            path = Path(self.database_path)
+            return str(path if path.is_absolute() else PROJECT_ROOT / path)
+        return str(PROJECT_ROOT / "data" / f"apnasor-{self.exchange_mode}.db")
 
     @property
     def enabled_exchange_list(self) -> list[str]:
