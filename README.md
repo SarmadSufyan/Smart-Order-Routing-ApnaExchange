@@ -1,81 +1,48 @@
-# Apna Exchange
+# ApnaSOR — Apna Exchange Smart Order Router
 
-**Smart Order Router + Distributed Execution Intelligence & Risk Control Platform (DEIRCP)**
+**A smart order router and risk-control platform over real crypto exchanges.**
 
 UITU Final Year Project — Group CS14
 Sarmad Sufyan Ahmed · Fizza Mubeen · Mahnoor Nadeem · Maham Ikram
 
 ---
 
-## What this repo contains
+ApnaSOR keeps live order books from real exchanges (Binance, Bybit, Gate, OKX), finds the best prices across them, runs pre-trade risk checks, and splits each order across venues as price-protected orders on the exchanges' own testnet / demo environments. Fills feed a unified wallet, a P&L ledger reconciled against every exchange, and an append-only audit log. A risk monitor can stop all trading automatically, and a TWAP bot executes large orders over time through the same checks.
 
-| Folder | Contents |
+## Start here
+
+| Read | For |
 |---|---|
-| `project-info/` | All project planning & design docs — architecture, API spec, algorithms, milestones, DB schema |
-| `backend/` | FastAPI gateway + platform services (market data, routing, risk, kill switch, …) |
-| `venues/` | 5 venue simulator FastAPI servers (V1 AlphaExchange → V5 EpsilonPool) |
-| `frontend/` | React + TypeScript dashboard |
-| `infra/` | Docker, AWS deployment, monitoring configs |
-| `tests/` | Integration, E2E, load tests |
-| `scripts/` | Dev utilities |
-| `CLAUDE.md` | Master reference for the AI assistant — read first if you're contributing |
-| `PROGRESS.md` | Live snapshot — what's done, what's next |
-| `DEVELOPMENT_JOURNAL.md` | Plain-language explanation of each change, dated chronologically |
+| [`CLAUDE.md`](CLAUDE.md) | Project guide: architecture, repo map, rules, gotchas — **read first** |
+| [`PROGRESS.md`](PROGRESS.md) | Where things stand, who is working on what |
+| [`project-info/ROADMAP.md`](project-info/ROADMAP.md) | What's next and what "done" means |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Team workflow: branches, PRs, setup |
+| [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) | Which exchange keys you need and how to get them |
+| [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md) | Every change explained: what, why, how |
 
----
-
-## Project phases
-
-This repo's folder layout is the **final** architecture. We fill it progressively:
-
-| Milestone | Scope | Storage | Deployment |
-|---|---|---|---|
-| **M2 — POC (now)** | 5 panel-assigned use cases: venue simulation, market data aggregation, venue health, risk + kill switch, dashboard | In-memory | Local only |
-| **M3 — Full system** | + RAFT consensus, policy engine, FIX protocol, advanced routing | PostgreSQL + Redis | Docker |
-| **M4 — Final** | + Load testing, failure demos, full security audit | Same | AWS (single cloud, separate VMs per venue/env) |
-
-Full milestone breakdown: [`project-info/MILESTONES.md`](project-info/MILESTONES.md)
-
----
-
-## Quick start (POC, local)
-
-Detailed setup in [`project-info/DEVELOPMENT_SETUP.md`](project-info/DEVELOPMENT_SETUP.md).
+## Quick start (local)
 
 ```powershell
-# Backend
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn gateway.main:app --reload --port 8000
-
-# Venues (separate terminal)
-cd venues
-pip install -r requirements.txt
-python start_all_venues.py
-
-# Frontend (once Figma Make output is dropped into frontend/)
-cd frontend
-pnpm install
-pnpm dev
+pip install -r backend/requirements.txt
+cd frontend; npm install; cd ..
+Copy-Item .env.example .env        # add your own testnet/demo keys (see API_KEYS_GUIDE)
+python scripts/check_exchange_keys.py
+python start_all.py
 ```
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
-| Gateway API | http://localhost:8000 |
-| Swagger docs | http://localhost:8000/docs |
-| Venue V1–V5 | http://localhost:8001 … 8005 |
+| Frontend | http://localhost:5173 (login `admin` / `admin`) |
+| Gateway API + Swagger | http://127.0.0.1:8000/docs |
 
-Default POC login: `admin` / `admin` (hardcoded user; swapped for DB-backed users in M3).
+Without exchange keys you still get live market data; trading needs testnet/demo keys. Tests: `python -m unittest discover -s backend/tests -t .`
 
----
+## Repo layout
 
-## Contributing (team workflow)
-
-1. Read `CLAUDE.md` and `project-info/PROJECT_STRUCTURE.md` before adding files.
-2. Conventional commits — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`.
-3. Branch naming — `feature/xxx`, `fix/xxx`, `refactor/xxx`, `docs/xxx`.
-4. Update `DEVELOPMENT_JOURNAL.md` with what + why for any non-trivial change.
-5. Update `PROGRESS.md` if the change shifts what "next" looks like.
+| Folder | Contents |
+|---|---|
+| `backend/` | FastAPI gateway, exchange adapters, routing, risk, wallet/P&L, audit log, TWAP |
+| `frontend/` | React + TypeScript dashboard |
+| `scripts/` | Exchange key checkers |
+| `project-info/` | Roadmap, API keys guide, older design docs (being rewritten) |
+| `venues/`, `tests/`, `infra/`, `diagrams/` | Legacy from the simulated June POC (also on `archive/venue-simulators`) |

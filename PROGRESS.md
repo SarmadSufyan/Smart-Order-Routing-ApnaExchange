@@ -1,114 +1,115 @@
 # Progress
 
-> Live snapshot of the project's state. Updated at the end of every working session, and automatically when the AI assistant's context window approaches 90% full.
->
-> **Read this first** when starting a new session — it tells you exactly where to pick up.
+> Live snapshot of the project. **Read this first** when starting any session — then [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for what "done" means.
+> Rules and architecture: [`CLAUDE.md`](CLAUDE.md). Team workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md). Why things are built the way they are: [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md).
+> Updated at the end of every working session (and before a long session runs out of context).
 
 ---
 
 ## Last updated
 
-**2026-09-29** — Live-tested with real keys: Binance and Bybit (demo) fully verified incl. real multi-venue splits; five bugs found and fixed; balance-aware routing + funding gate added. Gate (bad secret) and OKX (missing secret/passphrase, DNS-blocked network) still to verify.
+**2026-10-01** — Phases 0–4 and the TWAP bot (5a) are built and verified live on Binance testnet + Bybit demo. Docs rewritten for team hand-off (project guide, roadmap, contributing). Next: Phase 5b (LLM copilot), Phase 6 (parallelism + RAFT), 5c (arbitrage detector) — in parallel workstreams.
+
+---
+
+## Who is working on what
+
+Claim a row **before** you start (owner + branch). Only edit your own row. Two people or two assistant sessions must never build the same workstream.
+
+| | Workstream | Owner | Branch | Status | Last update |
+|---|---|---|---|---|---|
+| A | LLM copilot (ROADMAP §5b) | *unclaimed* | `feature/copilot` | not started | — |
+| B | Frontend: copilot panel, How It Works update, polish (§5b UI, §7) | *unclaimed* | `feature/frontend-v2` | not started | — |
+| C | Parallelism: multiprocessing risk + RAFT cluster (§6) | *unclaimed* | `feature/raft` | not started | — |
+| D | Arbitrage detector + CI + doc rewrite (§5c, §7) | *unclaimed* | `feature/arb-docs` | not started | — |
+| — | Integration, reviews, merges, exchange keys | Sarmad | `feature/crypto-pivot` → `main` | ongoing | 2026-10-01 |
+
+---
+
+## Picking this up cold?
+
+1. `git checkout feature/crypto-pivot && git pull` (or `main` once the crypto-pivot PR is merged), then create/checkout your workstream branch.
+2. Set up your **own** exchange keys (`project-info/API_KEYS_GUIDE.md`) → `python scripts/check_exchange_keys.py` → `python start_all.py` → log in as `admin` / `admin`.
+3. Run `python -m unittest discover -s backend/tests -t .` — expect **107 passing**.
+4. Read the ROADMAP section for your workstream; it lists what "done" means.
+5. The order path every feature must use: `OrderEntry.submit` (`backend/services/order_state/entry.py`). The TWAP bot (`backend/services/algos/twap.py`) is the reference example of a strategy built on top of it.
 
 ---
 
 ## Current phase
 
-**ApnaSOR crypto pivot — Phase 3 built; waiting on Bybit/OKX/Gate testnet keys to verify multi-venue execution. Phase 4 (balance-aware risk, audit log) next.**
+**Crypto pivot — Phases 0–4 + TWAP (5a) done. Next: 5b LLM copilot, 6 parallelism + RAFT, 5c arbitrage detector.**
 
-### Venue lineup (checked against each real testnet on 2026-09-28)
+### Venue lineup
 
 | ID | Venue | Order book | Execution | Status |
 |---|---|---|---|---|
-| V1 | Binance | real market | testnet | ✅ **verified live 2026-09-29** — all 5 pairs, every execution path |
-| V4 | Bybit | real market | **demo trading** | ✅ **verified live 2026-09-29** — all 5 pairs, every execution path, real multi-venue splits with Binance |
-| V5 | OKX | real market | demo trading | ❌ `.env` has only the key — add `OKX_TESTNET_API_SECRET` + `OKX_TESTNET_API_PASSPHRASE`; **and** this network's DNS blocks okx.com (see API_KEYS_GUIDE troubleshooting) |
-| V6 | Gate | real market | testnet | ❌ key rejected ("Signature mismatch") — secret looks half-copied (32 chars, Gate secrets are normally 64); create a new key |
-
-**➡ Which API keys to create, and exactly how: [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md)**
-| V2 | Coinbase | real market | none (no real testnet) | optional data-only, off by default |
+| V1 | Binance | real market | spot testnet | ✅ verified live (all 5 pairs, every execution path, TWAPs) |
+| V4 | Bybit | real market | **Demo Trading** | ✅ verified live (all 5 pairs, multi-venue splits with Binance, TWAPs) |
+| V6 | Gate | real market | spot testnet | ⚠️ key authenticates (2026-10-01), feed + coherence OK, routable — but the **spot testnet wallet is empty**, so the router skips Gate ("no USDT balance on this venue"). Gate documents test funds only for its *futures* testnet (not transferable to spot). Execution unverified until spot funds exist |
+| V5 | OKX | real market | Demo Trading | ❌ passphrase missing (`OKX_TESTNET_API_PASSPHRASE`); this network's DNS blocks okx.com |
+| V2 | Coinbase | real market | none (no real testnet) | data-only, off by default |
 | V3 | Kraken | — | — | not possible: no spot testnet |
 
-After the June POC review the panel rejected simulated venues. The team pivoted to a Smart Order Router over **real crypto exchanges** (Binance, Coinbase, Kraken, Bybit, OKX). Decision record: `notes/decisions/ADR-001-Crypto-Pivot.md`. The simulated system is preserved on the `archive/venue-simulators` branch.
-
-> ⚠️ `CLAUDE.md` and `project-info/*` still describe the old simulated/stock-market design. They are being reconciled; until then, trust this file and the code.
+The simulated system (June POC) is preserved on the `archive/venue-simulators` branch.
 
 ---
 
-## What works now (verified 2026-09-28)
+## What works now
 
-- **Two real venues, compared on real-market data** — order books come from **mainnet public feeds** (`MARKET_DATA_MODE=mainnet`, no keys needed) for Binance (V1) and Coinbase (V2); orders execute on the **Binance testnet**. Pairs: BTC/ETH/SOL/BNB/XRP vs USDT (BNB isn't listed on Coinbase).
-- **Coinbase is data-only** — it has no real testnet (its sandbox returns mocked responses; the institutional sandbox has no USDT pairs). Its book counts in the NBBO and shows in every routing proof as *excluded* with the reason. Coinbase execution arrives with mainnet in Phase 8.
-- **Book integrity** — Binance: REST snapshot + update-id chain (resync a symbol on a gap). Coinbase: in-stream snapshot + per-connection sequence numbers (reconnect on a gap). Both auto-reconnect with backoff.
-- **Real execution with price protection** — every child is an IOC LIMIT: user's limit for LIMIT orders, or the worst planned price ±50 bps for MARKET orders (`CHILD_PRICE_PROTECTION_BPS`), so a moved book makes a child expire instead of overpaying. Lot-size rounding, min-notional checks, `clientOrderId` reconciliation on network errors. Routing proof shows expected VWAP vs actual fill (shortfall in bps; live ~1 bps).
-- **Consolidated depth-walk routing** — best-price strategy walks the merged order book of all eligible venues; routing proof shows expected VWAP, levels walked, slippage (bps) and plain-English notes.
-- **Unified wallet** — `GET /api/wallet/` returns real exchange balances for the trading universe, valued in USDT from our own books; refreshes every 15 s and right after each fill.
-- **Venue health** — measured REST latency (p50/p95/p99), feed freshness, books synced, uptime; client-side rejects don't count against the venue; demo "Degrade" adds artificial latency to our connection.
-- **Risk** — 7 pre-trade checks incl. a new per-order notional limit (default $10,000); kill switch blocks new orders first, then cancels OMS orders and sweeps exchange-side open orders.
-- **Frontend** — crypto symbols, decimal quantities, adaptive price formatting, real Wallet page, TESTNET/MAINNET badge, working WebSocket subscriptions.
-- **Execution coherence** — every 5 s, per venue and symbol, the testnet/demo book is compared with the real-market book; beyond ±50 bps (`COHERENCE_THRESHOLD_BPS`) that venue+symbol is excluded from routing in both directions, with the reason in the routing proof and per-symbol chips on the Venue page.
-- **Balance-aware routing** — each venue's slice is capped by what it actually holds (coins to sell / USDT to buy, refreshed after every fill); a funding gate rejects orders the venues can't fund, with a per-venue breakdown.
-- **Credential health** — keys are verified at start-up and every wallet refresh; a rejected key makes the venue non-tradable with the exchange's reason.
-- **Tests** — 63 unit tests: `python -m unittest discover -s backend/tests -t .`
-
----
-
-## How to run locally
-
-Prerequisites: Python 3.11+ (verified on 3.14), Node 18+, and Binance **testnet** keys (optional — without keys you still get live market data; trading is disabled).
-
-```powershell
-# 1. One-time: install dependencies
-pip install -r backend/requirements.txt
-cd frontend; npm install; cd ..
-
-# 2. One-time: configure keys (copy the template, then paste your TESTNET keys)
-copy .env.example .env
-#    get keys at https://testnet.binance.vision/  (log in with GitHub -> Generate HMAC_SHA256 Key)
-
-# 3. Optional: check every exchange's keys at once
-python scripts/check_exchange_keys.py
-
-# 4. Start gateway + frontend
-python start_all.py
-```
-
-- Frontend: http://localhost:5173 (POC users: `HARDCODED_USERS` in `backend/gateway/middleware/auth.py`)
-- API docs: http://127.0.0.1:8000/docs
-- Order books take ~3 seconds to sync after start-up.
+- **Real-market data, real orders on test environments** — order books from mainnet public feeds (`MARKET_DATA_MODE=mainnet`); orders execute on Binance testnet / Bybit demo (`EXCHANGE_MODE=testnet`). Pairs: BTC/ETH/SOL/BNB/XRP vs USDT.
+- **Book integrity** — update-id chains (Binance, Gate), sequence chains (Bybit `u`, OKX `prevSeqId`), Coinbase per-connection sequence numbers; resync / reconnect with backoff.
+- **Execution coherence** — every 5 s per venue+symbol the test book is compared with the real market; beyond ±50 bps that pair is excluded from routing both ways.
+- **Consolidated depth-walk routing** — merged order book of all eligible venues, split at the best prices; respects each venue's balance (capacity), lot size and **minimum order** (sub-minimum shares are re-routed); routing proof with expected VWAP, slippage, exclusions in plain English.
+- **Safe execution** — every child is an IOC LIMIT, MARKET parents price-protected (±50 bps, tighter if the venue's own price-limit rule requires); idempotent client ids; reconciliation by client id after network errors (seen live: a Bybit network error was confirmed "not executed"); fees in USDT, base coin or BNB handled.
+- **Pre-trade risk** — 7 checks (kill switch, size, order notional, rate, position, exposure, symbol) + a funding gate.
+- **Unified wallet** — real balances per exchange, valued at our own mid prices; refreshed every 15 s and after every fill.
+- **P&L + reconciliation** — opening balances captured automatically per venue; average-cost ledger; total = realized + unrealized − fees, split into hold P&L and trading P&L; ledger reconciled against each exchange (OK / settling / BREAK; breaks can be accepted as a new baseline).
+- **Risk monitor** — trading-loss limit (default $1,000) engages the kill switch automatically and blocks its release while breached; concentration alerts (asset > 60%, exchange > 80%). Limits editable by an admin, persisted.
+- **Kill switch** — blocks new orders, stops unsent child orders, sweeps resting exchange orders, pauses TWAPs; persisted (stays engaged across restarts).
+- **Audit log** — every order step, risk check, routing decision, fill, operator action and algo event with actor + summary, in `data/apnasor-<mode>.db` (SQLite, per machine). Audit Log page + per-order timeline.
+- **TWAP bot** — Algo Orders page: slices through `OrderEntry`, catch-up schedule (≤ 2× a slice), optional jitter/limit, pause/resume/cancel between slices, execution chart, cost vs arrival and vs interval TWAP; restart leaves TWAPs paused; 3 pre-venue rejections pause it; max TWAP value limit ($50k).
+- **Survives restarts** — orders, execution reports, fills, baselines, limits, kill switch, algo orders.
+- **Frontend pages** — Dashboard, Market Data, Algo Orders (TWAP), Wallet (P&L, reconciliation, concentration), How It Works, Venue Connectivity, Risk Manager, Kill Switch & Alerts, Audit Log.
+- **Tests** — 107 backend unit tests; frontend strict type-check passes.
 
 ---
 
 ## What's next
 
-1. **Fix the Gate secret and the OKX secret/passphrase** (and OKX's DNS block), run `python scripts/check_exchange_keys.py`, then verify OKX and Gate live the same way Binance and Bybit were. Their execution code is written but not yet proven against a real account.
-2. **Rotate every exchange key** once testing is finished (Sarmad's plan) — the keys were used during live testing (never printed).
-3. **Phase 4 (remaining)** — balance-aware routing and the funding gate are already done (built early, 2026-09-29); still to do: P&L from real fills, concentration alerts, TimescaleDB audit log.
-4. Doc reconciliation: rewrite `CLAUDE.md` + `project-info/` for the crypto design; write `ARCHITECTURE_V2.md` and `ADR-003` (wallet + strategy/agents layer).
-5. Remove the unused `venues/` folder from the active branch (it lives on `archive/venue-simulators`) — waiting for the team's go-ahead.
-6. Later phases (see `PLAN.md` locally): TWAP bot, LLM copilot, multiprocessing risk + RAFT, C++ NBBO.
+See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" criteria.
+
+1. **5b LLM copilot** (workstream A + B) — needs an LLM API key in each developer's `.env` (`ANTHROPIC_API_KEY`).
+2. **6 Parallelism + RAFT** (workstream C).
+3. **5c Arbitrage detector, CI, doc rewrite** (workstream D).
+4. Merge `feature/crypto-pivot` → `main` via PR so every workstream branches from `main`.
+5. Gate spot funds; OKX passphrase + a network that reaches okx.com.
+6. Production DB decision (SQLite now; PostgreSQL/TimescaleDB later).
+7. Remove the unused `venues/` folder from the active branch (kept on `archive/venue-simulators`) — waiting for the team's go-ahead.
 
 ---
 
 ## Open questions / blockers
 
-- **Rotate the Binance testnet key.** During setup on 2026-09-27 a config validation error printed partial (middle-truncated) key/secret values to the console. Testnet only, no real funds — but regenerate it at testnet.binance.vision and update `.env`. The root cause is fixed (keys are `SecretStr` now).
-- Mainnet (Phase 8) needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay blank until then.
+- **Gate spot testnet funds** — no documented way found yet (see API_KEYS_GUIDE).
+- **OKX** — passphrase + DNS.
+- **Rotate exchange keys** after testing (Sarmad). One Binance testnet key had partial values printed to a console on 2026-09-27 (root cause fixed: keys are `SecretStr`).
+- **Mainnet (Phase 8)** needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay blank until then.
 
 ---
 
 ## Branch / commit state
 
-All crypto-pivot work (Phases 0–3 + live-testing fixes) is committed and pushed on **`feature/crypto-pivot`** (2026-09-29), branched from `feature/integration`. It also contains the final simulated-POC polish that had been uncommitted (degrade/recover buttons, Market Data page, AWS labels). `feature/integration` on GitHub still shows the last simulated-venue state. Next: open a PR `feature/crypto-pivot` → `main` for review.
+All work through Phase 5a is committed and pushed on **`feature/crypto-pivot`** (2026-10-01). `main` still has the June simulated POC; next step is a PR `feature/crypto-pivot` → `main`.
 
-Not in git on purpose: `.env` (keys), `PLAN.md` and `notes/` (personal, gitignored), `notes.zip` and the old `sor-poc-frontend/` copy (untracked).
+Not in git on purpose: `.env` (keys), `data/` (local audit database), `PLAN.md` and `notes/` (Sarmad's personal notes), `notes.zip`, the old `sor-poc-frontend/` copy, log files.
 
 ---
 
 ## How to update this file
 
-- **End of every working session:** update "Last updated", refresh "What works" and "What's next."
-- **When AI context hits ~90% used:** the AI assistant updates this automatically so the next session can pick up cold.
-- **When a decision flips:** edit "Open questions" or "What works" with the new decision and a date.
+- **End of every session:** "Last updated", your row in *Who is working on what*, "What works", "What's next".
+- **Before a long session runs out of context:** update it so the next session can pick up cold.
+- **When a decision flips:** edit "Open questions" / "What works" with the new decision and a date.
 
-Keep it factual. No marketing, no aspirational language. A teammate pulling this branch should know exactly what state the codebase is in after reading this file alone.
+Keep it factual. A teammate pulling the branch should know exactly where things stand from this file alone.

@@ -51,8 +51,11 @@ docker-compose.override.yml
 *.log
 logs/
 
-# Databases (just in case anyone uses SQLite locally)
+# Databases — the audit log / book of record lives in data/ (per machine)
+data/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 

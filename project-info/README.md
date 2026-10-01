@@ -1,5 +1,7 @@
 # Apna Exchange — DEIRCP
 
+> **Heads-up (2026-10-01):** most documents in this folder describe the **original simulated, stock-market design** (June 2026). The project has since pivoted to real crypto exchanges (ApnaSOR). Current sources: [`ROADMAP.md`](ROADMAP.md), [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md), the root [`CLAUDE.md`](../CLAUDE.md) project guide, [`PROGRESS.md`](../PROGRESS.md) and the code. The other files here are being rewritten (ROADMAP §7).
+
 **Distributed Execution Intelligence & Risk Control Platform for Fragmented Trading Systems**
 
 ---

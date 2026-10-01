@@ -103,7 +103,7 @@ Exchange websites change their menus. If a step doesn't match what you see, look
 4. IP binding: optional for testnet (leave unbound for development).
 5. Permissions: **Read and Write**, with spot trading allowed.
 6. Submit, then copy the API key and secret.
-7. Funds: run the checker (section 5) to see your TestNet balance. If it's zero, look for a test-funds option on Gate's TestNet pages.
+7. Funds: run the checker (section 5) to see your TestNet balance. If it's zero, log in at testnet.gate.com, open **Spot → Assets** and look for a test-funds option there. Careful: Gate's documented test-funds claim (1,000 USDT or 0.1 BTC, once per 72 h) goes to the **futures** testnet account and **cannot be moved to spot** — ApnaSOR trades Gate **spot**, so those funds don't help. (As of 2026-10-01 our Gate spot testnet wallet is empty; Gate stays connected for market data and is skipped for orders with "no USDT balance on this venue".)
 8. Add to `.env`:
    ```
    GATE_TESTNET_API_KEY=...
@@ -161,7 +161,7 @@ The script reads keys through the gateway's own settings and **never prints them
 | OKX `NO KEYS in .env` although you added the key | OKX needs **three** values: key, secret **and** passphrase. Check all three lines exist |
 | OKX `AUTH FAILED` | Wrong/missing **passphrase**, or a **live** key instead of a **Demo Trading** key |
 | OKX shows "Feed Disconnected" / `getaddrinfo failed` | Your network's DNS is **blocking `okx.com`** (seen 2026-09-29 on a Pakistani ISP: default DNS *refused* it, while 1.1.1.1 and 8.8.8.8 resolved it). Fix on **your** PC: set Windows DNS to `1.1.1.1` / `8.8.8.8`, or use a VPN. For the panel demo, don't depend on OKX unless the demo network can reach it |
-| Gate `AUTH FAILED` - "Signature mismatch" | The **secret** is wrong or incomplete. Gate's API v4 secrets are normally **64** characters; if yours is 32, only half was copied. Gate shows the secret once, so create a new key |
+| Gate `AUTH FAILED` - "Signature mismatch" | The **secret** is wrong. First check `.env` for the **same variable name twice** — the *later* line wins. Seen 2026-09-29: the OKX secret (32 uppercase hex characters) had been pasted as a second `GATE_TESTNET_API_SECRET` under the OKX key, overriding the real Gate secret (64 characters). Otherwise the secret was copied incompletely; Gate shows it once, so create a new key |
 | Gate `AUTH FAILED` - other | Key's account type is not **Testnet**, or an IP whitelist that doesn't match your IP |
 | Binance `AUTH FAILED` after working before | Binance **reset the testnet**, so generate a new key |
 | Any venue: timestamp / "recvWindow" errors | Your PC clock is off. Turn on *Set time automatically* in Windows settings |

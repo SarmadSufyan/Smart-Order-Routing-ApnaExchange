@@ -1,370 +1,170 @@
-# CLAUDE.md — Master Reference for Claude Code
+# Project Guide — read this first
 
-> **This file is the single source of truth for any AI assistant working on this codebase.**
-> Read this first. Read the linked docs for depth. Never guess when a doc exists.
+> The single source of truth for anyone (teammate or coding assistant) working on this repo.
+> **Then read [`PROGRESS.md`](PROGRESS.md)** (current state + who is working on what) and
+> **[`project-info/ROADMAP.md`](project-info/ROADMAP.md)** (what's next, with acceptance criteria).
+> Team workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md). History and the *why* behind every change: [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md).
 
 ---
 
-## Project Identity
+## Project identity
 
 | Field | Value |
 |---|---|
-| **Project Name** | DEIRCP — Distributed Execution Intelligence & Risk Control Platform |
-| **Brand Name** | Apna Exchange |
-| **Group** | CS14 — Usman Institute of Technology (UITU) |
-| **Domain** | Finance / FinTech (Algorithmic Trading & Risk Management) |
-| **Type** | Final Year Project (FYP) — 4-member team |
-| **Supervisors** | Sir Usman Javed, Miss Shiza |
+| Name | **ApnaSOR** — Apna Exchange's Smart Order Router (formerly DEIRCP) |
+| Group | CS14 — Usman Institute of Technology (UITU), Final Year Project, 4 members |
+| Supervisors | Sir Usman Javed, Miss Shiza |
+| Domain | Crypto trading infrastructure: smart order routing, pre-trade risk, execution algos |
+| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange — active branch `feature/crypto-pivot` |
 
-### Team
+Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070-CS) · Mahnoor Nadeem (23SP-065-CS) · Maham Ikram (23SP-101-CS).
 
-| Name | Roll No | Primary Responsibility |
-|---|---|---|
-| Sarmad Sufyan Ahmed | 23SP-078-CS | Backend architecture, system design |
-| Fizza Mubeen (Xange) | 23SP-070-CS | Frontend development, UI/UX integration |
-| Mahnoor Nadeem | 23SP-065-CS | Risk analytics, algorithms |
-| Maham Ikram | 23SP-101-CS | Testing, documentation, deployment |
+## What it is (one paragraph)
+
+A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then walks the **consolidated order book** to split the order across venues at the best prices and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book, and a **TWAP bot** slices large orders over time through the same order path.
+
+> **History:** until June 2026 this was a simulated 5-venue *stock* system. The FYP panel rejected simulated data, so the team pivoted to real crypto exchanges (July 2026). The simulators live on the `archive/venue-simulators` branch. **Several docs in `project-info/` still describe the old design — see "Docs you can trust" below.**
 
 ---
 
-## What This Project Is (One Paragraph)
+## Architecture (as built)
 
-A distributed, real-time platform that sits between an Order Management System (OMS) and multiple simulated trading venues. It ingests FIX protocol order-flow, continuously monitors venue health (latency, fill rates, rejection rates), predicts execution risk before orders are placed, and enforces automated control actions (venue blacklisting, order throttling, kill switch). A RAFT consensus cluster ensures all platform nodes agree on risk state, making control decisions consistent and fault-tolerant. Five venue servers are deployed across AWS, GCP, and Azure to simulate a realistically fragmented market.
+```
+ Frontend (React 18 + TS + Vite, Zustand) ── REST + one WebSocket ──┐
+                                                                    ▼
+ Gateway (FastAPI, async) ── routers: orders · algos · venues · market-data · wallet · risk · audit · routing · auth
+   │
+   ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, future LLM copilot)
+   │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → best-price depth walk
+   │                        → IOC LIMIT children (price-protected) sent concurrently → fills applied
+   ├─ PreTradeRiskEngine (7 checks) · KillSwitch (persisted) · PositionTracker
+   ├─ RiskMonitor (every 2 s): trading-loss limit → auto kill switch; concentration alerts
+   ├─ MarketDataCollector + Aggregator (NBBO) · VenueHealthMonitor · CoherenceMonitor
+   ├─ WalletService (real balances) · PnLService (opening balances + fills → P&L, reconciliation)
+   ├─ TwapEngine (algo orders) · AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
+   │
+ Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync
+   V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
+```
+
+Internal events flow over an in-process async event bus (`backend/shared/events/event_bus.py`); the WebSocket fans selected channels out to the browser (`venue_health`, `market_data`, `nbbo_update`, `order_update`, `risk_alert`, `kill_switch`, `execution_report`, `wallet_update`, `algo_update`).
+
+### Venues
+
+| ID | Exchange | Order book from | Execution | Status (see PROGRESS.md for live state) |
+|---|---|---|---|---|
+| V1 | Binance | mainnet public feed | **spot testnet** | ✅ verified live |
+| V4 | Bybit | mainnet public feed | **Demo Trading** (not Bybit Testnet — its books drift) | ✅ verified live |
+| V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ❌ blocked by some ISPs' DNS; passphrase missing |
+| V6 | Gate | mainnet public feed | spot testnet | ⚠️ authenticates; spot testnet wallet empty |
+| V2 | Coinbase | mainnet public feed | none (no real testnet) — data-only, off by default | — |
+| V3 | Kraken | — | no spot testnet | not possible |
+
+Trading universe: **BTC, ETH, SOL, BNB, XRP vs USDT**, decimal quantities. `MARKET_DATA_MODE=mainnet` (real-market books for decisions) is independent of `EXCHANGE_MODE=testnet` (where orders execute); the coherence monitor excludes a venue+symbol whose test book drifts > 50 bps from the real market.
 
 ---
 
-## Architecture at a Glance
+## Repository map (what actually exists)
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                     FRONTEND (React + TypeScript)                     │
-│         Dashboard │ Order Blotter │ Risk Manager │ Kill Switch        │
-│              Venue Connectivity │ Market Data │ Execution Reports     │
-└─────────────────────────────┬────────────────────────────────────────┘
-                              │ REST + WebSocket
-                              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     API GATEWAY (FastAPI)                             │
-│         Authentication │ Rate Limiting │ Request Routing              │
-└─────────────────────────────┬────────────────────────────────────────┘
-                              │ Internal gRPC / async events
-                              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     PLATFORM SERVICES LAYER                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │
-│  │ Market Data   │  │ Routing      │  │ Risk Engine               │   │
-│  │ Aggregator    │  │ Engine       │  │ (Pre-trade + Kill Switch) │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────────┘   │
-│         │                 │                      │                    │
-│  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────────┴───────────────┐   │
-│  │ Venue Health  │  │ Order State  │  │ RAFT Consensus            │   │
-│  │ Monitor       │  │ Manager      │  │ Cluster (3-node)          │   │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘   │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐    │
-│  │              Policy Engine (Rule-based decisions)              │    │
-│  └──────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────┬────────────────────────────────────────┘
-                              │ FIX / REST adapters
-                              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     VENUE SIMULATORS (5 servers)                      │
-│  V1: AlphaExchange   V2: BetaLiquidity   V3: GammaMarkets           │
-│  (AWS, :8001)        (GCP, :8002)        (Azure, :8003, degraded)    │
-│                                                                      │
-│  V4: DeltaPrime      V5: EpsilonPool                                 │
-│  (AWS, :8004)        (GCP, :8005)                                    │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Repository Structure
-
-```
-apna-exchange/
-│
-├── CLAUDE.md                         # ← YOU ARE HERE
-├── README.md                         # Project overview, quick start
-│
-├── project-info/                     # All project planning documentation (READ BEFORE CODING)
-│   ├── README.md                     # Project overview, quick start
-│   ├── ARCHITECTURE.md               # System architecture deep dive
-│   ├── PROJECT_STRUCTURE.md          # Directory layout explanation (CANONICAL)
-│   ├── MILESTONES.md                 # FYP milestones & development phases
-│   ├── BACKEND_GUIDE.md              # Backend services, patterns, conventions
-│   ├── FRONTEND_GUIDE.md             # Frontend architecture & screen map
-│   ├── API_SPECIFICATION.md          # REST + WebSocket API contracts
-│   ├── DATABASE_SCHEMA.md            # PostgreSQL + Redis data models (M3+; POC is in-memory)
-│   ├── ALGORITHMS.md                 # Core algorithms with pseudocode
-│   ├── DEPLOYMENT.md                 # Docker + AWS deployment (originally multi-cloud — AWS only now)
-│   └── DEVELOPMENT_SETUP.md          # Local environment setup guide
-│
-├── frontend/                         # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── routes.tsx
-│   │   │   └── App.tsx
-│   │   ├── components/               # Shared UI components
-│   │   │   ├── ui/                   # shadcn/ui primitives
-│   │   │   └── layout/               # Layout shells, sidebar, topbar
-│   │   ├── features/                 # Feature-based modules
-│   │   │   ├── dashboard/
-│   │   │   ├── order-blotter/
-│   │   │   ├── market-data/
-│   │   │   ├── venue-connectivity/
-│   │   │   ├── risk-manager/
-│   │   │   ├── kill-switch/
-│   │   │   ├── routing-engine/
-│   │   │   ├── execution-reports/
-│   │   │   └── auth/
-│   │   ├── hooks/                    # Custom React hooks
-│   │   ├── stores/                   # Zustand stores (WebSocket state)
-│   │   ├── services/                 # API client, WebSocket client
-│   │   ├── types/                    # TypeScript type definitions
-│   │   └── lib/                      # Utilities, constants, helpers
-│   ├── public/
-│   ├── tailwind.config.ts
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── backend/
-│   ├── gateway/                      # FastAPI API Gateway
-│   │   ├── main.py                   # App entry point
-│   │   ├── config.py                 # Configuration management
-│   │   ├── middleware/               # Auth, CORS, rate limiting
-│   │   ├── routers/                  # API route handlers
-│   │   │   ├── orders.py
-│   │   │   ├── venues.py
-│   │   │   ├── market_data.py
-│   │   │   ├── risk.py
-│   │   │   ├── routing.py
-│   │   │   └── admin.py
-│   │   ├── websocket/                # WebSocket manager
-│   │   │   └── ws_manager.py
-│   │   └── dependencies.py           # Dependency injection
-│   │
-│   ├── services/                     # Microservices
-│   │   ├── market_data/              # Market data collection & aggregation
-│   │   │   ├── collector.py          # Per-venue data collection
-│   │   │   ├── aggregator.py         # NBBO aggregation across venues
-│   │   │   ├── price_engine.py       # GBM + regime-switching simulator
-│   │   │   └── models.py
-│   │   │
-│   │   ├── routing_engine/           # Smart order routing
-│   │   │   ├── engine.py             # Core routing logic
-│   │   │   ├── strategies/
-│   │   │   │   ├── best_price.py     # Best price strategy
-│   │   │   │   ├── liquidity_sweep.py
-│   │   │   │   └── base.py           # Strategy interface
-│   │   │   ├── venue_scorer.py       # Venue scoring / ranking
-│   │   │   └── models.py
-│   │   │
-│   │   ├── risk_engine/              # Risk management
-│   │   │   ├── pre_trade.py          # Pre-trade risk checks
-│   │   │   ├── kill_switch.py        # Kill switch logic
-│   │   │   ├── position_tracker.py   # Position / exposure tracking
-│   │   │   ├── policy_engine.py      # Rule-based policy enforcement
-│   │   │   └── models.py
-│   │   │
-│   │   ├── order_state/              # Order lifecycle management
-│   │   │   ├── state_machine.py      # Order state transitions
-│   │   │   ├── order_manager.py      # CRUD + lifecycle orchestration
-│   │   │   └── models.py
-│   │   │
-│   │   ├── venue_monitor/            # Venue health monitoring
-│   │   │   ├── health_checker.py     # Latency, uptime, error tracking
-│   │   │   ├── anomaly_detector.py   # Statistical anomaly detection
-│   │   │   └── models.py
-│   │   │
-│   │   └── consensus/                # RAFT consensus
-│   │       ├── raft_node.py          # RAFT node implementation
-│   │       ├── raft_log.py           # Replicated log
-│   │       ├── state_replicator.py   # Risk state replication
-│   │       └── models.py
-│   │
-│   ├── shared/                       # Shared across all services
-│   │   ├── models/                   # Pydantic models (Order, Venue, etc.)
-│   │   │   ├── order.py
-│   │   │   ├── venue.py
-│   │   │   ├── market_data.py
-│   │   │   ├── risk.py
-│   │   │   └── execution_report.py
-│   │   ├── database/                 # DB connection, migrations
-│   │   │   ├── postgres.py
-│   │   │   ├── redis_client.py
-│   │   │   └── migrations/
-│   │   ├── events/                   # Event bus (pub/sub)
-│   │   │   └── event_bus.py
-│   │   ├── fix/                      # FIX protocol utilities
-│   │   │   ├── parser.py
-│   │   │   └── builder.py
-│   │   └── utils/
-│   │       ├── logger.py
-│   │       ├── metrics.py
-│   │       └── time_utils.py
-│   │
-│   ├── requirements.txt
-│   └── pyproject.toml
-│
-├── venues/                           # 5 venue simulator servers
-│   ├── venue_server.py               # Configurable venue simulator
-│   ├── order_book.py                 # In-memory order book engine
-│   ├── matching_engine.py            # Price-time priority matching
-│   ├── liquidity_model.py            # Liquidity simulation
-│   ├── impact_model.py               # Square-root market impact
-│   ├── profiles/                     # Per-venue personality configs
-│   │   ├── alpha_exchange.yaml       # V1: AWS, stable, medium latency
-│   │   ├── beta_liquidity.yaml       # V2: GCP, best prices, fast
-│   │   ├── gamma_markets.yaml        # V3: Azure, degraded, blacklisted
-│   │   ├── delta_prime.yaml          # V4: AWS, premium, low latency
-│   │   └── epsilon_pool.yaml         # V5: GCP, dark pool, balanced
-│   └── requirements.txt
-│
-├── infra/                            # Infrastructure
-│   ├── docker/
-│   │   ├── docker-compose.yml        # Full stack orchestration
-│   │   ├── docker-compose.dev.yml    # Development overrides
-│   │   ├── Dockerfile.gateway        # API gateway image
-│   │   ├── Dockerfile.venue          # Venue simulator image
-│   │   └── Dockerfile.frontend       # Frontend build image
-│   ├── nginx/
-│   │   └── nginx.conf                # Reverse proxy config
-│   └── scripts/
-│       ├── start_all.sh              # Start everything locally
-│       ├── start_venues.sh           # Start venue simulators only
-│       └── seed_data.sh              # Seed test data
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── e2e/
-│   └── load/
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-│
-├── .gitignore
-├── .env.example
-└── docker-compose.yml                # Symlink to infra/docker/
+backend/
+  exchanges/            base.py (ExchangeAdapter, SymbolRules, ExecutionResult), ccxt_venue.py (shared execution
+                        core: IOC, client-id idempotency, reconciliation, fees), orderbook.py, precision.py,
+                        update_id_sync.py / stream_sync.py (book integrity), registry.py (EXCHANGE_CATALOG),
+                        binance/ bybit/ okx/ gate/ coinbase/ (per-venue feed + quirks)
+  gateway/              main.py (lifespan: open store → restore state → start services), config.py (Settings,
+                        SecretStr keys, mainnet interlock), dependencies.py (wiring), middleware/auth.py
+                        (JWT, hardcoded POC users), routers/*, websocket/ws_manager.py
+  services/
+    order_state/        order_manager.py (state machine, in-flight tracking, restore), entry.py (OrderEntry)
+    routing_engine/     engine.py (pipeline + child execution), strategies/best_price.py (depth walk)
+    risk_engine/        pre_trade.py, kill_switch.py, position_tracker.py, risk_monitor.py
+    market_data/        collector.py, aggregator.py
+    venue_monitor/      health_checker.py, coherence.py
+    wallet/             portfolio.py (balances), ledger.py (pure P&L math), pnl.py (P&L + reconciliation)
+    audit/              recorder.py (event bus → audit log)
+    algos/              twap.py (TWAP engine; pure schedule math at the top)
+    consensus/          EMPTY — Phase 6 home for the RAFT cluster
+    execution/ policy/ risk/ routing/ venue_health/   empty legacy placeholders (unused)
+  shared/               models/ (Pydantic v2), database/store.py (AuditStore), events/event_bus.py,
+                        exceptions.py, utils/logger.py (structlog)
+  tests/                unittest suites: test_exchanges, test_routing, test_portfolio, test_algos, ...
+frontend/src/
+  pages/                Dashboard, MarketData, AlgoOrders, Wallet, HowItWorks, VenueHealth, RiskManager,
+                        KillSwitch, AuditLog, Login (OrderTicket is unrouted legacy)
+  components/           AppShell (nav), NewOrderModal, OrderProofModal, RoutingProof, AuditTimeline,
+                        TwapChart, shared.tsx
+  services/api.ts       every REST call + response types      services/websocket.ts  one multiplexed WS
+  stores/dataStore.ts   Zustand: all server state; WS events trigger refetches
+  theme.ts / format.ts  colour + font tokens (C, F), number formatting (fmtPrice, fmtQty, fmtUsd, fmtPnl)
+scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py
+project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
+venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
+start_all.py            starts gateway + frontend
+data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
 
 ---
 
-## Technology Stack
+## Run, test, verify
 
-| Layer | Technology | Why |
-|---|---|---|
-| **Frontend** | React 18 + TypeScript + Vite | Figma Make generated the initial code; fast HMR with Vite |
-| **UI Library** | Tailwind CSS + shadcn/ui | Consistent dark-theme components; trading-dashboard aesthetic |
-| **Frontend State** | Zustand (real-time) + TanStack Query (server) | Zustand for WebSocket streams; TanStack for REST cache/sync |
-| **Charts** | TradingView Lightweight Charts + Recharts | Industry-standard candlestick/line charts |
-| **Tables** | AG Grid (Community) | High-performance grid for order blotter, market data |
-| **Backend Gateway** | Python FastAPI | Async, auto-OpenAPI docs, fast prototyping |
-| **Database** | PostgreSQL 16 | Orders, execution reports, audit logs, config |
-| **Cache / Pub-Sub** | Redis 7 | Real-time market data cache, WebSocket pub/sub, rate limiting |
-| **Venue Simulators** | Python FastAPI | Self-contained per-venue with GBM price engine |
-| **FIX Protocol** | QuickFIX-Python | Session management, message parsing, execution reports |
-| **Consensus** | Custom RAFT (Python) | Risk state replication across 3-node cluster |
-| **Containerization** | Docker + docker-compose | Local dev + multi-cloud deployment |
-| **Cloud** | AWS + GCP + Azure | Venues distributed across 3 clouds for realism |
-| **CI/CD** | GitHub Actions | Automated testing, linting, build verification |
+```powershell
+pip install -r backend/requirements.txt          # + backend/requirements-dev.txt for tests
+cd frontend; npm install; cd ..
+copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
+python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
+python start_all.py                              # gateway :8000 (/docs) + frontend :5173
+python -m unittest discover -s backend/tests -t .   # all backend tests (107 as of 2026-10-01)
+npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
+```
+
+POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN), `trader1` (TRADER), `risk_mgr` (RISK_MANAGER) — password = username.
+
+**Verify on the real venues, not just in tests.** Every venue quirk so far (price-limit bands, fees in coins, lagging order history, float lot loss, fragmented inventory, venue minimums) was found live. Use small quantities (e.g. 0.0002 BTC).
 
 ---
 
-## Coding Conventions
+## Non-negotiable design rules
 
-### Python (Backend)
+1. **One way in.** Every order — button, TWAP, future copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly.
+2. **Testnet / demo only** until Phase 8. Mainnet needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay empty in dev.
+3. **Children are IOC LIMIT, price-protected.** No resting orders; MARKET parents are capped at the worst planned price ± `CHILD_PRICE_PROTECTION_BPS` (and the venue's own price-limit rule).
+4. **Reality wins.** A fill reported by an exchange is always recorded (even on a cancelled parent). Never "fix" a mismatch by editing the ledger — reconciliation shows it; an operator accepts exchange balances (audited).
+5. **Fail-safe state.** The kill switch and risk limits are persisted; a restart keeps an engaged kill switch engaged and leaves running TWAPs **paused**.
+6. **Never interrupt a call that is at the exchange** (no task cancellation mid-order). Pause/cancel take effect between steps.
+7. **Everything is audited** with an actor and a plain-English summary (`backend/shared/events/event_bus.py: audit()`).
+8. **Honest claims only** (the panel probes them): not "non-custodial" (exchanges custody funds; we read balances); arbitrage is a fee-aware *detector*; the value is integration, not a novel algorithm; only claim benchmarks we can show; testnet/demo = exchange-run fake funds.
 
-- Python 3.11+
-- Use `async`/`await` everywhere in FastAPI — no sync blocking in request handlers
-- Pydantic v2 for all data models — strict validation, `model_dump()` not `.dict()`
-- Type hints on every function signature — no `Any` unless unavoidable
-- Import order: stdlib → third-party → local (enforced by `ruff`)
-- Naming: `snake_case` for functions/variables, `PascalCase` for classes, `UPPER_SNAKE` for constants
-- Docstrings: Google style on all public functions
-- Error handling: raise domain-specific exceptions (`OrderNotFoundError`, `VenueUnavailableError`), caught in middleware
-- Logging: structured JSON via `structlog` — every log includes `order_id`, `venue_id`, `timestamp`
-- Tests: `pytest` + `pytest-asyncio` — minimum 80% coverage on services
+## Coding conventions
 
-### TypeScript (Frontend)
+**Python 3.11+** (developed on 3.14): `async def` everywhere in FastAPI; Pydantic v2 (`model_dump()`); type hints on every signature; business logic in services, routers stay thin; domain errors subclass `DomainError`; `structlog` logging (no `print` in services); Google-style docstrings on public functions; comments explain *why* (match the existing density); unit tests with `unittest` (`IsolatedAsyncioTestCase` for async); pure logic (math, schedules) kept in pure functions and tested directly.
 
-- Strict mode enabled (`"strict": true` in tsconfig)
-- Functional components only — no class components
-- Custom hooks for any logic used in 2+ components
-- Named exports only — no default exports (except route pages)
-- Naming: `camelCase` for variables/functions, `PascalCase` for components/types, `UPPER_SNAKE` for constants
-- File naming: `kebab-case.tsx` for components, `camelCase.ts` for utilities
-- Feature-based folder structure — everything related to a feature lives in its folder
-- No `any` — use `unknown` and narrow with type guards
-- Prefer `interface` over `type` for object shapes (extensibility)
-- CSS: Tailwind utility classes only — no custom CSS files except for global tokens
+**TypeScript**: strict mode; functional components; named exports; no `any`; styling is **inline styles with the theme tokens** `C` / `F` from `theme.ts` (no Tailwind, no CSS files); numbers through `format.ts`; server state in `dataStore.ts`, REST in `services/api.ts`.
 
-### Git Conventions
+**Git**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`); branch per workstream (see CONTRIBUTING.md); PRs reviewed and merged by Sarmad; no direct pushes to `main`. **No AI/tool attribution anywhere** — no co-author trailers, no "generated with …" lines in commits, PRs, code or docs.
 
-- Branch naming: `feature/xxx`, `fix/xxx`, `refactor/xxx`, `project-info/xxx`
-- Commit messages: conventional commits — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
-- PR-based workflow — no direct pushes to `main`
-- Each PR must pass CI (lint + test + build)
+## Session protocol (every working session, human or assistant)
 
----
+1. **Start:** pull your branch; read this file, `PROGRESS.md` (check *Who is working on what* — don't touch someone else's claimed area), and the relevant `ROADMAP.md` section.
+2. **Plan before building:** read the real code (docs can lag), list contradictions/risks, then build.
+3. **Verify:** run the tests + type-check; exercise the feature live on testnet with a small order.
+4. **End:** update `PROGRESS.md` (state, what's next, your claim row) and append a dated entry to `DEVELOPMENT_JOURNAL.md` (what, why, design choices, files). Commit with a conventional message; push only your branch.
 
-## Five Venue Profiles
+## Gotchas (each one cost us time)
 
-| ID | Name | Cloud | Port | Personality | Status |
-|---|---|---|---|---|---|
-| V1 | AlphaExchange | AWS | 8001 | Stable, medium latency (5-15ms), reliable fills | HEALTHY |
-| V2 | BetaLiquidity | GCP | 8002 | Best prices, fast (2-8ms), deep liquidity | HEALTHY |
-| V3 | GammaMarkets | Azure | 8003 | Degraded latency (50-200ms), high reject rate | BLACKLISTED |
-| V4 | DeltaPrime | AWS | 8004 | Premium venue, lowest latency (1-5ms), thin books | HEALTHY |
-| V5 | EpsilonPool | GCP | 8005 | Dark pool, balanced (10-25ms), variable liquidity | HEALTHY |
+- **Windows PowerShell 5.1 corrupts UTF-8 files** when you rewrite them with `Get-Content`/`Set-Content` (writes a BOM, turns `—` into `â€”`). Edit files with an editor or Python, not PowerShell pipelines.
+- **Vite on Windows can miss new files** — restart `npm run dev` before trusting what the browser shows.
+- **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
+- **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
+- **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
+- **OKX**: some ISPs' default DNS refuses `okx.com` — don't depend on OKX for a demo unless that network reaches it.
+- **Gate**: its documented test funds go to the *futures* testnet and can't move to spot; ApnaSOR trades Gate spot.
+- **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 
----
+## Docs you can trust
 
-## Key Architectural Decisions
-
-1. **RAFT consensus lives in the platform layer, NOT in venue servers.** Venues are purely simulated exchanges. The RAFT cluster replicates risk state (venue health scores, blacklist decisions, kill switch status) across platform nodes.
-
-2. **Single multiplexed WebSocket** from frontend to gateway. Messages are routed by `type` field into Zustand slices. No multiple connections.
-
-3. **Feature-based folder structure** over file-type grouping. Everything for "risk-manager" (component, hooks, types, tests) lives in `features/risk-manager/`.
-
-4. **Backend is Python FastAPI** — not the C++ core described in the blueprint. The blueprint is the production-grade reference architecture. Our implementation is a faithful POC in Python that demonstrates the same design principles, interfaces, and data flows.
-
-5. **Venue simulators are in-process** — each venue is a self-contained FastAPI server with its own order book, matching engine, and price simulator. No separate matching engine microservice.
-
-6. **Order state machine is deterministic.** Valid transitions are explicitly defined. Any invalid transition is rejected and logged.
-
-7. **Event-driven internal communication.** Services communicate via an async event bus (Redis pub/sub), not synchronous inter-service calls, except for latency-critical paths (routing decisions query market data synchronously).
-
----
-
-## What NOT to Do
-
-- **Do NOT modify files in `frontend/`** without explicit instructions — Figma Make generated that code and the structure should be preserved.
-- **Do NOT use `print()` for logging** — use `structlog` with structured fields.
-- **Do NOT create sync endpoints in FastAPI** — everything is `async def`.
-- **Do NOT hardcode venue URLs** — use configuration/environment variables.
-- **Do NOT skip Pydantic validation** — every API input/output goes through a model.
-- **Do NOT put business logic in route handlers** — handlers call service functions.
-- **Do NOT use `localStorage`** in React artifacts — use React state.
-- **Do NOT install packages globally** — use project-level `requirements.txt` or `package.json`.
-
----
-
-## Quick Reference: Which Doc to Read
-
-| I need to... | Read this |
+| Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| Understand the full system architecture | `project-info/ARCHITECTURE.md` |
-| Know where files go | `project-info/PROJECT_STRUCTURE.md` |
-| See milestone timeline & what's done | `project-info/MILESTONES.md` |
-| Build or modify backend services | `project-info/BACKEND_GUIDE.md` |
-| Build or modify frontend screens | `project-info/FRONTEND_GUIDE.md` |
-| Implement or consume an API endpoint | `project-info/API_SPECIFICATION.md` |
-| Design or query the database | `project-info/DATABASE_SCHEMA.md` |
-| Understand the routing/risk algorithms | `project-info/ALGORITHMS.md` |
-| Deploy or run with Docker | `project-info/DEPLOYMENT.md` |
-| Set up local dev environment | `project-info/DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+
+The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

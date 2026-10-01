@@ -447,3 +447,122 @@ A SELL was sent entirely to the best-bid venue, but most of the coins sat on the
 ### Network finding
 
 `okx.com` stopped resolving on this network: the default DNS server *refuses* it while 1.1.1.1 / 8.8.8.8 resolve it (Bybit resolves normally through the same server) — an ISP-level block. That's an environment problem, not code, but it matters for a live panel demo: don't depend on OKX unless the demo network reaches it.
+
+---
+
+## 2026-09-29 — Phase 4: a book of record — audit log, P&L, reconciliation, portfolio risk
+
+### First, the Gate key mystery
+
+Gate's "Signature mismatch" wasn't a half-copied secret. `.env` had **two** `GATE_TESTNET_API_SECRET` lines: the real 64-character Gate secret, and — right under the OKX key — a 32-character uppercase-hex value, which is exactly what an OKX secret looks like. The OKX secret had been pasted under the Gate name, and the later line won. Renaming that one line fixed Gate (now authenticates; its testnet account needs test funds) and gave OKX its secret (it still needs the passphrase, and the network still blocks okx.com).
+
+### Why Phase 4 was needed — three things found in the code
+
+1. **A race that lost fills.** If the kill switch (or an operator cancel) landed while an IOC child was at the exchange, the late fill tried `CANCELLED → FILLED`, the state machine raised, and the position was never updated. The exchange filled it — reality must win. Now the fill is recorded on the cancelled parent and the status stays CANCELLED.
+2. **Nothing survived a restart.** Orders, fills, positions, the kill switch and risk limits were all in memory. Worst case: an engaged kill switch was silently *released* by restarting the gateway.
+3. **No cost basis, so no honest P&L.** Testnet accounts start pre-funded. Positions counted only our fills, so selling coins you already held showed up as "short BTC".
+
+### What we built
+
+**Audit store** (`backend/shared/database/store.py`). SQLite, embedded, one file per mode (`data/apnasor-testnet.db`; mainnet gets its own so fake and real records never mix). Zero setup for all four of us. Writes are queued and applied by **one** background writer in the order they happened, so a later snapshot of an order can never be overwritten by an earlier one, and the trading path never waits on disk. The SQL is plain so a PostgreSQL/TimescaleDB backend can implement the same interface later — PLAN §6 lists Timescale as a stretch; the audit log itself is core.
+
+**Audit recorder** (`backend/services/audit/recorder.py`). It listens to the event bus, so no service had to learn that an audit log exists. Every order step, risk check, routing decision, child execution, kill-switch action, limit change, venue control, baseline change and gateway start/stop becomes one record: **who** (user, `risk-engine`, `router`, the venue, `risk-monitor`, `system`) and a **plain-English summary**. The order proof modal now shows the whole timeline; there is also an Audit Log page.
+
+**Portfolio ledger + P&L** (`backend/services/wallet/ledger.py`, `pnl.py`). Average cost per venue and asset:
+- *Opening balances* are captured automatically the first time a venue's balances are readable and fully priced, marked at our own mid prices. Never while an order is executing or a fill is settling (that would double-count it).
+- Every fill after that is applied on top. Fees are handled as they really happen: in USDT (cash out), in the base coin (fewer coins), or in a third coin such as BNB.
+- One identity holds exactly and is unit-tested: **value now − opening value = realized + unrealized − fees**.
+- Split into **hold P&L** (the opening balances' market move — not our doing) and **trading P&L** (total − hold: what ApnaSOR's trades added versus just holding). This split matters for the panel: testnet accounts hold ~2 BTC, so a 0.1% BTC move swamps any trading result. Only trading P&L says anything about the router.
+
+**Reconciliation.** Expected holdings (opening + fills) vs. what each exchange reports, per asset. A recent fill shows as *settling*, not as a break. A real break (testnet reset, manual trade, deposit) is flagged with the difference, and a risk manager can **accept the exchange balances** as a new baseline for that venue — audited, history kept.
+
+**Portfolio risk monitor** (`backend/services/risk_engine/risk_monitor.py`), every 2 s:
+- **Trading-loss limit** (default $1,000). A breach **engages the kill switch automatically**, and it can't be released while the loss is still beyond the limit — the operator must raise the limit or reset the baseline, a deliberate act that gets audited.
+- **Concentration**: one non-stable asset above 60% of the portfolio, or one exchange holding more than 80% (counterparty risk — exchanges do fail). Alerts fire when a limit is first crossed, not every tick.
+
+**Kill switch halts in-flight work.** Checked again right before every child is sent, not only at pre-trade. It cancels only orders being executed right now: an IOC parent left PARTIALLY_FILLED is finished (its remainder expired on the venue), so "cancelling" it would be fiction — the API now says so. The state is persisted and restored first on start-up: a halted gateway stays halted.
+
+**Restart survival.** Orders (last 500), execution reports, fills, baselines, the kill switch and risk limits come back. An order that was mid-flight when the gateway stopped is closed with an honest reason ("check the exchange and the reconciliation for late fills").
+
+### Design choices worth defending
+
+- **Risk "positions" = net traded since the baseline**, rebuilt from the same fills as the ledger — the exposure *ApnaSOR* added. Holdings live on the Wallet page. Two clearly labelled views of one source, instead of one ambiguous number.
+- **SQLite now, not Postgres.** A database every teammate must install is friction with no demo value yet. Swapping the backend later is one class.
+- **Trading P&L, not total P&L, drives the loss limit.** Total P&L on pre-funded testnet accounts would trip the kill switch on ordinary BTC moves that have nothing to do with our trading.
+
+### Verified live (Binance testnet + Bybit demo)
+
+- Baselines captured automatically for Binance, Bybit and Gate; reconciliation **MATCHED** on all three.
+- BUY 0.0002 BTC → Binance, SELL 0.0002 BTC → Bybit (fee 0.0167 USDT). Ledger and exchange agree to the cent after each fill; trading P&L = −$0.02, exactly the fee.
+- The full 9-step audit timeline for each order, in order, with actors.
+- Restart: kill switch still engaged, changed limit kept, orders, execution reports and fills restored.
+- Loss limit set to $0.01 in the UI → kill switch engaged by `risk-monitor` within 2 s → release **refused** with the reason → limit restored → released. Every step is in the audit log.
+- 90 unit tests (27 new: ledger identity and fee cases, store ordering/persistence, late fill after cancel, kill switch before child send, restart recovery, loss limit, concentration, reconciliation break vs. settling).
+
+### Files
+
+- **New:** `backend/shared/database/store.py`, `backend/shared/models/{audit,portfolio}.py`, `backend/services/audit/`, `backend/services/wallet/{ledger,pnl}.py`, `backend/services/risk_engine/risk_monitor.py`, `backend/gateway/routers/audit.py`, `backend/tests/test_portfolio/`, `frontend/src/pages/AuditLog.tsx`, `frontend/src/components/AuditTimeline.tsx`.
+- **Changed:** order manager (in-flight tracking, late fills, restore), routing engine (per-child kill-switch gate, routing-decision event, restored stats), kill switch (restore), pre-trade risk (audited, persisted limits), gateway start-up (restore order: kill switch first), routers (P&L, baseline, audit, refused release, actors on every operator action), Wallet / Risk Manager / Kill Switch pages, order proof modal.
+
+---
+
+## 2026-10-01 — Phase 5a: the TWAP execution bot
+
+### What a TWAP is, and why it's the first strategy
+
+A **TWAP** (time-weighted average price) splits one big "parent" order into equal slices spread evenly over a time window. Sending 1 BTC at once walks deep into the book and moves the price against you; sending 0.1 BTC every 30 s lets the book refill between slices. It is the textbook first execution algorithm: simple enough to explain, and a real product feature.
+
+### The rule that keeps it honest: the bot is just another client
+
+Every slice is an **ordinary order through `OrderEntry.submit`** (`backend/services/order_state/entry.py`) — the same function the order button's REST endpoint now calls. So each slice gets pre-trade risk, the funding gate, best-price routing across venues and price-protected IOC children, with its own routing proof and audit trail. The bot never talks to an exchange. The LLM copilot will use the same entry point next.
+
+### The algorithm (`backend/services/algos/twap.py`)
+
+```
+for i in 1..N:                                   # O(N) slices
+    wait until slice i is due        # start + (i-1)·D/N, optional ± jitter
+    if kill switch active: pause; stop
+    qty = floor_to_lot(min(target_i - filled, 2 · Q/N, per-order cap))
+    order = OrderEntry.submit(qty)   # routed: O(L log L) over L book levels
+    filled += order.filled
+status = COMPLETED if filled == Q else EXPIRED (shortfall reported)
+```
+
+- **Catch-up schedule.** Slice *i* aims for a *cumulative* Q·i/N, so a slice that fills short rolls its remainder into the next one — capped at 2× a normal slice so catching up never turns into a market-impact spike. Seen live: Bybit returned a network error on slice 4 (reconciliation confirmed the order was never executed); slice 5 asked for 2× and the TWAP still completed.
+- **Jitter** (optional ±20% of the interval) makes the slice timing harder for other traders to spot. It's capped so slices never swap order.
+- **Measured, not claimed.** Each TWAP reports its cost vs the **arrival price** (the market mid when it started — implementation shortfall) and vs the **interval TWAP** (the average market mid at the slice times — the benchmark a TWAP should beat or match). Both are in bps, positive = cost.
+
+### Checks before it starts (so it fails in one second, not twenty minutes in)
+
+- The slice must be at least the lot size and at least one venue's minimum order — the error says how many slices would work.
+- The venues must hold enough to fund the whole parent (each slice is checked again).
+- **New limit `max_algo_notional_usdt` (default $50,000).** Without it, slicing a $50k order into $5k pieces walks straight past the $10k per-order limit — a contradiction in the risk design that only appears once algos exist.
+
+### Safety
+
+- **Pause and cancel never interrupt a slice that is at the exchange** (a cancelled task mid-order could lose a fill); they take effect between slices.
+- **Kill switch pauses every running TWAP**; resuming is refused until it's released.
+- **Restart never resumes a TWAP** — it comes back PAUSED with the reason (same fail-safe as the kill switch).
+- **Three slices in a row rejected before reaching any venue** (risk, funding, no liquidity) pause the TWAP with the reason instead of burning through the schedule. A slice that reaches a venue but finds no liquidity in its price band just rolls forward.
+
+### A router bug the TWAP exposed
+
+The depth walk never checked each venue's **minimum order** (lot and value). Big orders never hit it, but TWAP slices are small by design: a split could hand one venue a $3 sliver it rejects, leaving the slice partly unfilled. The router now drops a venue whose share would be below its minimum and walks again (at most once per venue), and says so in the routing proof.
+
+### Verified live (Binance testnet + Bybit demo)
+
+- BUY 0.0006 BTC in 3 slices (all Binance) and SELL 0.0006 BTC in 3 slices: COMPLETED, ~±1 bps vs arrival.
+- From the UI: BUY 0.0006 BTC in 5 slices over 30 s, all on Bybit — the network-error catch-up above.
+- Pause → nothing sent for 8 s → resume → kill switch paused it (actor `kill-switch`) → resume refused → released → resumed → COMPLETED. Every step is in the TWAP's audit timeline.
+- After 17 real fills, Binance and Bybit still reconcile exactly.
+- 107 unit tests (17 new: schedule math, catch-up, shortfall, kill switch, cancel, rejections, restart, validation; router minimum-size cases).
+
+### Also found
+
+- Market data looked "frozen" (BTC mid identical across slices). Checked against Binance's own public quote: identical, with book sizes changing every sample — just a quiet market at 02:30. No bug; good to have ruled out.
+- Gate now returns "Invalid key provided" (the key was deleted or expired on Gate's side; `.env` unchanged) — regenerate it.
+
+### Files
+
+- **New:** `backend/services/order_state/entry.py`, `backend/services/algos/`, `backend/shared/models/strategy.py`, `backend/gateway/routers/algos.py`, `backend/tests/test_algos/`, `frontend/src/pages/AlgoOrders.tsx`, `frontend/src/components/TwapChart.tsx`.
+- **Changed:** best-price strategy (venue minimums), routing engine (passes minimums), orders router (uses `OrderEntry`), order model (`parent_id`), risk limits (`max_algo_notional_usdt`), audit store (`algos` table), gateway start-up/shutdown (TWAPs load paused, stop between slices), Risk Manager (new limit), Audit Log (algo filter), order proof modal ("slice of TWAP-…").
