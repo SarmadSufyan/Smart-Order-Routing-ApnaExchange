@@ -12,16 +12,26 @@ drift apart the child expires instead of filling at an arbitrary price.
 
 Each child's UUID doubles as the exchange ``clientOrderId`` so a timed-out
 request can be reconciled rather than resent.
+
+A venue that REFUSES a child (bad key, no permission, balance, exchange
+error — nothing executed) doesn't sink the order: the refused quantity is
+planned again on fresh books without that venue, at most ``MAX_REROUTES``
+times, each round price-protected and stopped by the kill switch or a
+cancel. A child that expired at its price limit is not re-routed (that would
+chase the price). A refusal of our key's right to trade also pauses routing
+to that venue for ``trading_block_s`` — found live: an OKX key that could
+read balances but not trade failed every order whose best price was on OKX.
 """
 
 import asyncio
 import time
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from backend.exchanges.base import ExecutionResult
 from backend.exchanges.precision import ceil_to_step, floor_to_step, is_close
 from backend.exchanges.registry import ExchangeRegistry
-from backend.shared.events.event_bus import event_bus
+from backend.shared.events.event_bus import audit, event_bus
 from backend.shared.exceptions import DomainError, KillSwitchActiveError, RiskCheckFailedError
 from backend.shared.models.execution_report import ExecType
 from backend.shared.models.order import ChildOrder, Order, OrderSide, OrderStatus, OrderType
@@ -32,6 +42,8 @@ from backend.shared.utils.logger import get_logger
 from .strategies.best_price import BestPriceStrategy, fmt_price, fmt_qty
 
 logger = get_logger("routing_engine")
+
+MAX_REROUTES = 2  # extra rounds after the first; each round drops the venues that refused
 
 
 def net_base_change(order: Order, ex: ExecutionResult) -> float:
@@ -82,6 +94,8 @@ class RoutingEngine:
         price_protection_bps: float = 50.0,
         coherence=None,
         wallet=None,
+        trading_block_s: float = 600.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._aggregator = market_data_aggregator
         self._collector = market_data_collector
@@ -94,6 +108,9 @@ class RoutingEngine:
         self._child_band_bps: dict[str, float] = {}  # band actually used per child
         self._coherence = coherence
         self._wallet = wallet
+        self._block_s = trading_block_s
+        self._clock = clock
+        self._trade_blocks: dict[str, tuple[str, float]] = {}  # venue -> (reason, resume at clock time)
         self._strategy = BestPriceStrategy()
         self._orders_routed_today = 0
         self._timed_orders = 0  # routed by this process (restored ones have no timing)
@@ -136,6 +153,7 @@ class RoutingEngine:
             vid
             for vid in self._venue_monitor.get_routable_venues()
             if (adapter := self._registry.get(vid)) is not None and adapter.can_trade
+            and self._trading_block(vid) is None
         ]
         if symbol and self._coherence is not None:
             venues = [v for v in venues if self._coherence.blocking_reason(v, symbol) is None]
@@ -150,6 +168,8 @@ class RoutingEngine:
                 continue
             if not adapter.can_trade:
                 excluded[vid] = adapter.execution_note or "execution not available"
+            elif block := self._trading_block(vid):
+                excluded[vid] = block
             elif symbol and self._coherence is not None:
                 reason = self._coherence.blocking_reason(vid, symbol)
                 if reason:
@@ -294,12 +314,17 @@ class RoutingEngine:
         for child in result.child_orders:
             self._venue_allocation[child.venue_id] = self._venue_allocation.get(child.venue_id, 0) + 1
 
-        # ── Execute all children concurrently, then apply results in order
-        executions = await asyncio.gather(
-            *(self._send_child(order, child) for child in result.child_orders)
-        )
-        for child, execution in zip(result.child_orders, executions, strict=True):
-            await self._apply_execution(order, child, execution)
+        # ── Execute all children concurrently, then apply results in order.
+        # Whatever a venue refused is planned again without it (bounded rounds).
+        children: list[ChildOrder] = result.child_orders
+        refused: set[str] = set()
+        for round_no in range(MAX_REROUTES + 1):
+            refused_qty = await self._execute_round(order, children, refused)
+            if refused_qty <= 0 or round_no == MAX_REROUTES:
+                break
+            children = await self._reroute(order, refused_qty, refused)
+            if not children:
+                break
 
         updated = self._orders.get_order(order.id)
         if updated.filled_quantity <= 0 and updated.status == OrderStatus.WORKING:
@@ -308,6 +333,112 @@ class RoutingEngine:
             )
             await self._reject(order, reasons or "All venue executions rejected")
         return result
+
+    async def _execute_round(self, order: Order, children: list[ChildOrder], refused: set[str]) -> float:
+        """Send children concurrently, apply results in order; return the quantity venues refused."""
+        executions = await asyncio.gather(*(self._send_child(order, child) for child in children))
+        refused_qty = 0.0
+        for child, ex in zip(children, executions, strict=True):
+            await self._apply_execution(order, child, ex)
+            if ex.blocks_trading:
+                await self._block_trading(child.venue_id, ex.reason or "the venue refused to trade")
+            if ex.retry_elsewhere and ex.filled_qty <= 0:
+                refused.add(child.venue_id)
+                refused_qty += child.quantity
+        return refused_qty
+
+    async def _reroute(self, order: Order, quantity: float, refused: set[str]) -> list[ChildOrder]:
+        """Plan ``quantity`` again on fresh books, without the venues that refused it.
+
+        Returns the new children (already attached to the order), or [] when
+        there is nowhere left to go — the reason goes into the routing proof.
+        Risk approved the whole parent, and a re-route never exceeds what is
+        still unfilled, so no new risk check is needed; funding is re-checked.
+        """
+        base = order.symbol.split("/")[0]
+        who = ", ".join(sorted(refused))
+        current = self._orders.get_order(order.id)
+
+        def give_up(why: str) -> list[ChildOrder]:
+            self._add_note(order, f"{who} refused {fmt_qty(quantity)} {base}; not re-routed: {why}")
+            return []
+
+        if self._risk.kill_switch.is_active:
+            return give_up("kill switch engaged")
+        if current.status == OrderStatus.CANCELLED:
+            return give_up("order cancelled")
+        venues = [v for v in self.executable_venues(order.symbol) if v not in refused]
+        if not venues:
+            return give_up("no other venue can execute it")
+        steps: dict[str, float] = {}
+        minimums: dict[str, tuple[float, float]] = {}
+        for vid in venues:
+            adapter = self._registry.get(vid)
+            if adapter and (rules := adapter.rules(order.symbol)):
+                steps[vid] = rules.amount_step
+                minimums[vid] = (rules.min_amount, rules.min_notional)
+        qty = min(quantity, current.quantity - current.filled_quantity)
+        if steps:
+            qty = floor_to_step(qty, max(steps.values()))
+        if qty <= 0:
+            return give_up("below the lot size")
+        nbbo = await self._aggregator.compute_nbbo(order.symbol)
+        if not nbbo:
+            return give_up("no live market data")
+
+        plan = order.model_copy(update={"quantity": qty, "child_orders": []})
+        depth = {
+            vid: d
+            for vid in venues
+            if (d := self._collector.get_depth(vid, order.symbol, self._depth_levels)) is not None
+        }
+        result = await self._strategy.route(
+            plan, nbbo, venues, depth=depth, lot_steps=steps,
+            venue_names={a.venue_id: a.name for a in self._registry.all()},
+            exclusion_reasons={**self.excluded_venues(order.symbol), **{v: "refused this order" for v in refused}},
+            capacity=await self.venue_capacity(plan, venues, nbbo), min_sizes=minimums,
+        )
+        if result.status == RoutingStatus.REJECTED or not result.child_orders:
+            return give_up(result.rejection_reason or "no liquidity on the other venues")
+
+        for child in result.child_orders:
+            await self._orders.add_child_order(order.id, child)
+            self._venue_allocation[child.venue_id] = self._venue_allocation.get(child.venue_id, 0) + 1
+        event = self._decision_event(plan, result)
+        event["summary"] = f"Re-route after {who} refused: {event['summary']}"
+        self._add_note(order, event["summary"])
+        await event_bus.publish("routing_decision", event)
+        return result.child_orders
+
+    def _add_note(self, order: Order, note: str) -> None:
+        """Append to the stored routing proof, so the UI shows what happened after the plan."""
+        decision = self._orders.get_order(order.id).routing_decision
+        if decision is not None:
+            decision.setdefault("notes", []).append(note)
+
+    def _trading_block(self, venue_id: str) -> str | None:
+        """Why routing to this venue is paused after it refused our key, or None."""
+        block = self._trade_blocks.get(venue_id)
+        if block is None:
+            return None
+        reason, resume_at = block
+        left = resume_at - self._clock()
+        if left <= 0:
+            del self._trade_blocks[venue_id]  # cooldown over: the next order there is the probe
+            return None
+        return f"trading paused for {max(1, round(left / 60))} more min after: {reason}"
+
+    async def _block_trading(self, venue_id: str, reason: str) -> None:
+        first = self._trading_block(venue_id) is None
+        self._trade_blocks[venue_id] = (reason, self._clock() + self._block_s)
+        if first:
+            resume = datetime.now(UTC) + timedelta(seconds=self._block_s)
+            logger.warning("venue_trading_blocked", venue_id=venue_id, reason=reason, seconds=self._block_s)
+            await audit(
+                "venue_trading_blocked",
+                f"{venue_id}: no new orders for {self._block_s / 60:g} min, then one retry — {reason}",
+                actor="router", venue_id=venue_id, payload={"reason": reason, "resume_at": resume.isoformat()},
+            )
 
     def _decision_event(self, order: Order, result: RoutingResult) -> dict:
         base = order.symbol.split("/")[0]
@@ -356,7 +487,7 @@ class RoutingEngine:
         if adapter is None:
             return ExecutionResult(
                 exec_type=ExecType.REJECT, requested_qty=child.quantity,
-                reason=f"venue {child.venue_id} is not connected", venue_fault=True,
+                reason=f"venue {child.venue_id} is not connected", venue_fault=True, retry_elsewhere=True,
             )
         if order.order_type == OrderType.MARKET:
             planned = child.limit_price or child.price

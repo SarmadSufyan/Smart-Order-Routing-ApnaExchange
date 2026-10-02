@@ -112,6 +112,7 @@ def init_services() -> Services:
         price_protection_bps=settings.child_price_protection_bps,
         coherence=coherence,
         wallet=wallet_service,  # per-venue balances cap each venue's slice
+        trading_block_s=settings.trading_block_cooldown_s,
     )
     risk_monitor = RiskMonitor(
         risk_engine, pnl_service, wallet_service, order_manager, registry,

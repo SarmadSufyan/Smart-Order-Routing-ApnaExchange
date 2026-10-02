@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # planned price. Decisions use mainnet books but fills happen on the
     # testnet book, so a drifted book must make a child expire, not overpay.
     child_price_protection_bps: float = 50.0
+    # A venue that refuses our key's right to trade gets no new orders for
+    # this long (then one retry); a restart clears it. Refused quantity is
+    # re-routed to the other venues either way.
+    trading_block_cooldown_s: float = 600.0
     # A venue+symbol whose EXECUTION book (testnet) sits further than this
     # from the real-market book is excluded from routing (both sides).
     coherence_threshold_bps: float = 50.0

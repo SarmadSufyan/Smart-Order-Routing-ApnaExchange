@@ -290,7 +290,8 @@ class Copilot:
                             "market is already there.")
         limits = self._risk.limits
         value = quantity * mid
-        update = {"reference_mid": mid, "conversion": conversion, "warnings": warnings,
+        # round(): the API showed float noise like 2747.2650000000003
+        update = {"reference_mid": round(mid, 8), "conversion": conversion, "warnings": warnings,
                   "status": ProposalStatus.PROPOSED}
         at = f" at limit {fmt_price(limit_price)}" if limit_price else " at market"
 

@@ -59,6 +59,14 @@ class ExecutionResult(BaseModel):
     # mistakes — below min lot, insufficient balance, missing keys — are not
     # the venue's fault and must not lower its health score.
     venue_fault: bool = False
+    # The venue refused the order before executing any of it (bad key, no
+    # permission, balance, exchange error, or a lost request confirmed "not
+    # executed"), so the router may send that quantity to another venue. An
+    # IOC that EXPIRED at its limit is a price decision, not a refusal.
+    retry_elsewhere: bool = False
+    # The refusal is about our API key's right to trade, not this order: every
+    # order to this venue would fail the same way, so stop routing there.
+    blocks_trading: bool = False
 
 
 class AssetBalance(BaseModel):
