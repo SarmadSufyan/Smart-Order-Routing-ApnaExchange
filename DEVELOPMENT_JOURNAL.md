@@ -789,3 +789,13 @@ Two honest limits from the first version, both fixed and re-verified live.
 - 226 tests (11 new): signatures, tampering, old messages, replayed requests and fake-node replies over real TCP; a wrong-secret client can neither write nor read; the instant answers (no proposal is even attempted when the picture shows no majority) and the fresh look before refusing. A network test that waited a fixed 0.5 s for a restarted node to catch up failed once in ~35 runs (on a busy machine the returning node can time out and hold an election before it hears the leader — no pre-vote — which costs a few hundred ms); it now waits until the node has caught up (up to 5 s): 30 repeated runs clean.
 
 **Files:** new `backend/services/consensus/wire.py`, `backend/tests/test_consensus/test_wire.py`; changed `node.py`, `client.py`, `risk_engine/controls.py`, `gateway/config.py` (`raft_shared_secret`, `raft_secret_problem()`), `dependencies.py`, `shared/models/consensus.py` (`signed`, `rejected_messages`), `start_all.py`, `scripts/raft_demo.py` (intruder step, `--no-majority`), tests, `.env.example`, docs.
+
+---
+
+## 2026-10-03 — Phase 6 pushed; a guide for the team
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+Before pushing, Phase 6 was re-checked: `origin/feature/backend-v2` had not moved (nothing to merge), 226 tests and the frontend type-check pass, lint is clean on every changed file, a scan of the whole push against the `.env` secret values found nothing, and the commits carry no tool attribution.
+
+Added [`project-info/PHASE6_GUIDE.md`](project-info/PHASE6_GUIDE.md): what Phase 6 is in plain words (the kitchen and secretary analogies, the TWAP pre-flight and stress-test examples, the benchmark table), where each piece lives, a 20-minute self-check with the expected output of every step, troubleshooting, and the panel Q&A + honest limits — so whoever picks this up, or has to defend it, doesn't depend on a chat history. PROGRESS.md's Phase 6 handoff now has Sarmad's to-do list in order and states the merge status plainly: 5b, router hardening and Phase 6 all reach `feature/crypto-pivot` in one merge.

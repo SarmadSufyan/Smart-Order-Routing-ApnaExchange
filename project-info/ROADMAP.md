@@ -81,6 +81,8 @@ Done when: detector unit-tested with synthetic books; live page shows real (most
 
 ### 6 — Parallelism proof ✅ (2026-10-02, Fizza)
 
+> Plain-English explanation, a 20-minute self-check and panel Q&A: [`PHASE6_GUIDE.md`](PHASE6_GUIDE.md).
+
 - **multiprocessing risk:** batch pre-trade checks in a process pool (e.g. a TWAP's or basket's slices); benchmark single-process vs pool and report what the chart shows, nothing more.
 - **RAFT cluster:** 3 Python processes (`backend/services/consensus/`), leader election + replicated log, replicating **kill switch, venue blacklist, risk limits**. The gateway writes those through the leader and reads committed state.
 - **Demo:** kill the leader mid-trading → a new leader is elected, the kill switch / limits are unchanged, orders continue (or stay halted).
