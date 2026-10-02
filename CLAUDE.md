@@ -102,7 +102,8 @@ backend/
     agents/             copilot.py (propose / confirm / cancel), llm.py (one LLM interface; GeminiClient)
     consensus/          RAFT: core.py (the algorithm — no I/O, no clock, tick/step), storage.py (SQLite),
                         state_machine.py (kill switch / limits / blacklist), node.py (one node process:
-                        python -m backend.services.consensus.node --id N), client.py (gateway + scripts)
+                        python -m backend.services.consensus.node --id N), client.py (gateway + scripts),
+                        wire.py (every message signed: HMAC-SHA256 + time stamp + one-time nonce)
     execution/ policy/ risk/ routing/ venue_health/   empty legacy placeholders (unused)
   shared/               models/ (Pydantic v2), database/store.py (AuditStore), events/event_bus.py,
                         exceptions.py, utils/logger.py (structlog)
@@ -133,15 +134,17 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (215 as of 2026-10-02)
+python -m unittest discover -s backend/tests -t .   # all backend tests (226 as of 2026-10-02)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
 ```
 
 Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.
-**RAFT on:** set `RAFT_ENABLED=true` in `.env`, then `python start_all.py` starts the 3 nodes before the gateway
-(a killed node is restarted after 15 s). `GET /api/consensus/status` shows leader, terms and log positions.
+**RAFT on:** set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` (make one with
+`python -c "import secrets; print(secrets.token_hex(32))"`) in `.env`, then `python start_all.py` starts the 3 nodes
+before the gateway (a killed node is restarted after 15 s). Every RAFT message is signed with that secret.
+`GET /api/consensus/status` shows leader, terms, log positions and refused messages.
 
 POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN), `trader1` (TRADER), `risk_mgr` (RISK_MANAGER) — password = username.
 

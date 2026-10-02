@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # stays local, exactly as before. start_all.py starts the nodes.
     raft_enabled: bool = False
     raft_cluster_nodes: str = "127.0.0.1:9001,127.0.0.1:9002,127.0.0.1:9003"
+    # Every RAFT message (node <-> node, gateway <-> node) is signed with this
+    # (HMAC-SHA256). Required when RAFT is on; each machine makes its own.
+    raft_shared_secret: SecretStr | None = None
     raft_data_dir: str = ""  # empty = data/raft-<exchange_mode>/ (one SQLite file per node)
     raft_tick_ms: int = 50
     raft_election_ticks: int = 10  # election timeout = random 10-20 ticks (0.5-1 s)
@@ -140,6 +143,16 @@ class Settings(BaseSettings):
                 "ALLOW_MAINNET=true. Refusing to start."
             )
         return self
+
+    def raft_secret_problem(self) -> str | None:
+        """Why the RAFT secret can't be used, or None. Checked where RAFT starts
+        (start_all, the gateway, each node) — not here, so loading the settings
+        never fails just because RAFT is half set up."""
+        secret = self.raft_shared_secret.get_secret_value() if self.raft_shared_secret else ""
+        if len(secret) >= 16:
+            return None
+        return ("RAFT needs RAFT_SHARED_SECRET in .env (16+ characters) - every RAFT message is signed "
+                "with it. Generate one with:  python -c \"import secrets; print(secrets.token_hex(32))\"")
 
     @property
     def symbol_list(self) -> list[str]:

@@ -7,6 +7,7 @@ from backend.services.agents import Copilot, build_llm_client
 from backend.services.algos import TwapEngine
 from backend.services.audit import AuditRecorder
 from backend.services.consensus.client import ConsensusClient, parse_cluster
+from backend.services.consensus.wire import MessageSigner
 from backend.services.market_data.aggregator import MarketDataAggregator
 from backend.services.market_data.collector import MarketDataCollector
 from backend.services.order_state.entry import OrderEntry
@@ -126,8 +127,11 @@ def init_services() -> Services:
     )
     # The one way to change the kill switch, limits and venue blacklist —
     # through the RAFT cluster's leader when RAFT_ENABLED=true.
+    if settings.raft_enabled and (problem := settings.raft_secret_problem()):
+        raise RuntimeError(problem)
     consensus = ConsensusClient(
         parse_cluster(settings.raft_cluster_nodes), write_timeout_s=settings.raft_write_timeout_s,
+        signer=MessageSigner(settings.raft_shared_secret.get_secret_value()),  # checked just above
     ) if settings.raft_enabled else None
     risk_controls = RiskControls(
         risk_engine, order_manager, registry, venue_monitor, client=consensus,

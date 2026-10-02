@@ -10,15 +10,21 @@ Reads ask every node for its committed state at once and keep the one with
 the highest applied log index. Committed entries never change, so a higher
 index is always the fresher truth — no need to find the leader for a read.
 
+Every message is signed (``wire.py``); an answer that isn't signed with our
+secret, or doesn't echo our one-time nonce, is treated as no answer — so a
+program pretending to be a node can't feed the gateway a fake state.
+
 Every network call has a short timeout: on Windows, connecting to a dead
 localhost port takes ~2 s to fail, which would otherwise stall everything.
 """
 
 import asyncio
-import json
 from typing import Any
+from uuid import uuid4
 
 from backend.shared.exceptions import DomainError
+
+from .wire import MessageSigner
 
 CONNECT_TIMEOUT_S = 0.3
 LINE_LIMIT = 1 << 20  # bytes per JSON line (an append of 100 entries is far smaller)
@@ -45,9 +51,11 @@ def parse_cluster(spec: str) -> dict[int, tuple[str, int]]:
     return nodes
 
 
-async def request(address: tuple[str, int], payload: dict[str, Any], timeout_s: float) -> dict[str, Any] | None:
-    """One request/reply over a fresh connection. None = no (valid) answer."""
+async def request(address: tuple[str, int], payload: dict[str, Any], timeout_s: float,
+                  signer: MessageSigner) -> dict[str, Any] | None:
+    """One signed request/reply over a fresh connection. None = no (valid) answer."""
     host, port = address
+    nonce = uuid4().hex
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(host, port, limit=LINE_LIMIT), timeout=min(timeout_s, CONNECT_TIMEOUT_S),
@@ -55,11 +63,11 @@ async def request(address: tuple[str, int], payload: dict[str, Any], timeout_s: 
     except (OSError, TimeoutError):
         return None
     try:
-        writer.write((json.dumps(payload, separators=(",", ":")) + "\n").encode())
+        writer.write(signer.encode({**payload, "nonce": nonce}))
         await asyncio.wait_for(writer.drain(), timeout_s)
         line = await asyncio.wait_for(reader.readline(), timeout_s)
-        reply = json.loads(line) if line else None
-        return reply if isinstance(reply, dict) else None
+        reply = signer.decode(line) if line else None
+        return reply if reply is not None and reply.get("nonce") == nonce else None
     except (OSError, TimeoutError, ValueError, asyncio.IncompleteReadError):
         return None
     finally:
@@ -74,8 +82,10 @@ class ConsensusClient:
         read_timeout_s: float = 0.5,
         write_timeout_s: float = 3.0,
         commit_wait_s: float = 2.0,
+        signer: MessageSigner | None = None,
     ) -> None:
         self.nodes = nodes
+        self.signer = signer or MessageSigner(None)
         self._read_timeout = read_timeout_s
         self._write_timeout = write_timeout_s
         self._commit_wait = commit_wait_s  # how long a leader waits for a majority (node side)
@@ -84,7 +94,8 @@ class ConsensusClient:
     async def states(self) -> dict[int, dict[str, Any] | None]:
         """Every node's status + committed state (None = unreachable)."""
         ids = list(self.nodes)
-        replies = await asyncio.gather(*(request(self.nodes[i], {"op": "state"}, self._read_timeout) for i in ids))
+        replies = await asyncio.gather(*(request(self.nodes[i], {"op": "state"}, self._read_timeout, self.signer)
+                                         for i in ids))
         out = {i: (r if r and r.get("ok") else None) for i, r in zip(ids, replies, strict=True)}
         leaders = [i for i, r in out.items() if r and r.get("role") == "LEADER"]
         if leaders:
@@ -109,7 +120,7 @@ class ConsensusClient:
                         f"({last_error}) — no leader with a majority right now"
                     )
                 reply = await request(self.nodes[node_id], {"op": "propose", "command": command},
-                                      min(remaining, self._commit_wait + 0.5))
+                                      min(remaining, self._commit_wait + 0.5), self.signer)
                 if reply is None:
                     last_error = f"node {node_id} unreachable"
                     continue

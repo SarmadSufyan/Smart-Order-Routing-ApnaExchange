@@ -52,6 +52,9 @@ def main() -> None:
             [sys.executable, "-m", "backend.services.consensus.node", "--id", str(node_id)], env=env, cwd=ROOT,
         )
 
+    if settings.raft_enabled and (problem := settings.raft_secret_problem()):
+        print(f"\n  RAFT_ENABLED=true, but: {problem}\n  Nothing was started.")
+        sys.exit(1)
     if settings.raft_enabled:
         from backend.services.consensus.client import parse_cluster
 

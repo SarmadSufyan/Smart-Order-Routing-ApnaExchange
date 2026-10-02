@@ -92,7 +92,7 @@ Done when:
 - [x] Journal entry with the design (2026-10-02, Phase 6).
 - [ ] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) and a pre-flight button on the Algo Orders page.
 
-**API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** when the cluster has no majority (show the message).
+**API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** at once when the cluster has no majority (show the message: "only N of 3 RAFT nodes are reachable … Nothing changed"); engaging still works. Every RAFT message is signed (HMAC-SHA256, `RAFT_SHARED_SECRET`); `status.signed` and each node's `rejected_messages` show it.
 
 ### 7 — Polish
 

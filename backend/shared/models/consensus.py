@@ -14,10 +14,12 @@ class ConsensusNode(BaseModel):
     applied_index: int | None = None
     pid: int | None = None
     mode: str | None = None  # testnet / mainnet: must match the gateway's
+    rejected_messages: int | None = None  # forged / too old / replayed lines this node refused
 
 
 class ConsensusStatus(BaseModel):
     enabled: bool
+    signed: bool = False  # every RAFT message carries an HMAC-SHA256 signature
     leader: int | None = None
     majority_reachable: bool = False
     nodes: list[ConsensusNode] = []

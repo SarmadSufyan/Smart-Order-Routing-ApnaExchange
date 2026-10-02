@@ -10,7 +10,7 @@ Dev utilities, one-shot tools, repo automation. Run them from the project root w
 | `check_exchange_keys.py` | Which venues authenticate with your `.env` keys, with test balances |
 | `check_binance_testnet.py` | Binance spot testnet end-to-end check |
 | `benchmark_risk_batch.py` | Phase 6: risk batch in one process vs a pool of worker processes; writes `project-info/benchmarks/risk-batch.{json,svg}` (`--quick` ≈ 20 s) |
-| `raft_demo.py` | Phase 6: start 3 RAFT nodes, kill the leader, show nothing is lost. `--gateway --twap 0.0006` does it against the running system (`RAFT_ENABLED=true`) in the middle of a testnet TWAP |
+| `raft_demo.py` | Phase 6: start 3 RAFT nodes, kill the leader, show nothing is lost. `--gateway --twap 0.0006` does it against the running system (`RAFT_ENABLED=true`) in the middle of a testnet TWAP; `--gateway --no-majority` kills 2 of 3 nodes to show the kill switch still engages and a release is refused |
 
 ## Planned scripts
 

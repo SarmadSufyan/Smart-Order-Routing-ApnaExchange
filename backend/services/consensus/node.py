@@ -6,8 +6,9 @@ risk state machine.
 
 ``start_all.py`` starts all three when ``RAFT_ENABLED=true``.
 
-Wire format: one JSON object per line, TCP on 127.0.0.1 (localhost only —
-the nodes don't authenticate each other; fine for this POC, not production).
+Wire format: one SIGNED JSON object per line (``wire.py``: HMAC-SHA256 with
+RAFT_SHARED_SECRET, a time stamp, and a one-time nonce on client requests),
+TCP on 127.0.0.1. A forged, too-old or replayed line is refused and counted.
   * node -> node: RAFT messages (``vote_req``/``vote_resp``/``append_req``/
     ``append_resp``), one-way: a reply is just another message back. A lost
     message is harmless — the next heartbeat repeats whatever is missing.
@@ -18,7 +19,6 @@ the nodes don't authenticate each other; fine for this POC, not production).
 
 import argparse
 import asyncio
-import json
 import os
 from pathlib import Path
 from typing import Any
@@ -29,6 +29,7 @@ from .client import LINE_LIMIT, parse_cluster
 from .core import NotLeaderError, RaftCore, Role
 from .state_machine import OPS, RiskStateMachine
 from .storage import SqliteStorage
+from .wire import MessageSigner, NonceCache
 
 logger = get_logger("raft_node")
 
@@ -54,8 +55,12 @@ class RaftNode:
         commit_wait_s: float = 2.0,
         mode: str = "testnet",
         rng=None,
+        signer: MessageSigner | None = None,
     ) -> None:
         self.id = node_id
+        self._signer = signer or MessageSigner(None)
+        self._nonces = NonceCache(self._signer.max_age_s)
+        self.rejected = 0  # forged / too old / replayed lines refused
         self.nodes = nodes
         self.mode = mode
         self.core = RaftCore(node_id, list(nodes), storage, election_ticks=election_ticks,
@@ -156,7 +161,7 @@ class RaftNode:
                     await asyncio.sleep(RECONNECT_DELAY_S)
                     continue
             try:
-                writer.write((json.dumps(msg, separators=(",", ":")) + "\n").encode())
+                writer.write(self._signer.encode(msg))
                 await asyncio.wait_for(writer.drain(), 1.0)
             except (OSError, TimeoutError):
                 writer.close()
@@ -167,18 +172,20 @@ class RaftNode:
         self._writers.add(writer)
         try:
             while line := await reader.readline():
-                try:
-                    msg = json.loads(line)
-                except ValueError:
-                    break
-                if not isinstance(msg, dict):
+                msg = self._signer.decode(line)
+                if msg is None:
+                    self._refuse("bad signature, too old, or not a JSON object")
                     break
                 if "type" in msg:  # a peer's RAFT message: one-way
                     self.core.step(msg)
                     self._pump()
                     continue
+                nonce = msg.get("nonce")
+                if self._signer.signing and (not isinstance(nonce, str) or not self._nonces.first_time(nonce)):
+                    self._refuse("request replayed (nonce already used) or without a nonce")
+                    break
                 reply = await self._client_op(msg)
-                writer.write((json.dumps(reply, separators=(",", ":")) + "\n").encode())
+                writer.write(self._signer.encode({**reply, "nonce": nonce}))
                 await writer.drain()
         except (OSError, asyncio.IncompleteReadError, ValueError):
             pass
@@ -186,13 +193,17 @@ class RaftNode:
             self._writers.discard(writer)
             writer.close()
 
+    def _refuse(self, reason: str) -> None:
+        self.rejected += 1
+        logger.warning("raft_message_refused", node=self.id, reason=reason, total=self.rejected)
+
     # ── client operations ───────────────────────────────────────────
     def info(self) -> dict[str, Any]:
         return {
             "ok": True, "node": self.id, "role": self.core.role.value, "term": self.core.term,
             "leader": self.core.leader_id, "commit_index": self.core.commit_index,
             "last_index": self.core.last_index, "applied_index": self.sm.applied_index,
-            "pid": os.getpid(), "mode": self.mode,
+            "pid": os.getpid(), "mode": self.mode, "signed": self._signer.signing, "rejected": self.rejected,
         }
 
     async def _client_op(self, msg: dict[str, Any]) -> dict[str, Any]:
@@ -231,6 +242,8 @@ def main() -> None:
     parser.add_argument("--nodes", default=settings.raft_cluster_nodes)
     parser.add_argument("--data-dir", default=settings.resolved_raft_data_dir)
     args = parser.parse_args()
+    if problem := settings.raft_secret_problem():
+        parser.error(problem)
 
     setup_logging(debug=False)
     nodes = parse_cluster(args.nodes)
@@ -241,6 +254,7 @@ def main() -> None:
         args.id, nodes, storage,
         tick_s=settings.raft_tick_ms / 1000, election_ticks=settings.raft_election_ticks,
         heartbeat_ticks=settings.raft_heartbeat_ticks, mode=settings.exchange_mode,
+        signer=MessageSigner(settings.raft_shared_secret.get_secret_value()),
     )
     try:
         asyncio.run(node.serve_forever())

@@ -5,6 +5,7 @@ import unittest
 
 from backend.services.consensus.client import ConsensusUnavailableError
 from backend.services.consensus.state_machine import RiskStateMachine
+from backend.services.consensus.wire import MessageSigner
 from backend.services.order_state.order_manager import OrderManager
 from backend.services.risk_engine.controls import RiskControls
 from backend.services.risk_engine.kill_switch import KillSwitch
@@ -50,6 +51,7 @@ class FakeCluster:
         self.lose_replies = False
         self.mode = mode
         self.proposed: list[dict] = []
+        self.signer = MessageSigner("unit-test-secret-0123456789")
 
     def commit(self, command: dict) -> dict:
         self.index += 1
@@ -139,6 +141,32 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.cluster.sm.kill_switch["active"])
         self.assertEqual(c.status().pending_writes, [])
 
+    async def test_known_no_majority_answers_at_once_without_waiting_for_a_timeout(self) -> None:
+        c = self.make()
+        self.cluster.up = False
+        await c.sync()  # the regular re-read: the gateway now knows there is no majority
+        await c.engage_kill_switch("market crash", "risk_mgr")
+        self.assertTrue(self.ks.is_active)
+        self.assertEqual(self.cluster.proposed, [])  # queued at once — no 3 s attempt
+        self.assertEqual(c.status().pending_writes, ["kill_switch"])
+        with self.assertRaises(ConsensusUnavailableError) as ctx:
+            await c.release_kill_switch("risk_mgr")
+        self.assertIn("only 0 of 3 RAFT nodes are reachable", ctx.exception.message)
+        self.assertIn("Nothing changed", ctx.exception.message)
+        self.assertEqual(self.cluster.proposed, [])
+        self.assertTrue(self.ks.is_active)
+        self.assertIn("consensus_refused", self.audit_types())
+
+    async def test_an_out_of_date_no_majority_picture_is_checked_again_before_refusing(self) -> None:
+        c = self.make()
+        await c.engage_kill_switch("demo", "risk_mgr")
+        self.cluster.up = False
+        await c.sync()  # picture: no majority...
+        self.cluster.up = True  # ...but the cluster has just come back
+        await c.release_kill_switch("risk_mgr")  # one fresh look, then it goes through
+        self.assertFalse(self.ks.is_active)
+        self.assertFalse(self.cluster.sm.kill_switch["active"])
+
     async def test_no_majority_release_and_limit_changes_are_refused_and_nothing_changes(self) -> None:
         c = self.make()
         await c.engage_kill_switch("demo", "risk_mgr")
@@ -222,7 +250,7 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
         c = self.make()
         await c.sync()
         status = c.status()
-        self.assertEqual((status.leader, status.majority_reachable), (1, True))
+        self.assertEqual((status.leader, status.majority_reachable, status.signed), (1, True, True))
         self.assertEqual([n.role for n in status.nodes], ["LEADER", "FOLLOWER", "FOLLOWER"])
 
 

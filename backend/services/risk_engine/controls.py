@@ -19,6 +19,10 @@ When the cluster can't commit (no leader / no majority), the rule is fail-safe:
     commit can't loosen anything behind the operator's back.
   * While a write of ours is unconfirmed, the cluster can't overwrite that
     item in the local copy.
+  * No waiting for a timeout when the answer is already known: the gateway
+    re-reads the cluster every ``poll_interval_s``, so when that picture shows
+    no majority, a tightening is queued and answered at once, and a loosening
+    is refused at once (after one fresh look, in case the cluster just came back).
 """
 
 import asyncio
@@ -37,6 +41,7 @@ from .kill_switch import engage_kill_switch
 logger = get_logger("risk_controls")
 
 ACTOR = "consensus"
+VIEW_MAX_AGE_S = 3.0  # an older picture of the cluster isn't trusted for a fast answer
 
 
 class RiskControls:
@@ -122,28 +127,60 @@ class RiskControls:
     def local_blacklist(self) -> set[str]:
         return {h.venue_id for h in self._venues.get_all_health() if h.status == VenueStatus.BLACKLISTED}
 
+    # ── is a majority there? ────────────────────────────────────────
+    def _reachable(self) -> int:
+        return len(self._valid(self._nodes))
+
+    def _majority_in_view(self) -> bool | None:
+        """A majority reachable, per the latest sync? None = no recent picture."""
+        if self._last_sync is None or (datetime.now(UTC) - self._last_sync).total_seconds() > VIEW_MAX_AGE_S:
+            return None
+        return self._reachable() >= len(self._client.nodes) // 2 + 1
+
+    async def _majority_now(self) -> bool:
+        """A definite answer before a loosening write: if the picture says no
+        (or is old), look once more right now (≤ 0.5 s) — the cluster may be back."""
+        if self._majority_in_view():
+            return True
+        self._nodes, self._last_sync = await self._client.states(), datetime.now(UTC)
+        return bool(self._majority_in_view())
+
     # ── writing through the cluster ─────────────────────────────────
     async def _tighten(self, key: str, command: dict[str, Any], what: str) -> None:
         if not self.replicated:
             return
+        if self._majority_in_view() is False:
+            # Known: no majority right now. Don't keep the operator waiting for a timeout.
+            await self._queue(key, command, what, f"only {self._reachable()} of {len(self._client.nodes)} "
+                                                  "nodes reachable")
+            return
         try:
             reply = await self._client.propose(command)
         except ConsensusUnavailableError as exc:
-            self._pending[key] = command
-            await audit("consensus_pending",
-                        f"{_cap(what)} applied here at once; the RAFT cluster can't confirm it right now "
-                        f"({exc.message}) — it will be replicated as soon as a majority is back",
-                        actor=ACTOR, payload={"item": key, "command": command})
-            logger.warning("consensus_write_pending", item=key)
+            await self._queue(key, command, what, exc.message)
             return
         self._pending.pop(key, None)
         await self._record_commit(what, reply)
         await self._catch_up(reply)
 
+    async def _queue(self, key: str, command: dict[str, Any], what: str, why: str) -> None:
+        self._pending[key] = command
+        await audit("consensus_pending",
+                    f"{_cap(what)} applied here at once; the RAFT cluster can't confirm it right now ({why}) "
+                    "— it will be replicated as soon as a majority is back",
+                    actor=ACTOR, payload={"item": key, "command": command})
+        logger.warning("consensus_write_pending", item=key, why=why)
+
     async def _loosen(self, key: str, command: dict[str, Any], compensate: dict[str, Any],
                       what: str) -> dict[str, Any] | None:
         if not self.replicated:
             return None
+        if not await self._majority_now():
+            total = len(self._client.nodes)
+            message = (f"Refused: only {self._reachable()} of {total} RAFT nodes are reachable — the {what} "
+                       f"needs a majority ({total // 2 + 1}). Nothing changed.")
+            await audit("consensus_refused", message, actor=ACTOR, payload={"item": key, "command": command})
+            raise ConsensusUnavailableError(message)
         await self._flush_pending()
         if key in self._pending:  # our own earlier change to this item must land first
             raise ConsensusUnavailableError(
@@ -307,7 +344,7 @@ class RiskControls:
                 role=s.get("role") if ok else None, term=s.get("term") if ok else None,
                 leader=s.get("leader") if ok else None, commit_index=s.get("commit_index") if ok else None,
                 applied_index=s.get("applied_index") if ok else None, pid=s.get("pid") if ok else None,
-                mode=s.get("mode") if s else None,
+                mode=s.get("mode") if s else None, rejected_messages=s.get("rejected") if ok else None,
             ))
         reachable = sum(n.reachable for n in nodes)
         leaders = [n for n in nodes if n.role == "LEADER"]
@@ -321,7 +358,7 @@ class RiskControls:
             message = (f"Only {reachable} of {len(nodes)} nodes reachable — no majority: the kill switch still "
                        "engages here at once; releasing it or changing limits is refused until a majority is back.")
         return ConsensusStatus(
-            enabled=True, leader=leader, majority_reachable=majority, nodes=nodes,
+            enabled=True, signed=self._client.signer.signing, leader=leader, majority_reachable=majority, nodes=nodes,
             pending_writes=sorted(self._pending), synced_index=self._seen_index, last_sync=self._last_sync,
             message=message,
         )
