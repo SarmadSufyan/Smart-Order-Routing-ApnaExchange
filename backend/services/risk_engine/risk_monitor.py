@@ -33,8 +33,10 @@ def fmt_usd(value: float) -> str:
 
 
 class RiskMonitor:
-    def __init__(self, risk_engine, pnl, wallet, order_manager, registry, interval_s: float = 2.0) -> None:
+    def __init__(self, risk_engine, pnl, wallet, order_manager, registry, interval_s: float = 2.0,
+                 controls=None) -> None:
         self._risk = risk_engine
+        self._controls = controls  # RiskControls: an automatic halt is replicated like a manual one
         self._pnl = pnl
         self._wallet = wallet
         self._orders = order_manager
@@ -85,9 +87,12 @@ class RiskMonitor:
             reason = (f"Automatic: trading loss {fmt_usd(trading)} breached the "
                       f"{fmt_usd(loss_limit)} limit")
             logger.warning("loss_limit_breached", trading_pnl=trading, limit=loss_limit)
-            await engage_kill_switch(
-                self._risk.kill_switch, self._orders, self._registry, reason=reason, operator=MONITOR_ACTOR,
-            )
+            if self._controls is not None:
+                await self._controls.engage_kill_switch(reason, MONITOR_ACTOR)
+            else:
+                await engage_kill_switch(
+                    self._risk.kill_switch, self._orders, self._registry, reason=reason, operator=MONITOR_ACTOR,
+                )
             await event_bus.publish("risk_alert", {"type": "LOSS_LIMIT", "message": reason})
 
         await self._edge_alerts(concentration)

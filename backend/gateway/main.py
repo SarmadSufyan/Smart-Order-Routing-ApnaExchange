@@ -12,6 +12,7 @@ from backend.gateway.routers import (
     algos,
     audit,
     auth,
+    consensus,
     copilot,
     execution_reports,
     market_data,
@@ -22,7 +23,8 @@ from backend.gateway.routers import (
     wallet,
 )
 from backend.gateway.routers.execution_reports import record_execution_report, report_from_event
-from backend.shared.events.event_bus import audit as record_audit, event_bus
+from backend.shared.events.event_bus import audit as record_audit
+from backend.shared.events.event_bus import event_bus
 from backend.shared.exceptions import DomainError
 from backend.shared.models.execution_report import ExecType
 from backend.shared.models.risk import KillSwitchState, RiskLimits
@@ -57,6 +59,8 @@ async def restore_state(svc: Services) -> None:
     if saved := await store.kv_get("risk_limits"):
         # Defaults first, so limits added in a newer version get their default.
         svc.risk_engine.limits = RiskLimits.model_validate({**default_risk_limits().model_dump(), **saved})
+    if saved := await store.kv_get("venue_blacklist"):
+        svc.venue_monitor.restore_blacklist(saved.get("venues", []))
 
     orders = await store.load_orders(limit=500)
     for order in svc.order_manager.restore(orders):
@@ -121,8 +125,11 @@ async def lifespan(app: FastAPI):
     # Exchanges first (they feed everything else), then the services reading them.
     await svc.exchange_registry.start_all()
     await svc.routing_engine.start()
+    svc.risk_engine.batch_runner.start()  # spawn the risk worker processes in the background
+    # RAFT on: agree with the cluster before anything can trade (no-op when off).
+    await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
-                  svc.wallet_service, svc.risk_monitor)
+                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls)
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
@@ -137,6 +144,7 @@ async def lifespan(app: FastAPI):
     for service in reversed(background):
         await service.stop()
     await svc.routing_engine.stop()
+    await svc.risk_engine.batch_runner.stop()
     for task in _background_tasks:
         task.cancel()
     await asyncio.gather(*_background_tasks, return_exceptions=True)
@@ -180,6 +188,7 @@ async def domain_error_handler(request, exc: DomainError):
         "LLM_UNAVAILABLE": 503,
         "PROPOSAL_NOT_FOUND": 404,
         "PROPOSAL_NOT_ACTIONABLE": 409,
+        "CONSENSUS_UNAVAILABLE": 503,
     }
     return JSONResponse(
         status_code=status_map.get(exc.code, 500),
@@ -188,7 +197,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos, copilot):
+                      algos, copilot, consensus):
     app.include_router(router_module.router)
 
 
@@ -217,11 +226,21 @@ async def health_check():
             "venue_monitor": "up",
             "wallet": "up",
             "audit_store": "up" if svc.audit_store.is_open else "down",
+            "consensus": _consensus_health(svc),
         },
         "audit_store": svc.audit_store.path,
         "exchanges": exchanges,
         "websocket_connections": svc.ws_manager.connection_count,
     }
+
+
+def _consensus_health(svc: Services) -> str:
+    status = svc.risk_controls.status()
+    if not status.enabled:
+        return "off"
+    if status.leader is not None and status.majority_reachable:
+        return f"up (leader node {status.leader})"
+    return "no majority" if not status.majority_reachable else "electing"
 
 
 @app.websocket("/ws")

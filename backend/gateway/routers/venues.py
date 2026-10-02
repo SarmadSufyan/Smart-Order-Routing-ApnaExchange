@@ -53,7 +53,7 @@ async def get_venue(venue_id: str, user: Annotated[User, Depends(get_current_use
 )
 async def blacklist_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     svc, _ = _require_venue(venue_id)
-    await svc.venue_monitor.blacklist_venue(venue_id, actor=user.username)
+    await svc.risk_controls.blacklist_venue(venue_id, actor=user.username)
     return svc.venue_monitor.get_venue_health(venue_id)
 
 
@@ -64,7 +64,7 @@ async def blacklist_venue(venue_id: str, user: Annotated[User, Depends(get_curre
 )
 async def unblacklist_venue(venue_id: str, user: Annotated[User, Depends(get_current_user)]):
     svc, _ = _require_venue(venue_id)
-    await svc.venue_monitor.unblacklist_venue(venue_id, actor=user.username)
+    await svc.risk_controls.unblacklist_venue(venue_id, actor=user.username)
     return svc.venue_monitor.get_venue_health(venue_id)
 
 

@@ -19,6 +19,10 @@ start + (i-1)·D/N (± optional jitter) and targets a cumulative fill of Q·i/N:
 A slice that fills short rolls its remainder into the next one, capped at
 twice the normal size so catching up never becomes a market-impact spike.
 
+Before the first slice, every planned slice is pre-flighted against the
+position it will meet (the risk batch), so a TWAP that would cross a
+position or exposure limit half way is refused up front.
+
 Safety: a slice that is already at the exchange is never interrupted —
 pause and cancel take effect between slices, so no fill can be lost. The
 kill switch pauses every running TWAP, a restart leaves them paused (never
@@ -32,6 +36,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from backend.exchanges.precision import floor_to_step, is_close
+from backend.services.risk_engine.checks import OrderSpec
 from backend.services.routing_engine.strategies.best_price import fmt_price, fmt_qty
 from backend.shared.events.event_bus import audit, event_bus
 from backend.shared.exceptions import DomainError
@@ -233,6 +238,21 @@ class TwapEngine:
                 f"${limits.max_order_notional:,.2f}; use more slices"
             )
 
+        # Pre-flight every slice against the position it will meet (the risk
+        # batch): a TWAP that would cross the position or exposure limit half
+        # way is refused now, not after it has already traded half of it.
+        now = datetime.now(UTC)
+        schedule = plan_schedule(params, quantity, now, step, self._rng)
+        targets = [s.target_cumulative for s in schedule]
+        sizes = [t - prev for prev, t in zip([0.0, *targets[:-1]], targets, strict=True)]
+        report = await self._risk.preflight([OrderSpec(symbol, side.value, q) for q in sizes], {symbol: mid})
+        if (bad := report.first_rejection) is not None:
+            raise AlgoRejectedError(
+                f"Pre-flight: slice {bad.index + 1} of {len(sizes)} would be rejected by pre-trade risk "
+                f"({', '.join(bad.outcome.failed)}): {bad.outcome.message}"
+            )
+        notes.append(f"Pre-flight: all {len(sizes)} slices pass pre-trade risk at today's limits")
+
         # Can the venues fund the whole parent right now? (Each slice is checked again.)
         probe = Order(symbol=symbol, side=side, quantity=quantity, order_type=OrderType.MARKET)
         capacity = await self._router.venue_capacity(probe, list(rules), nbbo)
@@ -252,7 +272,6 @@ class TwapEngine:
                 notes.append(f"Limit {fmt_price(params.limit_price)} is {-away:.0f} bps through the market "
                              "on the passive side — slices fill only if the price comes to it")
 
-        now = datetime.now(UTC)
         state = TwapState(
             id=f"TWAP-{uuid4().hex[:6].upper()}",
             created_by=user,
@@ -263,7 +282,7 @@ class TwapEngine:
             started_at=now,
             arrival_mid=mid,
             notes=notes,
-            slices=plan_schedule(params, quantity, now, step, self._rng),
+            slices=schedule,
         )
         self._algos[state.id] = state
         self._persist(state)

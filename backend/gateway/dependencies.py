@@ -6,14 +6,19 @@ from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.agents import Copilot, build_llm_client
 from backend.services.algos import TwapEngine
 from backend.services.audit import AuditRecorder
+from backend.services.consensus.client import ConsensusClient, parse_cluster
 from backend.services.market_data.aggregator import MarketDataAggregator
 from backend.services.market_data.collector import MarketDataCollector
 from backend.services.order_state.entry import OrderEntry
 from backend.services.order_state.order_manager import OrderManager
+from backend.services.risk_engine.batch import RiskBatchRunner
+from backend.services.risk_engine.controls import RiskControls
 from backend.services.risk_engine.kill_switch import KillSwitch
 from backend.services.risk_engine.position_tracker import PositionTracker
 from backend.services.risk_engine.pre_trade import PreTradeRiskEngine
+from backend.services.risk_engine.preflight import PreflightService
 from backend.services.risk_engine.risk_monitor import RiskMonitor
+from backend.services.risk_engine.volatility import VolatilityTracker
 from backend.services.routing_engine.engine import RoutingEngine
 from backend.services.venue_monitor.coherence import CoherenceMonitor
 from backend.services.venue_monitor.health_checker import VenueHealthMonitor
@@ -41,6 +46,9 @@ class Services:
     audit_recorder: AuditRecorder
     ws_manager: WebSocketManager
     copilot: Copilot
+    volatility: VolatilityTracker
+    preflight: PreflightService
+    risk_controls: RiskControls
 
 
 _services: Services | None = None
@@ -89,7 +97,9 @@ def init_services() -> Services:
 
     kill_switch = KillSwitch()
     position_tracker = PositionTracker()
-    risk_engine = PreTradeRiskEngine(kill_switch, position_tracker, default_risk_limits())
+    # Pre-flight batches with a stress test run on a pool of worker processes.
+    batch_runner = RiskBatchRunner(settings.risk_pool_workers, settings.risk_pool_min_orders)
+    risk_engine = PreTradeRiskEngine(kill_switch, position_tracker, default_risk_limits(), batch_runner)
 
     wallet_service = WalletService(
         registry,
@@ -114,9 +124,19 @@ def init_services() -> Services:
         wallet=wallet_service,  # per-venue balances cap each venue's slice
         trading_block_s=settings.trading_block_cooldown_s,
     )
+    # The one way to change the kill switch, limits and venue blacklist —
+    # through the RAFT cluster's leader when RAFT_ENABLED=true.
+    consensus = ConsensusClient(
+        parse_cluster(settings.raft_cluster_nodes), write_timeout_s=settings.raft_write_timeout_s,
+    ) if settings.raft_enabled else None
+    risk_controls = RiskControls(
+        risk_engine, order_manager, registry, venue_monitor, client=consensus,
+        default_limits=default_risk_limits(), poll_interval_s=settings.raft_poll_interval_s,
+        mode=settings.exchange_mode,
+    )
     risk_monitor = RiskMonitor(
         risk_engine, pnl_service, wallet_service, order_manager, registry,
-        interval_s=settings.risk_monitor_interval_s,
+        interval_s=settings.risk_monitor_interval_s, controls=risk_controls,
     )
     # The one way orders enter: the REST endpoint and every algo use it.
     order_entry = OrderEntry(order_manager, routing_engine)
@@ -132,6 +152,8 @@ def init_services() -> Services:
         unavailable_reason=llm_unavailable, ttl_s=settings.copilot_proposal_ttl_s,
         max_price_move_bps=settings.copilot_max_price_move_bps,
     )
+
+    volatility = VolatilityTracker(aggregator, settings.symbol_list, settings.volatility_sample_interval_s)
 
     _services = Services(
         exchange_registry=registry,
@@ -151,6 +173,12 @@ def init_services() -> Services:
         audit_recorder=AuditRecorder(store, order_manager, kill_switch),
         ws_manager=WebSocketManager(),
         copilot=copilot,
+        volatility=volatility,
+        preflight=PreflightService(
+            risk_engine, aggregator, settings.symbol_list, volatility,
+            stress_paths=settings.risk_stress_paths, stress_horizon_min=settings.risk_stress_horizon_min,
+        ),
+        risk_controls=risk_controls,
     )
     return _services
 

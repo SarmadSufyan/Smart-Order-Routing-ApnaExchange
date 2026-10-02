@@ -138,13 +138,24 @@ class VenueHealthMonitor:
             stats["rejects"] += 1
             stats["total"] += 1
 
+    def blacklisted(self) -> list[str]:
+        return sorted(vid for vid, h in self._health.items() if h.status == VenueStatus.BLACKLISTED)
+
+    def restore_blacklist(self, venue_ids: list[str]) -> None:
+        """Re-apply the blacklist saved before a restart (fail-safe, like the kill switch)."""
+        for vid in venue_ids:
+            if vid in self._health:
+                self._health[vid].status = VenueStatus.BLACKLISTED
+                logger.warning("venue_blacklist_restored", venue_id=vid)
+
     async def blacklist_venue(self, venue_id: str, actor: str | None = None) -> None:
         if venue_id in self._health:
             self._health[venue_id].status = VenueStatus.BLACKLISTED
             self._health[venue_id].last_checked = datetime.now(UTC)
             await event_bus.publish("venue_health", self._health[venue_id].model_dump(mode="json"))
             await audit("venue_blacklisted", f"{venue_id} blacklisted by {actor}: no new orders will route there",
-                        actor=actor, venue_id=venue_id)
+                        actor=actor, venue_id=venue_id,
+                        persist={"key": "venue_blacklist", "value": {"venues": self.blacklisted()}})
             logger.info("venue_blacklisted", venue_id=venue_id)
 
     async def unblacklist_venue(self, venue_id: str, actor: str | None = None) -> None:
@@ -154,7 +165,8 @@ class VenueHealthMonitor:
             self._health[venue_id].last_checked = datetime.now(UTC)
             await event_bus.publish("venue_health", self._health[venue_id].model_dump(mode="json"))
             await audit("venue_unblacklisted", f"{venue_id} removed from the blacklist by {actor}",
-                        actor=actor, venue_id=venue_id)
+                        actor=actor, venue_id=venue_id,
+                        persist={"key": "venue_blacklist", "value": {"venues": self.blacklisted()}})
             logger.info("venue_unblacklisted", venue_id=venue_id)
 
     # ── scoring ─────────────────────────────────────────────────────

@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="430" font-family="Segoe UI, Arial, sans-serif" font-size="12">
+<rect width="980" height="430" fill="#ffffff"/>
+<text x="60.0" y="32" font-size="13" font-weight="600" fill="#0f172a">Seven pre-trade checks only (µs work per order)</text>
+<rect x="60.0" y="50" width="400.0" height="310" fill="none" stroke="#cbd5e1"/>
+<line x1="60.0" x2="460.0" y1="360.0" y2="360.0" stroke="#eef2f7"/>
+<text x="54.0" y="364.0" text-anchor="end" fill="#64748b">10 µs</text>
+<line x1="60.0" x2="460.0" y1="298.0" y2="298.0" stroke="#eef2f7"/>
+<text x="54.0" y="302.0" text-anchor="end" fill="#64748b">100 µs</text>
+<line x1="60.0" x2="460.0" y1="236.0" y2="236.0" stroke="#eef2f7"/>
+<text x="54.0" y="240.0" text-anchor="end" fill="#64748b">1 ms</text>
+<line x1="60.0" x2="460.0" y1="174.0" y2="174.0" stroke="#eef2f7"/>
+<text x="54.0" y="178.0" text-anchor="end" fill="#64748b">10 ms</text>
+<line x1="60.0" x2="460.0" y1="112.0" y2="112.0" stroke="#eef2f7"/>
+<text x="54.0" y="116.0" text-anchor="end" fill="#64748b">100 ms</text>
+<line x1="60.0" x2="460.0" y1="50.0" y2="50.0" stroke="#eef2f7"/>
+<text x="54.0" y="54.0" text-anchor="end" fill="#64748b">1000 ms</text>
+<text x="60.0" y="376" text-anchor="middle" fill="#64748b">1</text>
+<text x="160.0" y="376" text-anchor="middle" fill="#64748b">10</text>
+<text x="260.0" y="376" text-anchor="middle" fill="#64748b">100</text>
+<text x="360.0" y="376" text-anchor="middle" fill="#64748b">1,000</text>
+<text x="460.0" y="376" text-anchor="middle" fill="#64748b">10,000</text>
+<text x="260.0" y="394" text-anchor="middle" fill="#475569">orders in the batch (log scale) — lower is faster</text>
+<text x="70.0" y="68" font-weight="600" fill="#0f172a">10,000 orders: best pool is 8x SLOWER than one process</text>
+<polyline points="60.0,322.7 160.0,308.4 260.0,261.3 360.0,199.8 460.0,143.6" fill="none" stroke="#334155" stroke-width="2.2" stroke-dasharray="5 4"/>
+<circle cx="60.0" cy="322.7" r="3" fill="#334155"/>
+<circle cx="160.0" cy="308.4" r="3" fill="#334155"/>
+<circle cx="260.0" cy="261.3" r="3" fill="#334155"/>
+<circle cx="360.0" cy="199.8" r="3" fill="#334155"/>
+<circle cx="460.0" cy="143.6" r="3" fill="#334155"/>
+<polyline points="60.0,214.1 160.0,207.6 260.0,188.4 360.0,135.8 460.0,81.2" fill="none" stroke="#0ea5e9" stroke-width="2.2"/>
+<circle cx="60.0" cy="214.1" r="3" fill="#0ea5e9"/>
+<circle cx="160.0" cy="207.6" r="3" fill="#0ea5e9"/>
+<circle cx="260.0" cy="188.4" r="3" fill="#0ea5e9"/>
+<circle cx="360.0" cy="135.8" r="3" fill="#0ea5e9"/>
+<circle cx="460.0" cy="81.2" r="3" fill="#0ea5e9"/>
+<polyline points="60.0,214.8 160.0,197.6 260.0,183.7 360.0,137.7 460.0,86.6" fill="none" stroke="#16a34a" stroke-width="2.2"/>
+<circle cx="60.0" cy="214.8" r="3" fill="#16a34a"/>
+<circle cx="160.0" cy="197.6" r="3" fill="#16a34a"/>
+<circle cx="260.0" cy="183.7" r="3" fill="#16a34a"/>
+<circle cx="360.0" cy="137.7" r="3" fill="#16a34a"/>
+<circle cx="460.0" cy="86.6" r="3" fill="#16a34a"/>
+<polyline points="60.0,215.5 160.0,177.5 260.0,174.6 360.0,138.3 460.0,80.7" fill="none" stroke="#d97706" stroke-width="2.2"/>
+<circle cx="60.0" cy="215.5" r="3" fill="#d97706"/>
+<circle cx="160.0" cy="177.5" r="3" fill="#d97706"/>
+<circle cx="260.0" cy="174.6" r="3" fill="#d97706"/>
+<circle cx="360.0" cy="138.3" r="3" fill="#d97706"/>
+<circle cx="460.0" cy="80.7" r="3" fill="#d97706"/>
+<text x="520.0" y="32" font-size="13" font-weight="600" fill="#0f172a">Checks + Monte Carlo stress test (5,000 paths x 60 min per order)</text>
+<rect x="520.0" y="50" width="400.0" height="310" fill="none" stroke="#cbd5e1"/>
+<line x1="520.0" x2="920.0" y1="360.0" y2="360.0" stroke="#eef2f7"/>
+<text x="514.0" y="364.0" text-anchor="end" fill="#64748b">100 ms</text>
+<line x1="520.0" x2="920.0" y1="205.0" y2="205.0" stroke="#eef2f7"/>
+<text x="514.0" y="209.0" text-anchor="end" fill="#64748b">1000 ms</text>
+<line x1="520.0" x2="920.0" y1="50.0" y2="50.0" stroke="#eef2f7"/>
+<text x="514.0" y="54.0" text-anchor="end" fill="#64748b">10000 ms</text>
+<text x="520.0" y="376" text-anchor="middle" fill="#64748b">1</text>
+<text x="600.0" y="376" text-anchor="middle" fill="#64748b">2</text>
+<text x="680.0" y="376" text-anchor="middle" fill="#64748b">4</text>
+<text x="760.0" y="376" text-anchor="middle" fill="#64748b">8</text>
+<text x="840.0" y="376" text-anchor="middle" fill="#64748b">16</text>
+<text x="920.0" y="376" text-anchor="middle" fill="#64748b">32</text>
+<text x="720.0" y="394" text-anchor="middle" fill="#475569">orders in the batch (log scale) — lower is faster</text>
+<text x="530.0" y="68" font-weight="600" fill="#0f172a">32 orders: pool of 8 is 2.7x faster</text>
+<polyline points="520.0,332.2 600.0,282.6 680.0,234.2 760.0,194.4 840.0,144.7 920.0,96.8" fill="none" stroke="#334155" stroke-width="2.2" stroke-dasharray="5 4"/>
+<circle cx="520.0" cy="332.2" r="3" fill="#334155"/>
+<circle cx="600.0" cy="282.6" r="3" fill="#334155"/>
+<circle cx="680.0" cy="234.2" r="3" fill="#334155"/>
+<circle cx="760.0" cy="194.4" r="3" fill="#334155"/>
+<circle cx="840.0" cy="144.7" r="3" fill="#334155"/>
+<circle cx="920.0" cy="96.8" r="3" fill="#334155"/>
+<polyline points="520.0,333.7 600.0,309.5 680.0,268.3 760.0,227.9 840.0,172.1 920.0,130.1" fill="none" stroke="#0ea5e9" stroke-width="2.2"/>
+<circle cx="520.0" cy="333.7" r="3" fill="#0ea5e9"/>
+<circle cx="600.0" cy="309.5" r="3" fill="#0ea5e9"/>
+<circle cx="680.0" cy="268.3" r="3" fill="#0ea5e9"/>
+<circle cx="760.0" cy="227.9" r="3" fill="#0ea5e9"/>
+<circle cx="840.0" cy="172.1" r="3" fill="#0ea5e9"/>
+<circle cx="920.0" cy="130.1" r="3" fill="#0ea5e9"/>
+<polyline points="520.0,336.3 600.0,315.0 680.0,285.3 760.0,245.7 840.0,198.8 920.0,146.5" fill="none" stroke="#16a34a" stroke-width="2.2"/>
+<circle cx="520.0" cy="336.3" r="3" fill="#16a34a"/>
+<circle cx="600.0" cy="315.0" r="3" fill="#16a34a"/>
+<circle cx="680.0" cy="285.3" r="3" fill="#16a34a"/>
+<circle cx="760.0" cy="245.7" r="3" fill="#16a34a"/>
+<circle cx="840.0" cy="198.8" r="3" fill="#16a34a"/>
+<circle cx="920.0" cy="146.5" r="3" fill="#16a34a"/>
+<polyline points="520.0,336.4 600.0,313.0 680.0,290.0 760.0,251.7 840.0,211.4 920.0,163.4" fill="none" stroke="#d97706" stroke-width="2.2"/>
+<circle cx="520.0" cy="336.4" r="3" fill="#d97706"/>
+<circle cx="600.0" cy="313.0" r="3" fill="#d97706"/>
+<circle cx="680.0" cy="290.0" r="3" fill="#d97706"/>
+<circle cx="760.0" cy="251.7" r="3" fill="#d97706"/>
+<circle cx="840.0" cy="211.4" r="3" fill="#d97706"/>
+<circle cx="920.0" cy="163.4" r="3" fill="#d97706"/>
+<rect x="60" y="404" width="14" height="4" fill="#334155"/>
+<text x="80" y="409" fill="#334155">one process</text>
+<rect x="250" y="404" width="14" height="4" fill="#0ea5e9"/>
+<text x="270" y="409" fill="#334155">pool of 2 processes</text>
+<rect x="440" y="404" width="14" height="4" fill="#16a34a"/>
+<text x="460" y="409" fill="#334155">pool of 4 processes</text>
+<rect x="630" y="404" width="14" height="4" fill="#d97706"/>
+<text x="650" y="409" fill="#334155">pool of 8 processes</text>
+<text x="920" y="16" text-anchor="end" fill="#94a3b8">4 cores / 8 threads · Python 3.14.0 · median of 5 runs · 2026-10-02</text>
+</svg>

@@ -155,6 +155,25 @@ class LossLimitTest(unittest.IsolatedAsyncioTestCase):
         await monitor.evaluate()
         self.assertIsNone(monitor.deactivation_blocker())
 
+    async def test_automatic_halt_goes_through_the_risk_controls(self) -> None:
+        # With RAFT on, an automatic halt must be replicated like a manual one.
+        risk = PreTradeRiskEngine(KillSwitch(), PositionTracker(), RiskLimits(max_trading_loss_usdt=1_000))
+
+        class RecordingControls:
+            calls: list[tuple[str, str]] = []
+
+            async def engage_kill_switch(self, reason: str, operator: str) -> None:
+                self.calls.append((reason, operator))
+                await risk.kill_switch.activate(reason, operator)
+
+        controls = RecordingControls()
+        monitor = RiskMonitor(risk, self.Pnl(), StubWallet(wallet_snapshot({"USDT": 100.0}, {}, NOW), {}),
+                              OrderManager(), StubRegistry(), controls=controls)
+        await monitor.evaluate()
+        self.assertEqual(len(controls.calls), 1)
+        self.assertEqual(controls.calls[0][1], "risk-monitor")
+        self.assertTrue(risk.kill_switch.is_active)
+
     async def test_zero_limit_is_off(self) -> None:
         risk = PreTradeRiskEngine(KillSwitch(), PositionTracker(), RiskLimits(max_trading_loss_usdt=0))
         monitor = RiskMonitor(risk, self.Pnl(), StubWallet(wallet_snapshot({}, {}, NOW), {}),

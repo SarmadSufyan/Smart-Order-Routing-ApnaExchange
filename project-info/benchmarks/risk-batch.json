@@ -1,0 +1,138 @@
+{
+  "pools": [
+    2,
+    4,
+    8
+  ],
+  "workloads": {
+    "checks": [
+      {
+        "orders": 1,
+        "in_process_ms": 0.04,
+        "pool_ms": {
+          "2": 2.255,
+          "4": 2.197,
+          "8": 2.145
+        },
+        "identical": true
+      },
+      {
+        "orders": 10,
+        "in_process_ms": 0.068,
+        "pool_ms": {
+          "2": 2.874,
+          "4": 4.162,
+          "8": 8.774
+        },
+        "identical": true
+      },
+      {
+        "orders": 100,
+        "in_process_ms": 0.391,
+        "pool_ms": {
+          "2": 5.868,
+          "4": 6.977,
+          "8": 9.788
+        },
+        "identical": true
+      },
+      {
+        "orders": 1000,
+        "in_process_ms": 3.833,
+        "pool_ms": {
+          "2": 41.348,
+          "4": 38.448,
+          "8": 37.592
+        },
+        "identical": true
+      },
+      {
+        "orders": 10000,
+        "in_process_ms": 30.93,
+        "pool_ms": {
+          "2": 314.053,
+          "4": 256.574,
+          "8": 319.811
+        },
+        "identical": true
+      }
+    ],
+    "stress": [
+      {
+        "orders": 1,
+        "in_process_ms": 151.228,
+        "pool_ms": {
+          "2": 147.898,
+          "4": 142.157,
+          "8": 141.992
+        },
+        "identical": true
+      },
+      {
+        "orders": 2,
+        "in_process_ms": 315.973,
+        "pool_ms": {
+          "2": 211.879,
+          "4": 195.149,
+          "8": 201.163
+        },
+        "identical": true
+      },
+      {
+        "orders": 4,
+        "in_process_ms": 648.211,
+        "pool_ms": {
+          "2": 390.62,
+          "4": 303.2,
+          "8": 282.955
+        },
+        "identical": true
+      },
+      {
+        "orders": 8,
+        "in_process_ms": 1170.512,
+        "pool_ms": {
+          "2": 711.421,
+          "4": 545.936,
+          "8": 499.461
+        },
+        "identical": true
+      },
+      {
+        "orders": 16,
+        "in_process_ms": 2449.492,
+        "pool_ms": {
+          "2": 1631.445,
+          "4": 1096.191,
+          "8": 909.054
+        },
+        "identical": true
+      },
+      {
+        "orders": 32,
+        "in_process_ms": 4989.92,
+        "pool_ms": {
+          "2": 3040.908,
+          "4": 2384.246,
+          "8": 1855.142
+        },
+        "identical": true
+      }
+    ]
+  },
+  "cold_start_ms": {
+    "2": 763.6,
+    "4": 1127.4,
+    "8": 1798.7
+  },
+  "machine": {
+    "cpu_count": 8,
+    "physical_cores": 4,
+    "processor": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.0"
+  },
+  "stress_paths": 5000,
+  "measured_at": "2026-10-02T16:48:51+00:00",
+  "repeats": 5
+}

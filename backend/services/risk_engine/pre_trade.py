@@ -1,7 +1,8 @@
 """Deterministic pre-trade risk gate. Every order passes through here —
-manual orders today, and later the TWAP bot and the LLM copilot too.
+the order button, every TWAP slice and every confirmed copilot proposal.
 
-Checks run in order and stop at the first failure:
+Checks run in order and stop at the first failure (the checks themselves
+live in ``checks.py``, a pure function shared with the risk batch):
     kill_switch -> size_limit -> order_notional -> rate_limit
     -> position_limit -> notional_limit -> symbol_restriction
 """
@@ -14,6 +15,8 @@ from backend.shared.models.order import Order
 from backend.shared.models.risk import RiskCheckDetail, RiskCheckResult, RiskLimits
 from backend.shared.utils.logger import get_logger
 
+from .batch import BatchReport, Mode, RiskBatchRunner, StressParams, plan_jobs
+from .checks import OrderSpec, RiskContext, evaluate_order
 from .kill_switch import KillSwitch
 from .position_tracker import PositionTracker
 
@@ -28,10 +31,12 @@ class PreTradeRiskEngine:
         kill_switch: KillSwitch,
         position_tracker: PositionTracker,
         limits: RiskLimits | None = None,
+        batch_runner: RiskBatchRunner | None = None,
     ) -> None:
         self._kill_switch = kill_switch
         self._positions = position_tracker
         self._limits = limits or RiskLimits()
+        self._batch = batch_runner or RiskBatchRunner()
         self._recent_checks: list[RiskCheckDetail] = []
         self._order_timestamps: list[float] = []
 
@@ -42,6 +47,10 @@ class PreTradeRiskEngine:
     @property
     def position_tracker(self) -> PositionTracker:
         return self._positions
+
+    @property
+    def batch_runner(self) -> RiskBatchRunner:
+        return self._batch
 
     @property
     def limits(self) -> RiskLimits:
@@ -73,55 +82,42 @@ class PreTradeRiskEngine:
         return list(self._recent_checks)
 
     def _evaluate(self, order: Order, mid_price: float) -> tuple[RiskCheckResult, list[str], list[str], str | None]:
-        lim = self._limits
-        passed: list[str] = []
-
-        def fail(result: RiskCheckResult, check: str, message: str):
-            return result, passed, [check], message
-
-        if self._kill_switch.is_active:
-            return fail(RiskCheckResult.REJECTED_KILL_SWITCH, "kill_switch", "Kill switch is active")
-        passed.append("kill_switch")
-
-        if order.quantity > lim.max_order_size:
-            return fail(RiskCheckResult.REJECTED_SIZE_LIMIT, "size_limit",
-                        f"Quantity {order.quantity:g} exceeds the max order size {lim.max_order_size:g}")
-        passed.append("size_limit")
-
-        order_notional = order.quantity * mid_price
-        if mid_price > 0 and order_notional > lim.max_order_notional:
-            return fail(RiskCheckResult.REJECTED_ORDER_NOTIONAL_LIMIT, "order_notional",
-                        f"Order notional ${order_notional:,.2f} exceeds the per-order limit ${lim.max_order_notional:,.2f}")
-        passed.append("order_notional")
-
+        # The checks themselves are a pure function (checks.py), shared with
+        # the risk batch; this method only snapshots the live state for it.
         now = time.monotonic()
         self._order_timestamps = [t for t in self._order_timestamps if now - t < 1.0]
-        if len(self._order_timestamps) >= lim.max_orders_per_second:
-            return fail(RiskCheckResult.REJECTED_RATE_LIMIT, "rate_limit",
-                        f"More than {lim.max_orders_per_second} orders in the last second")
-        passed.append("rate_limit")
+        ctx = RiskContext(
+            limits=self._limits,
+            kill_switch_active=self._kill_switch.is_active,
+            net_position=self._positions.get_position(order.symbol).net_position,
+            total_notional=self._positions.get_total_notional(),
+            orders_last_second=len(self._order_timestamps),
+        )
+        out = evaluate_order(ctx, OrderSpec(order.symbol, order.side.value, order.quantity), mid_price)
+        return out.result, out.passed, out.failed, out.message
 
-        pos = self._positions.get_position(order.symbol)
-        signed = order.quantity if order.side.value == "BUY" else -order.quantity
-        projected = abs(pos.net_position + signed)
-        if projected > lim.max_position_per_symbol:
-            return fail(RiskCheckResult.REJECTED_POSITION_LIMIT, "position_limit",
-                        f"Projected {order.symbol} position {projected:g} exceeds {lim.max_position_per_symbol:g}")
-        passed.append("position_limit")
+    async def preflight(
+        self,
+        orders: list[OrderSpec],
+        mids: dict[str, float],
+        *,
+        stress: dict[str, StressParams] | None = None,
+        mode: Mode = "auto",
+    ) -> BatchReport:
+        """Check a list of orders without sending anything (``batch.py``).
 
-        if mid_price > 0:
-            total = self._positions.get_total_notional() + order_notional
-            if total > lim.max_notional_exposure:
-                return fail(RiskCheckResult.REJECTED_NOTIONAL_LIMIT, "notional_limit",
-                            f"Total exposure ${total:,.2f} would exceed ${lim.max_notional_exposure:,.2f}")
-            passed.append("notional_limit")
-
-        if order.symbol in lim.restricted_symbols:
-            return fail(RiskCheckResult.REJECTED_SYMBOL_RESTRICTED, "symbol_restriction",
-                        f"Symbol {order.symbol} is restricted")
-        passed.append("symbol_restriction")
-
-        return RiskCheckResult.APPROVED, passed, [], None
+        Each order meets the position it would face if every earlier order in
+        the list had filled; the checks are the same pure function as the gate.
+        Nothing is recorded as an approval: the rate limit isn't consumed.
+        """
+        positions = self._positions.get_all_positions()
+        jobs = plan_jobs(
+            orders, mids, limits=self._limits, kill_switch_active=self._kill_switch.is_active,
+            positions={s: p.net_position for s, p in positions.items()},
+            notionals={s: abs(p.notional) for s, p in positions.items()},
+            stress=stress,
+        )
+        return await self._batch.run(jobs, mode)
 
     async def check_order(self, order: Order, mid_price: float = 0.0) -> RiskCheckDetail:
         start = time.perf_counter_ns()
