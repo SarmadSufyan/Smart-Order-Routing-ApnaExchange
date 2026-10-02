@@ -167,6 +167,7 @@ The script reads keys through the gateway's own settings and **never prints them
 | Gate `AUTH FAILED` - other | Key's account type is not **Testnet**, or an IP whitelist that doesn't match your IP |
 | Binance `AUTH FAILED` after working before | Binance **reset the testnet**, so generate a new key |
 | Any venue: timestamp / "recvWindow" errors | Your PC clock is off. Turn on *Set time automatically* in Windows settings |
+| OKX order rejected with **50124** "This API Key does not have trading permission for the market" | Seen 2026-10-02 although the key reported `read_only,trade` and a manual demo Spot trade had been made. Recreate the Demo Trading key with Read + Trade. Meanwhile ApnaSOR pauses OKX for 10 min after each such refusal and re-routes the order |
 | `NO KEYS in .env` | Variable name typo, or `.env` isn't in the project root `D:\Sor-Fyp` |
 
 ---

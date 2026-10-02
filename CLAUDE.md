@@ -37,6 +37,8 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, LLM copilot)
    │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → best-price depth walk
    │                        → IOC LIMIT children (price-protected) sent concurrently → fills applied
+   │                        → a venue's REFUSED quantity re-routed without it (≤ 2 rounds); a venue that
+   │                          refuses our key's right to trade is paused for TRADING_BLOCK_COOLDOWN_S
    ├─ PreTradeRiskEngine (7 checks) · KillSwitch (persisted) · PositionTracker
    ├─ RiskMonitor (every 2 s): trading-loss limit → auto kill switch; concentration alerts
    ├─ MarketDataCollector + Aggregator (NBBO) · VenueHealthMonitor · CoherenceMonitor
@@ -57,7 +59,7 @@ Internal events flow over an in-process async event bus (`backend/shared/events/
 |---|---|---|---|---|
 | V1 | Binance | mainnet public feed | **spot testnet** | ✅ verified live |
 | V4 | Bybit | mainnet public feed | **Demo Trading** (not Bybit Testnet — its books drift) | ✅ verified live |
-| V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ❌ blocked by some ISPs' DNS; passphrase missing |
+| V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ⚠️ authenticates; orders get 50124 "no trading permission" (2026-10-02) — router pauses it; some ISPs' DNS blocks okx.com |
 | V6 | Gate | mainnet public feed | spot testnet | ⚠️ authenticates; spot testnet wallet empty |
 | V2 | Coinbase | mainnet public feed | none (no real testnet) — data-only, off by default | — |
 | V3 | Kraken | — | no spot testnet | not possible |
@@ -117,7 +119,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (147 as of 2026-10-02)
+python -m unittest discover -s backend/tests -t .   # all backend tests (160 as of 2026-10-02)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 ```
 
@@ -160,7 +162,7 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 - **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
 - **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
 - **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
-- **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network). Do it on the demo laptop too.
+- **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network), then `ipconfig /flushdns` — Windows caches a failed lookup. Do it on the demo laptop too. Right after a DNS change, Bybit's WebSocket can hang for ~2 min (IPv6 addresses on a network without IPv6) and then recovers by itself.
 - **Gate**: its documented test funds go to the *futures* testnet and can't move to spot; ApnaSOR trades Gate spot.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 

@@ -622,3 +622,57 @@ The trader's text goes in its **own user message**, never into the instructions,
 
 - **New:** `backend/services/agents/` (`__init__.py`, `llm.py`, `copilot.py`), `backend/shared/models/copilot.py`, `backend/gateway/routers/copilot.py`, `backend/tests/test_copilot/`.
 - **Changed:** `gateway/config.py` (LLM settings), `gateway/dependencies.py` (wiring), `gateway/main.py` (router, error codes), `backend/requirements*.txt` (`httpx` to runtime), `.env.example` (Gemini replaces Anthropic), ROADMAP §5b (done boxes + API contract for the chat panel), API_KEYS_GUIDE, ONBOARDING, PROGRESS, CLAUDE.md.
+
+---
+
+## 2026-10-02 — A tougher router: one refusing venue no longer sinks an order
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+### The problem, found by testing the copilot by hand
+
+With OKX connected, "buy $10 of ETH" through the copilot came back **FAILED**: OKX had the best ETH price, the whole order went to OKX, and OKX refused it with code **50124** — *"This API Key does not have trading permission for the market"* — although the key reported `read_only,trade`. Binance and Bybit could have filled it. Two gaps:
+
+1. **No second chance.** A refused child was simply recorded as rejected; if it was the only child, the parent failed.
+2. **No memory.** ccxt doesn't know 50124, so it arrived as a plain `ExchangeError` — and even a real `AuthenticationError` only blocked the venue until the next balance read (every 15 s), which *succeeds* for a key that can read but not trade. Every order whose best price was on OKX would fail the same way.
+
+### What changed
+
+**Two facts on every exchange answer** (`ExecutionResult`, set in `CcxtVenueAdapter.place_order`):
+- `retry_elsewhere` — the venue **refused before executing anything** (bad key, no permission, balance, exchange error, or a lost request that reconciliation confirmed "not executed"). Every `reject()` path qualifies; so does an order the venue reports as `rejected`.
+- `blocks_trading` — the refusal is about **our key's right to trade**: ccxt's `AuthenticationError` family, or any venue message about permission (`is_permission_error`, which is how OKX 50124 is caught). These no longer lower the venue's health score — it's our key's fault, not the venue's.
+- An IOC that **expired** at its limit gets neither: that's a price decision, and re-sending it elsewhere would chase the price.
+
+**The engine** (`RoutingEngine._route`):
+
+```
+children = plan(order)
+for round in 0..MAX_REROUTES (2):
+    results = send children concurrently; apply each (reality wins: fills always recorded)
+    for each refusal that blocks trading: pause that venue (audited)
+    refused_qty = quantity of children refused with nothing executed
+    if refused_qty == 0 or last round: stop
+    children = plan(refused_qty) on fresh books WITHOUT every venue that refused so far
+               (kill switch / cancel / no other venue / below lot → stop, reason in the proof)
+```
+
+- **No new risk check** for a re-route: risk approved the whole parent, and a re-route never exceeds what is still unfilled. Funding (venue balances) *is* re-checked, and each round's children are price-protected against their own fresh plan.
+- **Bounded:** at most 2 extra rounds, each excluding every venue that already refused — a 4-venue cascade of refusals tries 3 venues and stops.
+- **Trading pause:** a venue that refused our key gets no new orders for `TRADING_BLOCK_COOLDOWN_S` (600 s), shown in `excluded_venues` ("trading paused for N more min after: …") — so the routing proof, the Venue Connectivity page, the TWAP engine and the copilot all see it — then one retry; refused again → paused again. A restart clears it (a new key needs a restart anyway). Audited as `venue_trading_blocked` (actor `router`); each re-route is a `routing_decision` "Re-route after V5 refused: …" and a note in the order's proof.
+- TWAP slices and copilot orders get all of this for free: they go through `OrderEntry`.
+
+### Verified live (OKX enabled for the run, Binance testnet + Bybit demo)
+
+- OKX alone had the best BTC bid → SELL 0.00013 BTC: **V5 refused (50124) → re-routed → FILLED on Bybit @ $86,505.00**, in one order with two children.
+- OKX then showed *"trading paused for 10 more min after: OKX refused this API key's trading permission…"*; the same order again went straight to Bybit, and its proof said OKX quoted 0.1 bps better but was skipped, and why.
+- Reconciliation flagged OKX as **BREAK** (+0.0000577 BTC / −5.00 USDT): the manual demo Spot trade made on OKX's website to try to clear 50124. Correct behaviour — and proof that the manual trade did not fix the permission; recreating the key is next.
+
+### Also
+
+- Tests: 160 (13 new) — re-route and block against scripted stub venues through the real order manager, risk engine and strategy (split orders re-route only the refused share; expired IOCs aren't chased; kill switch stops a re-route; rounds are bounded; the block expires on a test clock), and the adapter's classification of OKX 50124, `PermissionDenied`, `InsufficientFunds`, `rejected` / `expired` / lost orders.
+- Copilot `reference_mid` is rounded (the API had shown `2747.2650000000003`).
+
+### Files
+
+- **Changed:** `backend/exchanges/base.py`, `backend/exchanges/ccxt_venue.py`, `backend/services/routing_engine/engine.py`, `backend/gateway/config.py` (`trading_block_cooldown_s`), `backend/gateway/dependencies.py`, `backend/services/agents/copilot.py`, `.env.example`, CLAUDE.md, PROGRESS.md, API_KEYS_GUIDE.
+- **New:** `backend/tests/test_routing/test_reroute.py`, `backend/tests/test_exchanges/test_execution_errors.py`.
