@@ -676,3 +676,100 @@ for round in 0..MAX_REROUTES (2):
 
 - **Changed:** `backend/exchanges/base.py`, `backend/exchanges/ccxt_venue.py`, `backend/services/routing_engine/engine.py`, `backend/gateway/config.py` (`trading_block_cooldown_s`), `backend/gateway/dependencies.py`, `backend/services/agents/copilot.py`, `.env.example`, CLAUDE.md, PROGRESS.md, API_KEYS_GUIDE.
 - **New:** `backend/tests/test_routing/test_reroute.py`, `backend/tests/test_exchanges/test_execution_errors.py`.
+
+---
+
+## 2026-10-02 — Phase 6: the parallelism proof — a risk batch on worker processes, and a 3-node RAFT cluster
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+### The critique, and the honest answer
+
+The June panel said *"Python asyncio isn't real parallelism"* — and that's true: asyncio runs on ONE core and interleaves *waiting* (network I/O). It is the right tool for talking to four exchanges at once, which is most of what a router does. Our answer has two more parts: CPU work goes to **separate OS processes** (each with its own Python interpreter and its own core), and the risk controls are agreed by a **real distributed protocol** across three processes.
+
+### Part 1 — the risk batch on worker processes
+
+**What the code showed first.** The seven pre-trade checks take a few *microseconds* (the audit log shows 5-20 µs). Sending an order to another process — pickling it, a pipe, waking the worker — costs far more than that. A process pool for those checks would make them *slower*, and the benchmark confirms it (below). The ROADMAP's "CPU-bound risk batches" premise was only half true, so we built the batch so that it has real CPU work to parallelise, and measured both cases.
+
+**Design.**
+
+```
+checks.py   evaluate_order(context, order, mid)  — the 7 checks as ONE pure function
+            (the live gate now calls it too: the gate and a pre-flight can never disagree)
+
+batch.py    pre-flight = check a LIST of orders without sending anything
+   1. plan (serial, O(n)):   walk the list once, carrying the projected position and
+                             exposure forward -> one context per order ("if every earlier
+                             order filled" — the conservative choice for position limits)
+   2. evaluate (parallel):   each order is now independent -> checks + optional stress test,
+                             dealt round-robin to a warm pool of worker processes
+```
+
+- **The CPU-heavy check: a Monte Carlo stress test** of the position an order leaves us with — 5,000 random price paths, minute by minute over the next hour (geometric Brownian motion, zero drift), volatility **measured from our own live mid prices** (sampled every 5 s; until a minute of history exists the API says so instead of guessing). Per path we keep the *deepest* point the position goes underwater — the loss limit is watched continuously, so the worst moment matters, not just the end. Reported: the 99% worst loss (VaR) and the average of the worst 1% (expected shortfall). ~150 ms of pure Python per order. Sanity check: for $146 of BTC at 0.6%/hour volatility, 2.33 σ ≈ $2.05 at the end of the hour; the worst point within the hour came out $2.15 — slightly deeper, as it should be.
+- **Bit-identical answers.** Each order's paths come from its own seed, so a pool and a single process give exactly the same numbers (tested; the benchmark checks it on every run).
+- **When the pool is used** (`auto`): only for stress-tested batches of at least 4 orders. Everything else stays in-process; an in-process stress test runs in a thread so the gateway's event loop keeps serving market data and orders meanwhile.
+- **Warm pool.** On Windows a worker process starts by re-importing Python (0.8-1.8 s for 2-8 workers, measured), so the gateway spawns its 4 workers at start-up, in the background.
+
+**Where it is used live.**
+1. **Every TWAP is pre-flighted before its first slice.** This fixed a real gap: `TwapEngine.create` checked the total value and each slice's size, but never the position or exposure limit for where the TWAP *ends*. A TWAP that would cross the position limit started, traded half, then every slice was rejected and it stalled half-done. Now: *"Pre-flight: slice 3 of 4 would be rejected by pre-trade risk (position_limit) …"* before anything is sent.
+2. **`POST /api/risk/preflight`** — check a basket (e.g. a rebalance across five coins) with or without the stress test; the answer says which executor ran and how long it took.
+
+**Benchmark** (`scripts/benchmark_risk_batch.py`; laptop i5-1145G7 — 4 cores / 8 threads, Windows, Python 3.14; median of 5 runs, the executors take turns so heat throttling hits all of them alike; chart: `project-info/benchmarks/risk-batch.svg`):
+
+| Workload | Orders | One process | Pool of 2 | Pool of 4 | Pool of 8 |
+|---|---|---|---|---|---|
+| 7 checks only | 100 | 0.39 ms | 5.9 ms | 7.0 ms | 9.8 ms |
+| 7 checks only | 10,000 | 31 ms | 314 ms | 257 ms | 320 ms |
+| checks + stress | 1 | 151 ms | 148 ms | 142 ms | 142 ms |
+| checks + stress | 4 | 648 ms | 391 ms | 303 ms | 283 ms |
+| checks + stress | 32 | 4,990 ms | 3,041 ms | 2,384 ms | 1,855 ms |
+
+What the chart shows, and nothing more: for the microsecond checks the pool is **~8-10× slower** at every size (so they stay in-process); with the stress test it is **2.1-2.7× faster** for 4-32 orders. Not 4× on 4 cores, because one busy core runs faster (Turbo Boost) than four busy ones, the pickling and result-merging are serial, and a laptop throttles under sustained load. Live inside the running gateway: a 12-order stress basket took **2.0 s in-process vs 0.86 s on the pool of 4**, same verdicts.
+
+### Part 2 — the RAFT cluster
+
+**In plain words.** Three small processes each keep a numbered *log* of decisions ("engage the kill switch", "max order $500", "blacklist OKX"). One of them is the *leader*: every decision goes to it, it copies the entry to the others, and the entry counts — is *committed* — once a **majority (2 of 3)** has stored it on disk. Every node then applies committed entries, in order, to the same little state machine, so all three end up with the same kill switch, limits and blacklist. If the leader goes silent, the others wait a random 0.5-1 s, then one asks for votes; whoever gets a majority leads the next *term*. Two rules make it safe: a node votes once per term, and only for a candidate whose log is at least as complete as its own — so a new leader always holds every committed decision.
+
+**Design (`backend/services/consensus/`).**
+- `core.py` — the algorithm, **deterministic, with no network and no clock**: `tick()`, `step(message)`, `propose(command)`, an outbox of messages to send and `take_committed()`. The runtime calls it; the tests drive it message by message, so elections and crashes are exactly reproducible. Beyond the paper's core: the new leader appends a **no-op** (entries from earlier terms are committed only through one of the leader's own — Figure 8 of the paper, tested directly), **check-quorum** (a leader that can't reach a majority for an election timeout steps down, so a cut-off leader stops claiming leadership), and a **follower hint** on a failed append (a far-behind follower catches up in one round, not one entry per heartbeat).
+- `storage.py` — term, vote, log and commit index in one SQLite file per node (`synchronous=FULL`), written **before** any message that depends on them is sent: a node that crashes can never vote twice in a term or forget an entry a majority counted on.
+- `state_machine.py` — kill switch, risk limits, venue blacklist. Commands **set** a value (never "toggle"), so a command applied twice — a client retrying after a lost reply — changes nothing; timestamps travel inside the command so `apply` stays deterministic.
+- `node.py` — one process: a 50 ms tick, heartbeats every 100 ms, newline-delimited JSON over TCP on 127.0.0.1. Node-to-node messages are one-way (a reply is just another message; a lost one is repaired by the next heartbeat). Clients get one reply line; `propose` answers only after the entry is committed and applied.
+- `client.py` — writes go to the leader (a follower answers "not the leader, try node N"); reads ask all nodes at once and keep the state with the **highest applied index** — committed entries never change, so higher is always fresher, and no leader is needed to read.
+
+**Gateway side: `RiskControls` (`risk_engine/controls.py`)** — now the ONE way to change the kill switch, limits or blacklist (routers, the risk monitor's automatic halt). RAFT off (the default): local, as before. RAFT on: written through the leader; the gateway keeps a local copy that the order path reads in microseconds — **trading never waits on the cluster** — and re-reads the committed state every 0.5 s (changes made by another client are adopted and audited). The rules when there is **no majority**:
+- **Tightening** (engage the kill switch, blacklist a venue) happens locally *at once* and is queued; it is replicated as soon as a majority is back. A broken cluster must never stop an operator from halting trading.
+- **Loosening** (release, un-blacklist, change limits) needs a majority, or it is refused (503) and nothing changes.
+- **A loosening write that was sent but not confirmed** may still commit later. The gateway then re-asserts the current state *after* it, so a late commit can't loosen anything behind the operator's back. The test for this found a real bug in the first version: the sync re-asserted "engaged" and then adopted the *older* snapshot it had read before — which said "released". Fixed: after a queued write commits, the state from its reply is adopted, and the older snapshot is ignored (the copy only ever moves forward in the log).
+- **Start-up:** anything this gateway's own record says is *tighter* than the cluster (an engaged kill switch, a blacklisted venue) is kept and replicated; a brand-new cluster is seeded with the gateway's limits. Nodes reporting a different exchange mode (testnet vs mainnet) are ignored.
+
+Also fixed on the way: the **venue blacklist was never saved** — a restart silently un-blacklisted every venue. It is persisted now (and replicated with RAFT on).
+
+**Honest limits.** No log compaction (the log only holds operator actions — tiny); fixed 3-node membership; no pre-vote (a node cut off alone keeps starting elections and inflates its term — seen live, term 23; harmless); nodes don't authenticate each other (localhost only — fine for this POC, not production); the gateway's copy can be up to one poll (0.5 s) behind a change made by *another* client.
+
+### Verified live (2026-10-02, `RAFT_ENABLED=true`, Binance testnet + Bybit demo)
+
+- Start-up: node 3 elected ~0.6 s after launch; the gateway seeded its limits (log index 2); `/api/health` → `consensus: up (leader node 3)`.
+- Small order: BUY 0.0002 BTC → **FILLED** @ $85,120.90 on Bybit demo.
+- **Kill the leader in the middle of a TWAP** (`raft_demo.py --gateway --twap 0.0006`): TWAP started (6 slices, 60 s); after 2 slices the leader (node 3) was killed → **node 1 elected in 2.0 s** (one split vote first: term 3), state intact; kill switch engaged through the gateway → committed at index 4 on the two live nodes, TWAP paused; released with 2 of 3 nodes → index 5; TWAP resumed and **COMPLETED** (0.0006 BTC across Binance and Bybit, +0.96 bps vs arrival); `start_all.py` restarted node 3 after 15 s and it caught up to index 5.
+- **No majority** (2 nodes killed): engage → HTTP 200, trading halted at once, write queued (the reply took 3.7 s — the cluster timeout); release → **HTTP 503** "Refused … Nothing changed", switch stayed on; nodes back → the queued engage **replicated automatically** (index 7); release → 200.
+- Standalone demo (`raft_demo.py`): 3 writes committed in ~20 ms each; leader crash → new leader in **1.0 s**, nothing lost; a write with 2 of 3 nodes; the restarted node caught up (all 3 identical); with 1 node left a write is refused.
+
+### Tests (215 total, 55 new)
+
+- RAFT core on a simulated network: one leader per term, reproducible elections, one vote per term across a restart, a stale log can't win, a cut-off leader steps down, commit only with a majority, nothing committed lost on leader crash, a deposed leader's uncommitted entries replaced, a far-behind follower caught up in one round, the Figure-8 rule, strangers ignored — plus a **randomized safety test**: 40 seeds × 600 ticks of random crashes, restarts, network splits and proposals (~27 elections, ~11 crashes and ~59 commits per run), checking after every tick that there is at most one leader per term and that no two nodes ever apply different commands at the same index.
+- RAFT over real TCP (3 nodes in one test, failover, catch-up, no majority, bad commands); SQLite storage across reopen; the state machine.
+- `RiskControls`: local mode unchanged, every change through the cluster, tighten-at-once / loosen-refused without a majority, the late-commit case, adopting other clients' changes, seeding, start-up merge, mode mismatch, status. The risk monitor's automatic halt goes through it.
+- Risk batch: each check's rejection, projection, round-robin dealing, stress-test properties (scales with the position, ES ≥ VaR, short positions, ballpark vs the formula), **pool == in-process bit for bit**, the pre-flight doesn't use up the rate limit, the API service; TWAP pre-flight refuses a TWAP that would cross the position limit half way (nothing sent).
+
+### Also found (each cost time)
+
+- `IsolatedAsyncioTestCase` runs asyncio in **debug mode** (a stack trace per callback): three nodes ticking every 10 ms never finished an election. The TCP tests turn debug off.
+- Since Python 3.12, `Server.wait_closed()` **waits for every open connection** — peers keep theirs open, so shutdown hung until the node closes them itself.
+- On Windows, connecting to a closed `127.0.0.1` port takes **~2 s to fail**, and `localhost` may try IPv6 first: every RAFT call has a short timeout and `localhost` is turned into `127.0.0.1`. The venv's `python.exe` is a launcher: `Popen.pid` isn't the real Python's pid (killing the launcher kills its child).
+- A lint "fix" (`zip(..., strict=True)`) broke the TWAP slice sizes (the lists differ in length on purpose) — caught at once by the TWAP tests.
+
+### Files
+
+- **New:** `backend/services/consensus/` (`core.py`, `storage.py`, `state_machine.py`, `node.py`, `client.py`), `backend/services/risk_engine/` (`checks.py`, `batch.py`, `preflight.py`, `volatility.py`, `controls.py`), `backend/shared/models/consensus.py`, `backend/gateway/routers/consensus.py`, `backend/tests/test_consensus/`, `backend/tests/test_risk_batch/`, `scripts/benchmark_risk_batch.py`, `scripts/raft_demo.py`, `project-info/benchmarks/risk-batch.{json,svg}`.
+- **Changed:** `pre_trade.py` (uses the pure checks, `preflight()`), `risk_monitor.py` (automatic halt via `RiskControls`), `health_checker.py` (blacklist persisted + restored), `twap.py` (pre-flight), `shared/models/risk.py` (pre-flight models), routers `risk.py` / `venues.py` (through `RiskControls`, `POST /api/risk/preflight`), `gateway/config.py` (`RAFT_*`, `RISK_POOL_*`, `RISK_STRESS_*`), `dependencies.py`, `main.py` (start-up sync, 503 `CONSENSUS_UNAVAILABLE`, consensus in `/api/health`), `start_all.py` (starts + restarts the nodes), `.env.example`, `scripts/README.md`, CLAUDE.md, PROGRESS.md, ROADMAP §6.

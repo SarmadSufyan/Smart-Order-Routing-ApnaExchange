@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-02.
+> Last updated: 2026-10-02 (Phase 6 done).
 
 ---
 
@@ -14,7 +14,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 |---|---|
 | "Simulated market data isn't real" | Live order books from real exchanges; every tick is a real market event. ✅ |
 | "Should connect to real wallets and execute real orders" | Real orders on exchange testnet/demo environments now; small real money in the final demo (Phase 8). Unified wallet reads real balances. ✅ (testnet) |
-| "Python asyncio isn't real parallelism" | async for I/O fan-out (right tool), plus `multiprocessing` for CPU-bound risk batches and a real 3-process RAFT cluster (Phase 6). ⏳ |
+| "Python asyncio isn't real parallelism" | async for I/O fan-out (right tool), plus a pool of worker processes for CPU-bound risk batches (measured, chart in `benchmarks/`) and a real 3-process RAFT cluster (Phase 6). ✅ 2026-10-02 |
 
 ## Phases
 
@@ -28,7 +28,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 5a | **TWAP execution bot** | ✅ 2026-10-01 |
 | 5b | **LLM copilot** (plain English → confirmed, risk-checked orders) | ✅ API 2026-10-02 (verified live); chat panel ⏭ frontend |
 | 5c | **Arbitrage detector** (fee-aware, honest framing) | ⏭ |
-| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ⏭ |
+| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live; frontend status panel optional) |
 | 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ |
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
 
@@ -79,13 +79,20 @@ Proposal `status`: **PROPOSED** (show the card: `message`, `conversion`, `warnin
 
 Done when: detector unit-tested with synthetic books; live page shows real (mostly negative-net) edges; no execution path bypasses risk.
 
-### 6 — Parallelism proof
+### 6 — Parallelism proof ✅ (2026-10-02, Fizza)
 
 - **multiprocessing risk:** batch pre-trade checks in a process pool (e.g. a TWAP's or basket's slices); benchmark single-process vs pool and report what the chart shows, nothing more.
-- **RAFT cluster:** 3 Python processes (`backend/services/consensus/`, currently empty), leader election + replicated log, replicating **kill switch, venue blacklist, risk limits**. The gateway writes those through the leader and reads committed state.
+- **RAFT cluster:** 3 Python processes (`backend/services/consensus/`), leader election + replicated log, replicating **kill switch, venue blacklist, risk limits**. The gateway writes those through the leader and reads committed state.
 - **Demo:** kill the leader mid-trading → a new leader is elected, the kill switch / limits are unchanged, orders continue (or stay halted).
 
-Done when: unit tests for election, log replication and commit; a script that starts 3 nodes, kills one and shows continuity; a journal entry with the design.
+Done when:
+- [x] Risk batch on a process pool + benchmark: the 7 checks alone are microseconds, so the pool *loses* there (honest result, kept in-process); with the Monte Carlo stress test per order the pool wins (up to 2.7× on a 4-core laptop) — numbers in `project-info/benchmarks/risk-batch.svg` and the journal. Used live: every TWAP is pre-flighted slice by slice before it starts; `POST /api/risk/preflight` checks a basket.
+- [x] Unit tests for election, log replication and commit (simulated network, crashes, splits, a 40-seed randomized safety test) + over real TCP.
+- [x] `scripts/raft_demo.py` starts 3 nodes, kills the leader and shows continuity; `--gateway --twap` does it in the middle of a live testnet TWAP.
+- [x] Journal entry with the design (2026-10-02, Phase 6).
+- [ ] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) and a pre-flight button on the Algo Orders page.
+
+**API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** when the cluster has no majority (show the message).
 
 ### 7 — Polish
 
