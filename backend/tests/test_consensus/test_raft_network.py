@@ -8,7 +8,12 @@ import time
 import unittest
 from pathlib import Path
 
-from backend.services.consensus.client import ConsensusClient, ConsensusUnavailableError, parse_cluster, request
+from backend.services.consensus.client import (
+    ConsensusClient,
+    ConsensusUnavailableError,
+    parse_cluster,
+    request,
+)
 from backend.services.consensus.node import RaftNode
 from backend.services.consensus.storage import SqliteStorage
 from backend.services.consensus.wire import MessageSigner

@@ -3,8 +3,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from backend.gateway.middleware.auth import User, UserRole, get_current_user, require_role
-from backend.shared.exceptions import InvalidStateTransitionError, KillSwitchActiveError, OrderNotFoundError
+from backend.gateway.middleware.auth import User, get_current_user
+from backend.shared.exceptions import (
+    InvalidStateTransitionError,
+    KillSwitchActiveError,
+    OrderNotFoundError,
+)
 from backend.shared.models.order import OrderCreate, OrderListResponse, OrderResponse
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -56,7 +60,7 @@ async def get_order(
         order = order_manager.get_order(order_id)
         return OrderResponse.from_order(order)
     except OrderNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found") from None
 
 
 @router.post("/{order_id}/cancel", response_model=OrderResponse)
@@ -69,6 +73,6 @@ async def cancel_order(
         order = await order_manager.cancel_order(order_id, reason=f"Cancelled by {user.username}")
         return OrderResponse.from_order(order)
     except OrderNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found") from None
     except InvalidStateTransitionError as e:
-        raise HTTPException(status_code=409, detail=e.message)
+        raise HTTPException(status_code=409, detail=e.message) from None

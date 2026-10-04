@@ -58,7 +58,7 @@ async def refresh(body: RefreshRequest):
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-        from backend.gateway.middleware.auth import HARDCODED_USERS, User, UserRole
+        from backend.gateway.middleware.auth import HARDCODED_USERS, User
 
         user_id = payload["sub"]
         user_data = next(
@@ -80,4 +80,4 @@ async def refresh(body: RefreshRequest):
             user=user.model_dump(),
         )
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token") from None
