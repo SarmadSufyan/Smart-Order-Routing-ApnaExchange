@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts for the app shell and Maham's pages).
+> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts; §6 RAFT cluster panel).
 
 ---
 
@@ -109,7 +109,8 @@ Done when:
 - [x] Unit tests for election, log replication and commit (simulated network, crashes, splits, a 40-seed randomized safety test) + over real TCP.
 - [x] `scripts/raft_demo.py` starts 3 nodes, kills the leader and shows continuity; `--gateway --twap` does it in the middle of a live testnet TWAP.
 - [x] Journal entry with the design (2026-10-02, Phase 6).
-- [ ] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) and a pre-flight button on the Algo Orders page.
+- [x] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) — `frontend/src/components/RaftPanel.tsx` on the Kill Switch page (2026-10-05, Maham; verified with a live leader kill and a no-majority test).
+- [ ] *(optional, frontend)* a pre-flight button on the Algo Orders page.
 
 **API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** at once when the cluster has no majority (show the message: "only N of 3 RAFT nodes are reachable … Nothing changed"); engaging still works. Every RAFT message is signed (HMAC-SHA256, `RAFT_SHARED_SECRET`); `status.signed` and each node's `rejected_messages` show it.
 

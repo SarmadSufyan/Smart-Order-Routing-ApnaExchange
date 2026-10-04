@@ -381,6 +381,33 @@ export interface ArbWindowList {
   windows: ArbWindow[]  // closed, newest first
 }
 
+// ── RAFT cluster (Phase 6) — GET /api/consensus/status ──────────────
+export interface ConsensusNode {
+  id: number
+  address: string
+  reachable: boolean
+  role: string | null           // FOLLOWER / CANDIDATE / LEADER
+  term: number | null
+  leader: number | null         // who this node thinks leads
+  commit_index: number | null
+  applied_index: number | null
+  pid: number | null
+  mode: string | null           // testnet / mainnet: must match the gateway's
+  rejected_messages: number | null  // forged / too old / replayed messages refused
+}
+
+export interface ConsensusStatus {
+  enabled: boolean
+  signed: boolean               // every RAFT message carries an HMAC-SHA256 signature
+  leader: number | null
+  majority_reachable: boolean
+  nodes: ConsensusNode[]
+  pending_writes: string[]      // our changes the cluster hasn't confirmed yet
+  synced_index: number          // committed log index this gateway has adopted
+  last_sync: string | null
+  message: string
+}
+
 export interface ChildOrder {
   id: string
   venue_id: string
@@ -629,6 +656,8 @@ export const api = {
     if (params.limit) q.set('limit', String(params.limit))
     return request<ArbWindowList>(`/api/arbitrage/windows?${q.toString()}`)
   },
+
+  getConsensusStatus: () => request<ConsensusStatus>('/api/consensus/status'),
 
   getWallet: () => request<WalletSnapshot>('/api/wallet/'),
 

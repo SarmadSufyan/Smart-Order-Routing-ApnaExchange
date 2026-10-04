@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
+import { RaftPanel } from '../components/RaftPanel'
 import { useDataStore } from '../stores/dataStore'
 import { isVenueBlacklisted, LATENCY_WARN_MS } from '../adapters'
 
@@ -25,13 +26,17 @@ export function KillSwitch() {
   const [busy, setBusy]     = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
+  // A message about engaging or releasing is stale once the state has flipped.
+  useEffect(() => { setError(null) }, [killActive])
+
   async function activate() {
     if (step === 0) { setStep(1); return }
     if (!reason) return
     setBusy(true)
-    await activateKillSwitch(reason)
+    const err = await activateKillSwitch(reason)  // a failed engage must never pass silently
     setBusy(false)
-    setStep(0)
+    setError(err)
+    if (!err) setStep(0)
   }
 
   async function deactivate() {
@@ -242,9 +247,19 @@ export function KillSwitch() {
                 </div>
               </div>
             )}
+            {error && (
+              <div style={{
+                margin: '14px auto 0', maxWidth: 560, padding: '8px 12px', borderRadius: 4,
+                background: tint(C.red, 12), border: `1px solid ${C.red}`, color: C.red, fontSize: F.sm, fontWeight: 600,
+              }}>
+                Kill switch NOT engaged: {error}
+              </div>
+            )}
           </>
         )}
       </div>
+
+      <RaftPanel style={{ marginBottom: 14 }} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 14 }}>
 

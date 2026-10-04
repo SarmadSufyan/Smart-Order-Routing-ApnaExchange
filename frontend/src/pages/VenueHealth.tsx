@@ -18,18 +18,22 @@ export function VenueHealth() {
   const recoverVenue    = useDataStore((s) => s.recoverVenue)
 
   const [busy, setBusy] = useState<string | null>(null)
+  // e.g. un-blacklisting is refused while RAFT has no majority
+  const [actionError, setActionError] = useState<{ venueId: string; text: string } | null>(null)
 
   const venues = backendVenues.map(backendVenueToUi)
 
   async function handleBlacklist(venueId: string) {
     setBusy(venueId)
-    await blacklistVenue(venueId, 'Manual operator action')
+    const err = await blacklistVenue(venueId, 'Manual operator action')
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
   async function handleUnblacklist(venueId: string) {
     setBusy(venueId)
-    await unblacklistVenue(venueId)
+    const err = await unblacklistVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
@@ -210,6 +214,14 @@ export function VenueHealth() {
                     </button>
                   </div>}
                 </>
+              )}
+              {actionError?.venueId === v.backend.venue_id && (
+                <div style={{
+                  marginTop: 8, padding: '6px 10px', borderRadius: 4, fontSize: F.xs,
+                  background: tint(C.red, 10), border: `1px solid ${tint(C.red, 45)}`, color: C.red,
+                }}>
+                  {actionError.text}
+                </div>
               )}
             </div>
           )

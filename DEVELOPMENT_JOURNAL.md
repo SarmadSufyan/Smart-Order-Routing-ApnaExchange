@@ -933,3 +933,44 @@ A small script in the browser measured, for each page, how far anything sticks o
 ### Files
 
 New: `frontend/src/hooks/useMediaQuery.ts`. Changed: `components/AppShell.tsx` (shared), `components/AuditTimeline.tsx`, `pages/Wallet.tsx`, `pages/AlgoOrders.tsx`, `pages/VenueHealth.tsx`, `pages/RiskManager.tsx`, `pages/KillSwitch.tsx`; PROGRESS.md, ROADMAP §7. Mahnoor's pages (Dashboard, Market Data, How It Works, Login) are not touched — the same helper can fit them.
+
+---
+
+## 2026-10-05 — A real RAFT cluster panel, and errors that were being swallowed
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+### Why
+
+The Dashboard showed a "RAFT consensus nodes" card with three hard-coded nodes and the note "Simulated for POC — real RAFT cluster lands in M3". The real 3-node cluster has existed since Phase 6, and the panel already rejected the project once for simulated data. ROADMAP §6 lists a small cluster panel as an optional frontend item.
+
+Checking how the pages handle the cluster's answers turned up two silent failures: with RAFT on and no majority, **un-blacklisting a venue** is refused (503 `CONSENSUS_UNAVAILABLE`), but the store only wrote the error to `lastError`, so the button just stopped spinning; and **engaging the kill switch** swallowed any error the same way — an emergency stop that fails must be seen.
+
+### What changed
+
+- **`components/RaftPanel.tsx` (new, reusable)**, shown on the Kill Switch page under the big kill-switch panel. It polls `GET /api/consensus/status` every 2 s while shown (there is no WebSocket channel for it; the gateway itself re-reads the cluster every 0.5 s) and shows: a MAJORITY / NO MAJORITY chip with how many nodes are up, SIGNED when every RAFT message carries an HMAC-SHA256 signature, the backend's own one-line status, one card per node (role LEADER / FOLLOWER / CANDIDATE / UNREACHABLE, address, term, committed and applied log index, refused messages if any), changes waiting for the cluster to confirm, the log entry this gateway has adopted, and a plain explanation (tighten at once, loosen only with a majority). With RAFT off it shows the backend's message and how to turn it on — never made-up nodes.
+- **Store / API:** `ConsensusNode`, `ConsensusStatus`, `getConsensusStatus` in `services/api.ts`; `consensus` + `fetchConsensus` in `dataStore.ts` (not in `fetchAll`). `activateKillSwitch`, `blacklistVenue` and `unblacklistVenue` now resolve to an error message or null, like the other operator actions.
+- **Kill Switch page:** a failed engage shows "Kill switch NOT engaged: …" and keeps the reason box open to retry; a message is cleared once the kill switch state flips.
+- **Venue Connectivity page:** a refused blacklist / un-blacklist shows its reason inside that venue's card.
+
+### How it was checked (live, with the real cluster)
+
+RAFT was switched on for the test through environment variables on a local launch configuration (`RAFT_ENABLED`, a throwaway `RAFT_SHARED_SECRET`), so `.env` stayed untouched, and node restarts were turned off (`--raft-restart-delay 0`) to hold the no-majority state:
+
+1. All up: leader node 1, term 1, log #2 on every node, SIGNED.
+2. Leader process killed: node 2 leader in term 2 within 3 s, log #3; the panel showed node 1 UNREACHABLE and "MAJORITY · 2 OF 3 UP".
+3. A second node killed: "NO MAJORITY · 1 OF 3 UP", node 2 CANDIDATE with its term climbing.
+4. Kill switch engaged from the page: worked at once; the panel showed "Waiting for the cluster to confirm: kill_switch". Release: refused, on screen — "only 1 of 3 RAFT nodes are reachable — the kill switch release by admin needs a majority (2). Nothing changed."
+5. Gate blacklisted (at once), then un-blacklist: refused, and the reason now appears in Gate's card.
+6. Nodes 1 and 3 restarted: majority back, the waiting changes committed (log #3 → #6); un-blacklist and release then succeeded (log #8 on all three).
+7. Restored: test cluster stopped (no node processes left, ports free), gateway back with RAFT off, kill switch inactive, no venue blacklisted. These test actions are in the audit log (reason "RAFT panel test - no majority").
+
+Type-check passes; 254 backend tests pass (no backend change). The Kill Switch and Venue pages still fit a 375 px phone.
+
+### Left for Mahnoor
+
+The Dashboard's simulated card (`RAFT_NODES` in `pages/Dashboard.tsx`) can be replaced by `<RaftPanel />` from `../components/RaftPanel`.
+
+### Files
+
+New: `frontend/src/components/RaftPanel.tsx`. Changed: `services/api.ts`, `stores/dataStore.ts` (shared, additive), `pages/KillSwitch.tsx`, `pages/VenueHealth.tsx`; PROGRESS.md, ROADMAP §6.

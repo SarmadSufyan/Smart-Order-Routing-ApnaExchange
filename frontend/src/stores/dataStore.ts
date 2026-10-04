@@ -14,6 +14,7 @@ import {
   type TwapState,
   type ArbStatus,
   type ArbWindowList,
+  type ConsensusStatus,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
 
@@ -32,6 +33,7 @@ interface DataState {
   algos: TwapState[]
   arbitrage: ArbStatus | null
   arbWindows: ArbWindowList | null
+  consensus: ConsensusStatus | null
   loading: boolean
   lastError: string | null
 
@@ -45,6 +47,8 @@ interface DataState {
   // Resolves to an error message, or null on success.
   fetchArbitrage: () => Promise<string | null>
   fetchArbWindows: (symbol?: string, profitableOnly?: boolean) => Promise<void>
+  // Polled by the RAFT panel while it is shown; resolves to an error message or null.
+  fetchConsensus: () => Promise<string | null>
 
   fetchWallet: () => Promise<void>
   refreshWallet: () => Promise<void>
@@ -61,11 +65,11 @@ interface DataState {
   fetchAll: () => Promise<void>
   submitOrder: (symbol: string, side: string, qty: number, orderType?: string, limitPrice?: number) => Promise<Order | null>
   cancelOrder: (orderId: string) => Promise<void>
-  blacklistVenue: (venueId: string, reason?: string) => Promise<void>
-  unblacklistVenue: (venueId: string) => Promise<void>
+  blacklistVenue: (venueId: string, reason?: string) => Promise<string | null>
+  unblacklistVenue: (venueId: string) => Promise<string | null>
   degradeVenue: (venueId: string) => Promise<void>
   recoverVenue: (venueId: string) => Promise<void>
-  activateKillSwitch: (reason: string) => Promise<void>
+  activateKillSwitch: (reason: string) => Promise<string | null>
   deactivateKillSwitch: () => Promise<string | null>
   setupWebSocket: () => void
 }
@@ -82,6 +86,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   algos: [],
   arbitrage: null,
   arbWindows: null,
+  consensus: null,
   loading: false,
   lastError: null,
 
@@ -127,6 +132,15 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ arbWindows: await api.getArbitrageWindows({ symbol, profitable_only: profitableOnly, limit: 50 }) })
     } catch (e) {
       set({ lastError: (e as Error).message })
+    }
+  },
+
+  fetchConsensus: async () => {
+    try {
+      set({ consensus: await api.getConsensusStatus() })
+      return null
+    } catch (e) {
+      return (e as Error).message
     }
   },
 
@@ -270,8 +284,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.blacklistVenue(venueId, reason)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -279,8 +294,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.unblacklistVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      // e.g. RAFT on without a majority: loosening is refused
+      return (e as Error).message
     }
   },
 
@@ -306,8 +323,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.activateKillSwitch(reason)
       await get().fetchRiskStatus()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
