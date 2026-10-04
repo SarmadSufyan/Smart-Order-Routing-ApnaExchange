@@ -8,7 +8,7 @@
 
 ## Last updated
 
-**2026-10-04 (night)** — **5c arbitrage detector done (backend)** (Fizza): every venue pair, both directions, 4 times a second — gross gap vs after both taker fees, windows (how often, how big, how long), what our accounts could fund; detection only. **Measured live** (Binance, Bybit, Gate, ~9 min): books crossed in 73 % of scans but by +0.4 bps on average; after taker fees the best pair averaged −20.7 bps; **0 of 249 crossed windows profitable**. `GET /api/arbitrage/status`, `scripts/arb_watch.py`; the Arbitrage page is for the frontend (contract: ROADMAP §5c). Found live and fixed: the WebSocket refused the frontend's `algo_update` subscription. 254 tests. Handoff note below.
+**2026-10-04 (night)** — **5c arbitrage detector done (backend)** (Fizza): every venue pair, both directions, 4 times a second — gross gap vs after both taker fees, windows (how often, how big, how long), what our accounts could fund; detection only. **Measured live** (Binance, Bybit, Gate, ~9 min): books crossed in 73 % of scans but by +0.4 bps on average; after taker fees the best pair averaged −20.7 bps; **0 of 249 crossed windows profitable**. `GET /api/arbitrage/status`, `scripts/arb_watch.py`; the Arbitrage page is for the frontend (contract: ROADMAP §5c). Found live and fixed: the WebSocket refused the frontend's `algo_update` subscription. 254 tests. **Merged into `feature/crypto-pivot`** the same night — frontend: `git merge origin/feature/crypto-pivot`, the Arbitrage page can start. Handoff note below.
 
 2026-10-04 (evening) — **`feature/backend-v2` merged into `feature/crypto-pivot`** (Fizza, merge commit): the 5b copilot API, router hardening and Phase 6 are now on the default branch. Checked before merging: 226 tests pass, frontend type-check passes, `scripts/raft_demo.py` shows every expected line, and live on testnet with RAFT on — 3 of 3 nodes up and signed, a stress pre-flight of 4 orders on the pool of 4 processes in 321 ms vs 710 ms in one process. **Frontend (Mahnoor, Maham):** `git merge origin/feature/crypto-pivot` into `feature/frontend-v2` — the copilot chat panel can start (contract: ROADMAP §5b). Fizza has the backend relay again for §5c (arbitrage detector).
 
@@ -32,10 +32,10 @@ Team split (decided 2026-10-01). Update **your own** row's status at the end of 
 
 | Area | People | Branch | Scope | Status | Last update |
 |---|---|---|---|---|---|
-| **Backend** (relay) | **Fizza ⇄ Sarmad** — one at a time, never together | `feature/backend-v2` | In order: 5b LLM copilot API → 6 multiprocessing risk + RAFT → 5c arbitrage detector → 7 CI + doc rewrite (ROADMAP) | 5b ✅ + router hardening ✅ + **6 ✅** (2026-10-02), all merged into `feature/crypto-pivot` 2026-10-04; **5c ✅ backend** (2026-10-04, on `feature/backend-v2`). **Fizza has the relay** — next: §7 | 2026-10-04 |
+| **Backend** (relay) | **Fizza ⇄ Sarmad** — one at a time, never together | `feature/backend-v2` | In order: 5b LLM copilot API → 6 multiprocessing risk + RAFT → 5c arbitrage detector → 7 CI + doc rewrite (ROADMAP) | 5b ✅ + router hardening ✅ + **6 ✅** (2026-10-02), all merged into `feature/crypto-pivot` 2026-10-04; **5c ✅ backend** (2026-10-04, merged into `feature/crypto-pivot`). **Fizza has the relay** — next: §7 | 2026-10-04 |
 | **Frontend** — pages | **Mahnoor** | `feature/frontend-v2` | How It Works (rewrite for the crypto design), Dashboard (+ running-TWAP widget), Market Data, Login; the **copilot chat panel** once the copilot API is merged | not started | — |
 | **Frontend** — pages | **Maham** | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; narrow-screen / responsive fixes; the new **Arbitrage** page (API: ROADMAP §5c — or Mahnoor, decide between you) | not started | — |
-| Integration | Sarmad | `feature/crypto-pivot` (default) | Merge `backend-v2` and `frontend-v2` at milestones; reviews; exchange keys | `backend-v2` (5b + router hardening + 6) merged 2026-10-04 (by Fizza, from Sarmad's to-do) | 2026-10-04 |
+| Integration | Sarmad | `feature/crypto-pivot` (default) | Merge `backend-v2` and `frontend-v2` at milestones; reviews; exchange keys | `backend-v2` (5b + router hardening + 6, then 5c) merged 2026-10-04 (by Fizza, from Sarmad's to-do) | 2026-10-04 |
 
 Mahnoor and Maham may swap pages; just update the table. **Shared frontend files** (`services/api.ts`, `stores/dataStore.ts`, `App.tsx`, `components/AppShell.tsx`, `components/shared.tsx`, `theme.ts`, `format.ts`): `git pull` right before editing, push right after, and tell the other.
 
@@ -45,7 +45,7 @@ Fizza and Sarmad never work at the same time. **Before starting:** message the o
 
 | Date | By | Done | Half-done / next step |
 |---|---|---|---|
-| 2026-10-04 (night) | Fizza | **5c arbitrage detector (backend) complete**, nothing half-done. `backend/services/arbitrage/detector.py` (pure: `edge_between`, `cross_venue_edges`, `fundable_size`, `WindowTracker`, summaries; service: `ArbitrageDetector`), router `gateway/routers/arbitrage.py`, models `shared/models/arbitrage.py`, settings `ARB_*`, `scripts/arb_watch.py`; WS `algo_update` + `arb_update` subscribable (`ws_manager.py`). 28 new tests (254). Live numbers: journal 2026-10-04 | Read **Handoff 2026-10-04** below. Next: push + merge into `feature/crypto-pivot` again (5c + the WebSocket fix), then ROADMAP §7. Frontend: Arbitrage page (ROADMAP §5c) |
+| 2026-10-04 (night) | Fizza | **5c arbitrage detector (backend) complete**, nothing half-done. `backend/services/arbitrage/detector.py` (pure: `edge_between`, `cross_venue_edges`, `fundable_size`, `WindowTracker`, summaries; service: `ArbitrageDetector`), router `gateway/routers/arbitrage.py`, models `shared/models/arbitrage.py`, settings `ARB_*`, `scripts/arb_watch.py`; WS `algo_update` + `arb_update` subscribable (`ws_manager.py`). 28 new tests (254). Live numbers: journal 2026-10-04 | Read **Handoff 2026-10-04** below. Pushed and merged into `feature/crypto-pivot` (2026-10-04 night). Next: ROADMAP §7. Frontend: Arbitrage page (ROADMAP §5c) |
 | 2026-10-04 (eve) | Fizza | **Took the backend relay back** (Sarmad had not started: `origin/feature/backend-v2` was still at `1fa0d96`). Ran the to-do of *Handoff 2026-10-02 (night)*: tests (226), RAFT demo, live check, then **merged `feature/backend-v2` → `feature/crypto-pivot`** | (finished — 5c in the note above). Still a team decision: `RAFT_ENABLED` on by default |
 | 2026-10-02 (night) | Fizza | **Phase 6 complete**, nothing half-done. **Risk batch:** `risk_engine/checks.py` (the 7 checks as one pure function — the live gate calls it too), `batch.py` (`plan_jobs` → `evaluate_jobs`, `stress_position` Monte Carlo, `RiskBatchRunner` = warm `ProcessPoolExecutor`; auto = pool only for stress batches ≥ `RISK_POOL_MIN_ORDERS`), `preflight.py` (`POST /api/risk/preflight`), `volatility.py` (live realized vol from NBBO mids). `TwapEngine.create` pre-flights every slice. **RAFT:** `consensus/core.py` (the algorithm, no I/O), `storage.py` (SQLite per node), `state_machine.py`, `node.py` (one node process), `client.py`; gateway side `risk_engine/controls.py` (`RiskControls`: every kill-switch / limits / blacklist change goes through it), `GET /api/consensus/status`; `start_all.py` starts + restarts the nodes when `RAFT_ENABLED=true`. The venue blacklist is now persisted (it was lost on restart). 66 new tests (226). Live results: journal 2026-10-02 (Phase 6) | **Backend free — handed over to Sarmad; pushed 2026-10-03** (`1cd2cf3`). Read [`project-info/PHASE6_GUIDE.md`](project-info/PHASE6_GUIDE.md), then **Handoff 2026-10-02 (night)** below (it has your to-do list). Next: ROADMAP §5c (arbitrage detector). Team decision: turn `RAFT_ENABLED` on by default? |
 | 2026-10-02 (eve) | Fizza | **Took the backend relay back** for ROADMAP §6 (Sarmad had not started: `origin/feature/backend-v2` was still at `53fd27f`) | (finished — see the note above) |
@@ -55,14 +55,14 @@ Fizza and Sarmad never work at the same time. **Before starting:** message the o
 
 ### Handoff 2026-10-04 — Fizza: merge done + 5c arbitrage detector
 
-**State:** `feature/crypto-pivot` has 5b + router hardening + Phase 6 (merge commit `4a7bb18`, pushed). 5c + the WebSocket fix are committed on `feature/backend-v2` after it. 254 tests pass; frontend type-check passes; ruff clean on every new/changed file (17 older findings in other gateway files are untouched — a §7 clean-up).
+**State:** `feature/crypto-pivot` has 5b + router hardening + Phase 6 (merge commit `4a7bb18`, pushed). 5c + the WebSocket fix followed in a second merge the same night. 254 tests pass; frontend type-check passes; ruff clean on every new/changed file (17 older findings in other gateway files are untouched — a §7 clean-up).
 
 **What 5c is, in plain words:** if one exchange will *buy* a coin for more than another *sells* it for, you could buy on one and sell on the other — but both charge a taker fee (~0.1 % each). The detector checks every pair of exchanges in both directions 4×/s and does that sum. Design and every live number: journal *2026-10-04 — … Phase 5c*.
 
 **Try it (≈ 5 min):** `python start_all.py` → after a minute `./.venv/Scripts/python.exe scripts/arb_watch.py` (a live table: best pair per coin, gross / fees / net, windows, plain-English statistics) or http://127.0.0.1:8000/docs → *arbitrage* → `GET /api/arbitrage/status`. Expect red (negative) NET everywhere and `0 of N crossed windows were profitable after fees`. Statistics are saved and keep counting across restarts (`stats_since`).
 
 **Next, in order**
-1. Push `feature/backend-v2`, then merge it into `feature/crypto-pivot` again (merge commit) so the frontend gets the arbitrage API and the `algo_update` fix; tell Mahnoor/Maham to `git merge origin/feature/crypto-pivot`.
+1. ~~Push + merge into `feature/crypto-pivot`~~ done (2026-10-04 night). Tell Mahnoor/Maham to `git merge origin/feature/crypto-pivot` (arbitrage API + the `algo_update` fix).
 2. Frontend: the **Arbitrage page** (contract + suggested layout: ROADMAP §5c) and the copilot chat panel (§5b).
 3. Backend: ROADMAP **§7** — CI (tests + type-check on every PR), the security hardening under *Open questions* (`/ws` without a token, hardcoded POC users, default `JWT_SECRET`, CORS `*`), the stale `project-info/` docs.
 4. Team decision still open: `RAFT_ENABLED=true` by default for the final demo?
@@ -194,7 +194,7 @@ The simulated system (June POC) is preserved on the `archive/venue-simulators` b
 See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" criteria.
 
 1. **Backend relay (Fizza ⇄ Sarmad):** ~~5b LLM copilot API~~ ✅ → ~~router hardening~~ ✅ → ~~6 parallelism + RAFT~~ ✅ → ~~5c arbitrage detector~~ ✅ (backend) → 7 CI + security hardening + doc rewrite.
-2. **Frontend (Mahnoor + Maham):** How It Works rewrite, page polish, running-TWAP widget, responsive fixes; the **copilot chat panel** — the API is on `feature/crypto-pivot` since 2026-10-04 (contract in ROADMAP §5b); the **Arbitrage page** once 5c is merged (contract in ROADMAP §5c).
+2. **Frontend (Mahnoor + Maham):** How It Works rewrite, page polish, running-TWAP widget, responsive fixes; the **copilot chat panel** — the API is on `feature/crypto-pivot` since 2026-10-04 (contract in ROADMAP §5b); the **Arbitrage page** — the API is on `feature/crypto-pivot` too (contract in ROADMAP §5c).
 3. Merge `backend-v2` / `frontend-v2` into `feature/crypto-pivot` at milestones; much later `feature/crypto-pivot` → `main`.
 5. Gate spot funds; OKX passphrase + a network that reaches okx.com.
 6. Production DB decision (SQLite now; PostgreSQL/TimescaleDB later).
@@ -217,7 +217,7 @@ See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" cr
 
 ## Branch / commit state
 
-All work through Phase 6 is on **`feature/crypto-pivot`**, the repo's **default branch** (2026-10-01; `feature/backend-v2` with 5b, router hardening and Phase 6 merged 2026-10-04). Working branches cut from it: `feature/backend-v2` (Fizza ⇄ Sarmad relay) and `feature/frontend-v2` (Mahnoor + Maham); both merge back into `feature/crypto-pivot` at milestones. The repo is **private** (Sarmad admin; Fizza, Mahnoor, Maham write). `main` still has the June simulated POC; `feature/crypto-pivot` → `main` happens later via PR.
+All work through Phase 6 and the 5c backend is on **`feature/crypto-pivot`**, the repo's **default branch** (2026-10-01; `feature/backend-v2` with 5b, router hardening, Phase 6 and 5c merged 2026-10-04). Working branches cut from it: `feature/backend-v2` (Fizza ⇄ Sarmad relay) and `feature/frontend-v2` (Mahnoor + Maham); both merge back into `feature/crypto-pivot` at milestones. The repo is **private** (Sarmad admin; Fizza, Mahnoor, Maham write). `main` still has the June simulated POC; `feature/crypto-pivot` → `main` happens later via PR.
 
 Not in git on purpose: `.env` (keys), `data/` (local audit database), `PLAN.md` and `notes/` (Sarmad's personal notes), `notes.zip`, the old `sor-poc-frontend/` copy, log files.
 
