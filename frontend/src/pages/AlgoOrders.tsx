@@ -6,7 +6,8 @@ import { OrderProofModal } from '../components/OrderProofModal'
 import { useDataStore } from '../stores/dataStore'
 import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
-import type { AlgoStatus, TwapState } from '../services/api'
+import { api, PREFLIGHT_MAX_ORDERS } from '../services/api'
+import type { AlgoStatus, PreflightResponse, TwapState } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 
 const MIN_INTERVAL_S = 3        // mirrors the backend (a slice + balance refresh take ~1-2 s)
@@ -44,6 +45,132 @@ function targetNow(a: TwapState, now: number): number {
   return t
 }
 
+/** "REJECTED_POSITION_LIMIT" -> "position limit". */
+function checkLabel(result: string): string {
+  return result === 'APPROVED' ? 'pass' : result.replace(/^REJECTED_/, '').replace(/_/g, ' ').toLowerCase()
+}
+
+function signedQty(q: number): string {
+  return (q > 0 ? '+' : '') + fmtQty(q, 8)
+}
+
+/** The pre-flight answer: one verdict, the stress picture, then every slice. */
+function PreflightResult({ result, error, base, side, onClose }: {
+  result: PreflightResponse | null
+  error: string | null
+  base: string
+  side: 'BUY' | 'SELL'
+  onClose: () => void
+}) {
+  const th: React.CSSProperties = { padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left', whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '5px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${tint(C.border, 40)}`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+  const right: React.CSSProperties = { ...td, textAlign: 'right' }
+
+  const rows = result?.results ?? []
+  const firstBad = rows.find((r) => r.result !== 'APPROVED') ?? null
+  const hasStress = rows.some((r) => r.stress)
+  const last = rows[rows.length - 1] ?? null  // the position once every slice has filled
+  const ms = result ? (result.elapsed_ms < 10 ? result.elapsed_ms.toFixed(2) : result.elapsed_ms.toFixed(0)) : ''
+
+  return (
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <CardTitle>PRE-FLIGHT — NOTHING WAS SENT</CardTitle>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {result && (
+            <span style={{ fontSize: F.xs, color: C.dim }} title="Where the checks ran, and how long they took">
+              {result.executor} · {ms} ms
+            </span>
+          )}
+          <button onClick={onClose} aria-label="Close the pre-flight result" style={{
+            background: 'none', border: `1px solid ${C.border}`, borderRadius: 4, color: C.muted,
+            cursor: 'pointer', fontFamily: 'inherit', fontSize: F.sm, padding: '2px 8px',
+          }}>✕</button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ padding: '8px 10px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>
+          Pre-flight failed: {error}
+        </div>
+      )}
+
+      {result && (
+        <>
+          <div style={{
+            padding: '10px 12px', borderRadius: 4, fontSize: F.base, fontWeight: 600, lineHeight: 1.5,
+            background: tint(result.all_approved ? C.green : C.red, 10),
+            border: `1px solid ${tint(result.all_approved ? C.green : C.red, 45)}`,
+            color: result.all_approved ? C.green : C.red,
+          }}>
+            {result.all_approved
+              ? `✓ All ${rows.length} slices pass pre-trade risk at today's limits.`
+              : `✗ ${result.rejected} of ${rows.length} slices would be rejected — first: slice ${(firstBad?.index ?? 0) + 1} (${checkLabel(firstBad?.result ?? '')})${firstBad?.message ? `: ${firstBad.message}` : ''}. Start would be refused.`}
+            {last && (
+              <div style={{ fontSize: F.sm, fontWeight: 400, color: C.text, marginTop: 2 }}>
+                Position after the last slice: {signedQty(last.position_after)} {base}
+              </div>
+            )}
+          </div>
+
+          {last?.stress && (
+            <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 4, background: C.surface, fontSize: F.sm, color: C.muted, lineHeight: 1.6 }}>
+              <span style={{ color: C.text, fontWeight: 600 }}>Stress test, if every slice fills ({side} → {signedQty(last.stress.position_after)} {base}): </span>
+              on 99% of {last.stress.paths.toLocaleString()} simulated price paths the loss within {last.stress.horizon_min} min stays
+              under <span style={{ color: C.text, fontWeight: 600 }}>{fmtUsd(last.stress.var_99_usdt)}</span> (VaR 99%); the worst 1% of
+              paths lose <span style={{ color: C.text, fontWeight: 600 }}>{fmtUsd(last.stress.expected_shortfall_usdt)}</span> on
+              average (expected shortfall). Volatility {last.stress.sigma_per_min_pct.toFixed(3)}% per minute, measured from our own
+              live prices.
+            </div>
+          )}
+
+          <div style={{ overflow: 'auto', maxHeight: 280, marginTop: 10 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, background: C.surface2 }}>
+                <tr>
+                  <th style={th}>Slice</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Quantity</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Position after</th>
+                  <th style={th}>Pre-trade risk</th>
+                  {hasStress && <th style={{ ...th, textAlign: 'right' }}>VaR 99%</th>}
+                  {hasStress && <th style={{ ...th, textAlign: 'right' }}>Exp. shortfall</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.index}>
+                    <td style={{ ...td, color: C.muted }}>{r.index + 1}</td>
+                    <td style={right}>{fmtQty(r.quantity, 8)} {base}</td>
+                    <td style={right}>{signedQty(r.position_after)}</td>
+                    <td style={{ ...td, whiteSpace: 'normal', minWidth: 140 }} title={r.message ?? undefined}>
+                      {r.result === 'APPROVED'
+                        ? <span style={{ color: C.green }}>✓ pass</span>
+                        : <span style={{ color: C.red, fontWeight: 600 }}>✗ {checkLabel(r.result)}</span>}
+                    </td>
+                    {hasStress && <td style={right}>{r.stress ? fmtUsd(r.stress.var_99_usdt) : '—'}</td>}
+                    {hasStress && <td style={right}>{r.stress ? fmtUsd(r.stress.expected_shortfall_usdt) : '—'}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {result.notes.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: F.xs, color: C.muted, lineHeight: 1.6 }}>
+              {result.notes.map((n) => <div key={n}>ⓘ {n}</div>)}
+            </div>
+          )}
+          <div style={{ marginTop: 8, fontSize: F.xs, color: C.dim, lineHeight: 1.6 }}>
+            Each slice is checked against the position it would meet if every earlier slice had filled. Slices here are an
+            even split of the total; the TWAP itself rounds each to the exchange's lot size and runs this same check again
+            when you press Start. Every pre-flight is recorded in the Audit Log.
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
 export function AlgoOrders() {
   const algos      = useDataStore((s) => s.algos)
   const nbbos      = useDataStore((s) => s.nbbos)
@@ -68,6 +195,14 @@ export function AlgoOrders() {
   const [proofOrderId, setProofOrderId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
   const isNarrow = useMediaQuery(MQ.narrow)  // the form goes above the list
+  // Pre-flight: a dry run of every slice through pre-trade risk (nothing is sent).
+  const [withStress, setWithStress] = useState(false)
+  const [checking, setChecking]     = useState(false)
+  const [preflight, setPreflight]   = useState<PreflightResponse | null>(null)
+  const [preflightError, setPreflightError] = useState<string | null>(null)
+
+  // A result only describes the order it was run for.
+  useEffect(() => { setPreflight(null); setPreflightError(null) }, [symbol, side, qty, slices])
 
   useEffect(() => { fetchAlgos() }, [fetchAlgos])
   useEffect(() => {
@@ -108,6 +243,28 @@ export function AlgoOrders() {
     setBusy(false)
     if (err) setFormError(err)
     if (algo) setSelectedId(algo.id)
+  }
+
+  // The same slices the TWAP would send: cumulative targets i/k of the total, the
+  // last one exactly the total (the backend also rounds each to the lot size).
+  function sliceSizes(): number[] {
+    const q = parseFloat(qty)
+    const k = parseInt(slices, 10)
+    const targets = Array.from({ length: k }, (_, i) => (i === k - 1 ? q : (q * (i + 1)) / k))
+    return targets.map((t, i) => t - (i === 0 ? 0 : targets[i - 1]))
+  }
+
+  async function runPreflight() {
+    if (!preview) return
+    setChecking(true)
+    setPreflightError(null)
+    try {
+      setPreflight(await api.preflight(sliceSizes().map((quantity) => ({ symbol, side, quantity })), withStress))
+    } catch (e) {
+      setPreflight(null)
+      setPreflightError((e as Error).message)
+    }
+    setChecking(false)
   }
 
   async function control(id: string, action: 'pause' | 'resume' | 'cancel') {
@@ -210,6 +367,30 @@ export function AlgoOrders() {
             {formError && (
               <div style={{ padding: '6px 10px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>{formError}</div>
             )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                onClick={runPreflight}
+                disabled={!preview || checking || parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS}
+                title="Runs every slice through the pre-trade risk checks without sending anything"
+                style={{
+                  padding: '8px 0', borderRadius: 4, fontFamily: 'inherit', fontSize: F.sm, fontWeight: 600,
+                  border: `1px solid ${C.blue}`, background: tint(C.blue, 10), color: C.blue,
+                  cursor: checking ? 'wait' : 'pointer',
+                  opacity: !preview || checking || parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS ? 0.45 : 1,
+                }}
+              >
+                {checking ? 'Checking every slice…' : 'Pre-flight check — sends nothing'}
+              </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.xs, color: C.muted, cursor: 'pointer' }}>
+                <input type="checkbox" checked={withStress} onChange={(e) => setWithStress(e.target.checked)} />
+                With stress test (Monte Carlo price paths, on worker processes when worth it)
+              </label>
+              {parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS && (
+                <div style={{ fontSize: F.xs, color: C.dim }}>
+                  Pre-flight checks up to {PREFLIGHT_MAX_ORDERS} slices; Start still checks every slice.
+                </div>
+              )}
+            </div>
             <button
               onClick={submit}
               disabled={busy || !preview || killActive}
@@ -268,6 +449,16 @@ export function AlgoOrders() {
           )}
         </Card>
       </div>
+
+      {(preflight || preflightError) && (
+        <PreflightResult
+          result={preflight}
+          error={preflightError}
+          base={base}
+          side={side}
+          onClose={() => { setPreflight(null); setPreflightError(null) }}
+        />
+      )}
 
       {/* Detail */}
       {selected && (() => {

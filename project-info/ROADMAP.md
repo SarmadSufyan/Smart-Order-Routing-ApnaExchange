@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts; §6 RAFT cluster panel).
+> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts; §6 RAFT cluster panel + TWAP pre-flight button).
 
 ---
 
@@ -28,7 +28,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 5a | **TWAP execution bot** | ✅ 2026-10-01 |
 | 5b | **LLM copilot** (plain English → confirmed, risk-checked orders) | ✅ API 2026-10-02 (verified live); chat panel ⏭ frontend |
 | 5c | **Arbitrage detector** (fee-aware, honest framing) | ✅ backend 2026-10-04 (verified live); page ✅ 2026-10-05 (`feature/frontend-v2`, verified live) |
-| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live; frontend status panel optional) |
+| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live); frontend RAFT panel + pre-flight button ✅ 2026-10-05 |
 | 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ |
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
 
@@ -110,7 +110,7 @@ Done when:
 - [x] `scripts/raft_demo.py` starts 3 nodes, kills the leader and shows continuity; `--gateway --twap` does it in the middle of a live testnet TWAP.
 - [x] Journal entry with the design (2026-10-02, Phase 6).
 - [x] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) — `frontend/src/components/RaftPanel.tsx` on the Kill Switch page (2026-10-05, Maham; verified with a live leader kill and a no-majority test).
-- [ ] *(optional, frontend)* a pre-flight button on the Algo Orders page.
+- [x] *(optional, frontend)* a pre-flight button on the Algo Orders page — New TWAP form, optional stress test (2026-10-05, Maham; verified live incl. a TWAP that crosses the position limit at slice 9).
 
 **API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** at once when the cluster has no majority (show the message: "only N of 3 RAFT nodes are reachable … Nothing changed"); engaging still works. Every RAFT message is signed (HMAC-SHA256, `RAFT_SHARED_SECRET`); `status.signed` and each node's `rejected_messages` show it.
 

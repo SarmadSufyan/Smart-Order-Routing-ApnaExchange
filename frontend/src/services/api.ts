@@ -408,6 +408,49 @@ export interface ConsensusStatus {
   message: string
 }
 
+// ── Pre-flight (Phase 6 risk batch) — POST /api/risk/preflight ──────
+export interface PreflightOrder {
+  symbol: string
+  side: 'BUY' | 'SELL'
+  quantity: number
+}
+
+export interface PreflightStress {
+  position_after: number         // base units held after the order (signed)
+  var_99_usdt: number            // worst loss within the horizon on 99% of simulated paths
+  expected_shortfall_usdt: number  // average loss over the worst 1% of paths
+  horizon_min: number
+  paths: number
+  sigma_per_min_pct: number      // measured volatility, % per minute
+}
+
+export interface PreflightItem {
+  index: number
+  symbol: string
+  side: string
+  quantity: number
+  mid_price: number
+  result: string                 // APPROVED or REJECTED_<CHECK>
+  checks_passed: string[]
+  checks_failed: string[]
+  message: string | null
+  position_after: number         // if this and every earlier order filled
+  stress: PreflightStress | null
+}
+
+export interface PreflightResponse {
+  all_approved: boolean
+  approved: number
+  rejected: number
+  executor: string               // "in-process" or "pool (N processes)"
+  elapsed_ms: number
+  notes: string[]
+  results: PreflightItem[]
+}
+
+/** The backend checks at most this many orders in one pre-flight. */
+export const PREFLIGHT_MAX_ORDERS = 200
+
 export interface ChildOrder {
   id: string
   venue_id: string
@@ -658,6 +701,12 @@ export const api = {
   },
 
   getConsensusStatus: () => request<ConsensusStatus>('/api/consensus/status'),
+
+  // Checks orders against pre-trade risk WITHOUT sending anything (audited).
+  preflight: (orders: PreflightOrder[], stress = false) =>
+    request<PreflightResponse>('/api/risk/preflight', {
+      method: 'POST', body: JSON.stringify({ orders, stress }),
+    }),
 
   getWallet: () => request<WalletSnapshot>('/api/wallet/'),
 

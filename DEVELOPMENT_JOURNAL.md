@@ -974,3 +974,29 @@ The Dashboard's simulated card (`RAFT_NODES` in `pages/Dashboard.tsx`) can be re
 ### Files
 
 New: `frontend/src/components/RaftPanel.tsx`. Changed: `services/api.ts`, `stores/dataStore.ts` (shared, additive), `pages/KillSwitch.tsx`, `pages/VenueHealth.tsx`; PROGRESS.md, ROADMAP §6.
+
+---
+
+## 2026-10-05 — Pre-flight a TWAP before starting it
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §6's last frontend item. Since Phase 6 every TWAP is pre-flighted slice by slice when it starts (the risk batch), but the trader only learned "refused" afterwards, with one line of reason. The backend also offers `POST /api/risk/preflight` for a basket of orders, optionally with a Monte Carlo stress test on the worker-process pool — nothing in the UI used it.
+
+### What changed
+
+- **Algo Orders → New TWAP:** a "Pre-flight check — sends nothing" button above Start, and a "With stress test" checkbox. The slices sent are the ones the TWAP would send — cumulative targets i/k of the total, the last one exactly the total — so each is checked against the position left by the earlier ones. The backend accepts at most 200 orders per pre-flight (a TWAP may have 500 slices); above that the button is disabled with a note, and Start still checks every slice.
+- **The result card** (full width, under the form and list): one verdict — "✓ All N slices pass pre-trade risk at today's limits" or "✗ M of N slices would be rejected — first: slice i (position limit): <backend message>. Start would be refused" — with the position after the last slice; with the stress test, one sentence on the 99 % VaR and expected shortfall over the horizon for the full position, the number of paths and the measured volatility; a per-slice table (quantity, position after, pass / failed check, VaR and expected shortfall per slice); the backend's notes; and where it ran (`in-process` or `pool (N processes)`) with the time. A result is cleared when the symbol, side, quantity or slice count changes, so it can never describe a different order. It is honest about its one approximation: the even split here vs the TWAP's own rounding to the lot size, and Start checks again.
+- `services/api.ts`: `PreflightOrder`, `PreflightStress`, `PreflightItem`, `PreflightResponse`, `PREFLIGHT_MAX_ORDERS`, `api.preflight()`. The result is page-local state (a one-off answer to the form, like the Audit Log's pages), not store state.
+- Audit Log: `risk_preflight` events now appear under the *Risk* filter (the backend audits every pre-flight).
+
+### How it was checked (live, nothing sent)
+
+- 0.002 BTC in 10 slices: all pass, position +0.002 BTC, **in-process, 0.06 ms** — the 7 checks are microseconds, so the backend's auto mode correctly does not start worker processes (the benchmark's honest result).
+- The same with the stress test: **pool (4 processes), 0.9 s**; VaR 99 % grows with the position, $0.54 over 60 min for the full $172 (volatility 0.016 %/min on a quiet night).
+- 60,000 XRP in 10 slices of 6,000 (each under the per-order limits; the position limit is 50,000): **slices 1–8 pass, 9–10 fail** — "Projected XRP/USDT position 54000 exceeds 50000" — exactly the "crosses a limit half way" case the Phase 6 pre-flight was built for.
+- Changing the quantity cleared the result; the pre-flights appeared in the Audit Log under *Risk*; the page with a stress result fits a 375 px phone; no TWAP was started (0 on record). Type-check passes; 254 backend tests pass (no backend change).
+
+### Files
+
+Changed: `frontend/src/pages/AlgoOrders.tsx` (button, `PreflightResult` card), `services/api.ts` (shared, additive), `pages/AuditLog.tsx` (one filter); PROGRESS.md, ROADMAP §6.

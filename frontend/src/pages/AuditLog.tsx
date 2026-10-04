@@ -8,7 +8,7 @@ const FILTERS: { label: string; types: string }[] = [
   { label: 'Everything', types: '' },
   { label: 'Operator actions', types: 'kill_switch,kill_switch_release_refused,risk_limits_changed,baseline_set,venue_blacklisted,venue_unblacklisted,venue_degraded,venue_recovered' },
   { label: 'Orders', types: 'order_submitted,order_status' },
-  { label: 'Risk', types: 'risk_check,concentration_alert,concentration_cleared,kill_switch' },
+  { label: 'Risk', types: 'risk_check,risk_preflight,concentration_alert,concentration_cleared,kill_switch' },
   { label: 'Routing & fills', types: 'routing_decision,execution_report' },
   { label: 'Algos (TWAP)', types: 'algo_started,algo_slice,algo_paused,algo_resumed,algo_finished' },
   { label: 'System', types: 'gateway_started,gateway_stopped,baseline_set' },
