@@ -8,7 +8,9 @@
 
 ## Last updated
 
-**2026-10-04 (evening)** — **`feature/backend-v2` merged into `feature/crypto-pivot`** (Fizza, merge commit): the 5b copilot API, router hardening and Phase 6 are now on the default branch. Checked before merging: 226 tests pass, frontend type-check passes, `scripts/raft_demo.py` shows every expected line, and live on testnet with RAFT on — 3 of 3 nodes up and signed, a stress pre-flight of 4 orders on the pool of 4 processes in 321 ms vs 710 ms in one process. **Frontend (Mahnoor, Maham):** `git merge origin/feature/crypto-pivot` into `feature/frontend-v2` — the copilot chat panel can start (contract: ROADMAP §5b). Fizza has the backend relay again for §5c (arbitrage detector).
+**2026-10-04 (night)** — **5c arbitrage detector done (backend)** (Fizza): every venue pair, both directions, 4 times a second — gross gap vs after both taker fees, windows (how often, how big, how long), what our accounts could fund; detection only. **Measured live** (Binance, Bybit, Gate, ~9 min): books crossed in 73 % of scans but by +0.4 bps on average; after taker fees the best pair averaged −20.7 bps; **0 of 249 crossed windows profitable**. `GET /api/arbitrage/status`, `scripts/arb_watch.py`; the Arbitrage page is for the frontend (contract: ROADMAP §5c). Found live and fixed: the WebSocket refused the frontend's `algo_update` subscription. 254 tests. Handoff note below.
+
+2026-10-04 (evening) — **`feature/backend-v2` merged into `feature/crypto-pivot`** (Fizza, merge commit): the 5b copilot API, router hardening and Phase 6 are now on the default branch. Checked before merging: 226 tests pass, frontend type-check passes, `scripts/raft_demo.py` shows every expected line, and live on testnet with RAFT on — 3 of 3 nodes up and signed, a stress pre-flight of 4 orders on the pool of 4 processes in 321 ms vs 710 ms in one process. **Frontend (Mahnoor, Maham):** `git merge origin/feature/crypto-pivot` into `feature/frontend-v2` — the copilot chat panel can start (contract: ROADMAP §5b). Fizza has the backend relay again for §5c (arbitrage detector).
 
 2026-10-04 — Two extras for the team (Fizza), pushed before the handover: [`project-info/EXCHANGE_API_KEY_SECURITY.md`](project-info/EXCHANGE_API_KEY_SECURITY.md) (how the exchange API keys are protected, with code proof and a panel summary) and `scripts/live_binance.py` (live Binance prices in the terminal, for demos). A new item under *Open questions → security hardening*: the `/ws` WebSocket accepts connections without a login token.
 
@@ -30,9 +32,9 @@ Team split (decided 2026-10-01). Update **your own** row's status at the end of 
 
 | Area | People | Branch | Scope | Status | Last update |
 |---|---|---|---|---|---|
-| **Backend** (relay) | **Fizza ⇄ Sarmad** — one at a time, never together | `feature/backend-v2` | In order: 5b LLM copilot API → 6 multiprocessing risk + RAFT → 5c arbitrage detector → 7 CI + doc rewrite (ROADMAP) | 5b ✅ + router hardening ✅ + **6 ✅** (2026-10-02), all merged into `feature/crypto-pivot` 2026-10-04. **Fizza has the relay** — working on §5c | 2026-10-04 |
+| **Backend** (relay) | **Fizza ⇄ Sarmad** — one at a time, never together | `feature/backend-v2` | In order: 5b LLM copilot API → 6 multiprocessing risk + RAFT → 5c arbitrage detector → 7 CI + doc rewrite (ROADMAP) | 5b ✅ + router hardening ✅ + **6 ✅** (2026-10-02), all merged into `feature/crypto-pivot` 2026-10-04; **5c ✅ backend** (2026-10-04, on `feature/backend-v2`). **Fizza has the relay** — next: §7 | 2026-10-04 |
 | **Frontend** — pages | **Mahnoor** | `feature/frontend-v2` | How It Works (rewrite for the crypto design), Dashboard (+ running-TWAP widget), Market Data, Login; the **copilot chat panel** once the copilot API is merged | not started | — |
-| **Frontend** — pages | **Maham** | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; narrow-screen / responsive fixes | not started | — |
+| **Frontend** — pages | **Maham** | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; narrow-screen / responsive fixes; the new **Arbitrage** page (API: ROADMAP §5c — or Mahnoor, decide between you) | not started | — |
 | Integration | Sarmad | `feature/crypto-pivot` (default) | Merge `backend-v2` and `frontend-v2` at milestones; reviews; exchange keys | `backend-v2` (5b + router hardening + 6) merged 2026-10-04 (by Fizza, from Sarmad's to-do) | 2026-10-04 |
 
 Mahnoor and Maham may swap pages; just update the table. **Shared frontend files** (`services/api.ts`, `stores/dataStore.ts`, `App.tsx`, `components/AppShell.tsx`, `components/shared.tsx`, `theme.ts`, `format.ts`): `git pull` right before editing, push right after, and tell the other.
@@ -43,12 +45,31 @@ Fizza and Sarmad never work at the same time. **Before starting:** message the o
 
 | Date | By | Done | Half-done / next step |
 |---|---|---|---|
-| 2026-10-04 (eve) | Fizza | **Took the backend relay back** (Sarmad had not started: `origin/feature/backend-v2` was still at `1fa0d96`). Ran the to-do of *Handoff 2026-10-02 (night)*: tests (226), RAFT demo, live check, then **merged `feature/backend-v2` → `feature/crypto-pivot`** | Next: ROADMAP §5c (arbitrage detector) on `feature/backend-v2`. Still a team decision: `RAFT_ENABLED` on by default |
+| 2026-10-04 (night) | Fizza | **5c arbitrage detector (backend) complete**, nothing half-done. `backend/services/arbitrage/detector.py` (pure: `edge_between`, `cross_venue_edges`, `fundable_size`, `WindowTracker`, summaries; service: `ArbitrageDetector`), router `gateway/routers/arbitrage.py`, models `shared/models/arbitrage.py`, settings `ARB_*`, `scripts/arb_watch.py`; WS `algo_update` + `arb_update` subscribable (`ws_manager.py`). 28 new tests (254). Live numbers: journal 2026-10-04 | Read **Handoff 2026-10-04** below. Next: push + merge into `feature/crypto-pivot` again (5c + the WebSocket fix), then ROADMAP §7. Frontend: Arbitrage page (ROADMAP §5c) |
+| 2026-10-04 (eve) | Fizza | **Took the backend relay back** (Sarmad had not started: `origin/feature/backend-v2` was still at `1fa0d96`). Ran the to-do of *Handoff 2026-10-02 (night)*: tests (226), RAFT demo, live check, then **merged `feature/backend-v2` → `feature/crypto-pivot`** | (finished — 5c in the note above). Still a team decision: `RAFT_ENABLED` on by default |
 | 2026-10-02 (night) | Fizza | **Phase 6 complete**, nothing half-done. **Risk batch:** `risk_engine/checks.py` (the 7 checks as one pure function — the live gate calls it too), `batch.py` (`plan_jobs` → `evaluate_jobs`, `stress_position` Monte Carlo, `RiskBatchRunner` = warm `ProcessPoolExecutor`; auto = pool only for stress batches ≥ `RISK_POOL_MIN_ORDERS`), `preflight.py` (`POST /api/risk/preflight`), `volatility.py` (live realized vol from NBBO mids). `TwapEngine.create` pre-flights every slice. **RAFT:** `consensus/core.py` (the algorithm, no I/O), `storage.py` (SQLite per node), `state_machine.py`, `node.py` (one node process), `client.py`; gateway side `risk_engine/controls.py` (`RiskControls`: every kill-switch / limits / blacklist change goes through it), `GET /api/consensus/status`; `start_all.py` starts + restarts the nodes when `RAFT_ENABLED=true`. The venue blacklist is now persisted (it was lost on restart). 66 new tests (226). Live results: journal 2026-10-02 (Phase 6) | **Backend free — handed over to Sarmad; pushed 2026-10-03** (`1cd2cf3`). Read [`project-info/PHASE6_GUIDE.md`](project-info/PHASE6_GUIDE.md), then **Handoff 2026-10-02 (night)** below (it has your to-do list). Next: ROADMAP §5c (arbitrage detector). Team decision: turn `RAFT_ENABLED` on by default? |
 | 2026-10-02 (eve) | Fizza | **Took the backend relay back** for ROADMAP §6 (Sarmad had not started: `origin/feature/backend-v2` was still at `53fd27f`) | (finished — see the note above) |
 | 2026-10-02 (pm) | Fizza | **Router hardening complete**, nothing half-done. `ExecutionResult.retry_elsewhere` / `blocks_trading` (`exchanges/base.py`), set in `CcxtVenueAdapter.place_order` (`is_permission_error` also catches OKX 50124, which ccxt doesn't map); `RoutingEngine._execute_round` / `_reroute` (≤ `MAX_REROUTES` = 2) / `_block_trading` (`TRADING_BLOCK_COOLDOWN_S`, default 600). 13 new tests (160 total). Live with OKX enabled: OKX refused → same order FILLED on Bybit; OKX shown as "trading paused"; next order skipped it with the reason in the proof. Copilot `reference_mid` rounded | **Backend free — handed over** (Sarmad continues; message "taking backend" first). Read **Handoff 2026-10-02** right below this table — everything since 1 Oct in one place. Next: ROADMAP §6. Fizza's own to-do: recreate her OKX demo key (50124) |
 | 2026-10-02 | Fizza | **5b copilot API complete**, nothing half-done. `backend/services/agents/` (`llm.py`: `LLMClient` interface + `GeminiClient`; `copilot.py`: `Copilot.propose/confirm/cancel`), router `gateway/routers/copilot.py`, models `shared/models/copilot.py`, settings `LLM_PROVIDER` / `GEMINI_API_KEY` / `GEMINI_MODEL` / `COPILOT_*`. 40 new tests (147 total). Live: market order filled, TWAP completed (Bybit + Binance), prompt-injection "sell 1000 BTC" proposal rejected by pre-trade risk on confirm. `httpx` moved to runtime requirements → run `pip install -r backend/requirements.txt` | **Sarmad:** add your own free `GEMINI_API_KEY` to `.env` (aistudio.google.com/apikey, no billing), review + merge `feature/backend-v2` → `feature/crypto-pivot` so Mahnoor can build the chat panel (API contract: ROADMAP §5b). **Next backend step:** ROADMAP §6 — multiprocessing risk batch first (process pool over pre-trade checks for a TWAP's/basket's slices + benchmark), then the RAFT cluster in the empty `backend/services/consensus/`. Surprise: Gemini *did* obey an injected "sell 1000 BTC" — the safety is confirm + risk, never the model |
 | 2026-10-01 | Sarmad | Phases 0–4 + TWAP (5a) on `feature/crypto-pivot`; branches `feature/backend-v2` and `feature/frontend-v2` created from it | Next: start 5b LLM copilot API (ROADMAP §5b) — `backend/services/agents/copilot.py` + `backend/gateway/routers/copilot.py`; needs `ANTHROPIC_API_KEY` in `.env` |
+
+### Handoff 2026-10-04 — Fizza: merge done + 5c arbitrage detector
+
+**State:** `feature/crypto-pivot` has 5b + router hardening + Phase 6 (merge commit `4a7bb18`, pushed). 5c + the WebSocket fix are committed on `feature/backend-v2` after it. 254 tests pass; frontend type-check passes; ruff clean on every new/changed file (17 older findings in other gateway files are untouched — a §7 clean-up).
+
+**What 5c is, in plain words:** if one exchange will *buy* a coin for more than another *sells* it for, you could buy on one and sell on the other — but both charge a taker fee (~0.1 % each). The detector checks every pair of exchanges in both directions 4×/s and does that sum. Design and every live number: journal *2026-10-04 — … Phase 5c*.
+
+**Try it (≈ 5 min):** `python start_all.py` → after a minute `./.venv/Scripts/python.exe scripts/arb_watch.py` (a live table: best pair per coin, gross / fees / net, windows, plain-English statistics) or http://127.0.0.1:8000/docs → *arbitrage* → `GET /api/arbitrage/status`. Expect red (negative) NET everywhere and `0 of N crossed windows were profitable after fees`. Statistics are saved and keep counting across restarts (`stats_since`).
+
+**Next, in order**
+1. Push `feature/backend-v2`, then merge it into `feature/crypto-pivot` again (merge commit) so the frontend gets the arbitrage API and the `algo_update` fix; tell Mahnoor/Maham to `git merge origin/feature/crypto-pivot`.
+2. Frontend: the **Arbitrage page** (contract + suggested layout: ROADMAP §5c) and the copilot chat panel (§5b).
+3. Backend: ROADMAP **§7** — CI (tests + type-check on every PR), the security hardening under *Open questions* (`/ws` without a token, hardcoded POC users, default `JWT_SECRET`, CORS `*`), the stale `project-info/` docs.
+4. Team decision still open: `RAFT_ENABLED=true` by default for the final demo?
+
+**Panel lines:** "a fee-aware detector, not a bot — the books cross most of the time, but by less than a basis point, and a taker round trip costs 20"; "it can't trade: it has no execution path at all (a test checks that)"; "prices are the real market; 'fundable' uses our testnet balances".
+
+**Honest limits:** sampled books (part of a crossing can be one feed arriving later), 0.25 s duration resolution, top-of-book size only, base-tier fees, OKX not in today's numbers.
 
 ### Handoff 2026-10-02 (night) — Fizza → Sarmad: Phase 6
 
@@ -118,7 +139,7 @@ Fizza and Sarmad never work at the same time. **Before starting:** message the o
 
 1. New machine? Follow [`ONBOARDING.md`](ONBOARDING.md) (clone straight onto your branch, deps, your own `.env`, checks). Otherwise `git checkout feature/backend-v2` or `feature/frontend-v2` and `git pull`; backend relay: read the newest handoff note below first.
 2. Set up your **own** exchange keys (`project-info/API_KEYS_GUIDE.md`) → `python scripts/check_exchange_keys.py` → `python start_all.py` → log in as `admin` / `admin`.
-3. Run `python -m unittest discover -s backend/tests -t .` — expect **226 passing**.
+3. Run `python -m unittest discover -s backend/tests -t .` — expect **254 passing**.
 4. Read the ROADMAP section for your workstream; it lists what "done" means.
 5. The order path every feature must use: `OrderEntry.submit` (`backend/services/order_state/entry.py`). The TWAP bot (`backend/services/algos/twap.py`) and the LLM copilot (`backend/services/agents/copilot.py`) are the reference examples of features built on top of it.
 
@@ -126,7 +147,7 @@ Fizza and Sarmad never work at the same time. **Before starting:** message the o
 
 ## Current phase
 
-**Crypto pivot — Phases 0–4, TWAP (5a), the copilot API (5b) and the parallelism proof (6: risk batch + RAFT) done. Next: copilot chat panel (frontend), 5c arbitrage detector, 7 polish.**
+**Crypto pivot — Phases 0–4, TWAP (5a), the copilot API (5b), the parallelism proof (6: risk batch + RAFT) and the arbitrage detector backend (5c) done. Next: copilot chat panel + Arbitrage page (frontend), 7 polish.**
 
 ### Venue lineup
 
@@ -161,9 +182,10 @@ The simulated system (June POC) is preserved on the `archive/venue-simulators` b
 - **Risk batch / pre-flight (Phase 6)** — the 7 checks are one pure function shared by the live gate and a pre-flight that checks a list of orders without sending anything (each against the position left by the earlier ones). Every TWAP is pre-flighted before its first slice; `POST /api/risk/preflight` checks a basket, optionally with a Monte Carlo stress test (5,000 paths × 60 min, volatility measured from our live mids) on a warm pool of worker processes. Benchmark: `project-info/benchmarks/`.
 - **RAFT cluster (Phase 6, `RAFT_ENABLED=true`)** — 3 node processes replicate the kill switch, risk limits and venue blacklist; the gateway writes through the leader (`RiskControls`) and adopts changes made elsewhere. Kill the leader → a new one in ~1-2 s, nothing lost; no majority → the kill switch still engages, releases are refused. `GET /api/consensus/status`; `scripts/raft_demo.py`.
 - **Venue refusals don't sink orders** — a child a venue refuses (bad key, no permission, balance, exchange error, or a lost request confirmed not executed) is re-planned on fresh books without that venue, up to 2 extra rounds, price-protected, stopped by the kill switch or a cancel; an IOC that expired at its limit is not chased. A venue that refuses our key's right to trade is paused for 10 min (reason shown in exclusions and the routing proof, audited `venue_trading_blocked`), then gets one retry.
-- **Survives restarts** — orders, execution reports, fills, baselines, limits, kill switch, algo orders.
+- **Arbitrage detector (5c, detection only)** — 4×/s, every venue pair in both directions: gross gap vs after both taker fees (`ARB_TAKER_FEES_BPS`), size, what our accounts could fund (and why not more); windows = a direction staying crossed (duration, peak, profitable?); statistics saved across restarts; profitable windows audited (`arb_opportunity`). Live: crossed most of the time by < 1 bps, net ≈ −20 bps, 0 profitable windows. `GET /api/arbitrage/status` / `windows`, WS `arb_update`, `scripts/arb_watch.py`. It has no execution path.
+- **Survives restarts** — orders, execution reports, fills, baselines, limits, kill switch, algo orders, arbitrage statistics.
 - **Frontend pages** — Dashboard, Market Data, Algo Orders (TWAP), Wallet (P&L, reconciliation, concentration), How It Works, Venue Connectivity, Risk Manager, Kill Switch & Alerts, Audit Log.
-- **Tests** — 226 backend unit tests (RAFT: simulated network incl. a randomized 40-seed safety test, real TCP, the gateway bridge); frontend strict type-check passes.
+- **Tests** — 254 backend unit tests (arbitrage detector on synthetic books; RAFT: simulated network incl. a randomized 40-seed safety test, real TCP, the gateway bridge); frontend strict type-check passes.
 
 ---
 
@@ -171,8 +193,8 @@ The simulated system (June POC) is preserved on the `archive/venue-simulators` b
 
 See [`project-info/ROADMAP.md`](project-info/ROADMAP.md) for specs and "done" criteria.
 
-1. **Backend relay (Fizza ⇄ Sarmad):** ~~5b LLM copilot API~~ ✅ → ~~router hardening~~ ✅ → ~~6 parallelism + RAFT~~ ✅ → 5c arbitrage detector → 7 CI + doc rewrite.
-2. **Frontend (Mahnoor + Maham):** How It Works rewrite, page polish, running-TWAP widget, responsive fixes; the **copilot chat panel** — the API is on `feature/crypto-pivot` since 2026-10-04 (contract in ROADMAP §5b).
+1. **Backend relay (Fizza ⇄ Sarmad):** ~~5b LLM copilot API~~ ✅ → ~~router hardening~~ ✅ → ~~6 parallelism + RAFT~~ ✅ → ~~5c arbitrage detector~~ ✅ (backend) → 7 CI + security hardening + doc rewrite.
+2. **Frontend (Mahnoor + Maham):** How It Works rewrite, page polish, running-TWAP widget, responsive fixes; the **copilot chat panel** — the API is on `feature/crypto-pivot` since 2026-10-04 (contract in ROADMAP §5b); the **Arbitrage page** once 5c is merged (contract in ROADMAP §5c).
 3. Merge `backend-v2` / `frontend-v2` into `feature/crypto-pivot` at milestones; much later `feature/crypto-pivot` → `main`.
 5. Gate spot funds; OKX passphrase + a network that reaches okx.com.
 6. Production DB decision (SQLite now; PostgreSQL/TimescaleDB later).

@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-02 (Phase 6 done).
+> Last updated: 2026-10-04 (5c arbitrage detector, backend done).
 
 ---
 
@@ -27,7 +27,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 4 | Wallet + risk on real data: audit log, P&L + reconciliation, risk monitor (loss limit → kill switch, concentration), restart survival | ✅ 2026-09-29 |
 | 5a | **TWAP execution bot** | ✅ 2026-10-01 |
 | 5b | **LLM copilot** (plain English → confirmed, risk-checked orders) | ✅ API 2026-10-02 (verified live); chat panel ⏭ frontend |
-| 5c | **Arbitrage detector** (fee-aware, honest framing) | ⏭ |
+| 5c | **Arbitrage detector** (fee-aware, honest framing) | ✅ backend 2026-10-04 (verified live); page ⏭ frontend |
 | 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live; frontend status panel optional) |
 | 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ |
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
@@ -70,14 +70,31 @@ Done when:
 
 Proposal `status`: **PROPOSED** (show the card: `message`, `conversion`, `warnings`, `estimated_notional_usdt`, `expires_at`, Confirm / Cancel; remind "nothing is sent until you confirm") · **CLARIFY** (the copilot asks `message`; no buttons) · **REFUSED** (`message` says why and what it can do; no buttons). `kind` is `order` (details in `order`) or `twap` (details in `twap`). Errors: 503 `COPILOT_UNAVAILABLE` / `LLM_UNAVAILABLE` (e.g. free-tier limit — "try again in a minute"), 404 `PROPOSAL_NOT_FOUND`, 409 `PROPOSAL_NOT_ACTIONABLE` (already confirmed, cancelled or expired after 2 min). Copilot steps appear in the Audit Log as `copilot_*` events.
 
-### 5c — Arbitrage detector
+### 5c — Arbitrage detector ✅ backend (2026-10-04, Fizza)
 
 **Idea:** flag moments when one venue's best bid is above another venue's best ask **after fees** (crossed markets were already seen live, but usually smaller than fees).
-- Per symbol, every NBBO update: gross edge = bid_A − ask_B; net edge = gross − taker fees on both legs (per-venue fee schedule in config). Size = min(top sizes), capped by what each venue can fund.
-- Alerts list + history (how often, how big, how long they lasted). That data is the honest panel story: "windows exist but are mostly smaller than fees".
-- Optional stretch: execute both legs as IOC orders through `OrderEntry` **only** with pre-positioned inventory on both venues — never "risk-free".
+- Per symbol, every scan (4/s = the book sampling rate): for every two venues, both directions — gross edge = (bid_A − ask_B) / ask_B; net edge = (bid_A × (1 − fee_A) − ask_B × (1 + fee_B)) / ask_B, with each exchange's base-tier **taker** fee (`ARB_TAKER_FEES_BPS`). Size = min(top sizes); *fundable* = capped by the USDT on the buy venue and the coins on the sell venue (our testnet/demo balances), 0 if a venue can't execute that symbol.
+- **Window** = a direction that stays crossed (gross > 0) over consecutive scans: how long it lasted, its peak, whether it was ever profitable after fees. Statistics per symbol (how often crossed, average gap before/after fees, duration and size buckets) are saved and survive restarts. Profitable windows are audited (`arb_opportunity`).
+- Optional stretch (not built): execute both legs as IOC orders through `OrderEntry` **only** with pre-positioned inventory on both venues — never "risk-free".
 
-Done when: detector unit-tested with synthetic books; live page shows real (mostly negative-net) edges; no execution path bypasses risk.
+Done when:
+- [x] Detector unit-tested with synthetic books (`backend/tests/test_arbitrage/`: edge math, fees, funding caps, windows, audit cooldown, persistence).
+- [x] Live: real (negative-net) edges from Binance, Bybit and Gate — `GET /api/arbitrage/status`, `scripts/arb_watch.py`; journal 2026-10-04.
+- [x] No execution path bypasses risk: the detector has **no** execution path (it gets read-only lookups — no adapter, router or `OrderEntry`; a test checks it).
+- [ ] UI: an Arbitrage page *(frontend — API contract below)*.
+
+**API for the page** (login token needed; live contract at http://127.0.0.1:8000/docs → *arbitrage*):
+
+| Call | Returns |
+|---|---|
+| `GET /api/arbitrage/status` | `{enabled, running, scan_interval_ms, min_net_bps, fees_bps: {venue_id: bps}, venue_names: {venue_id: name}, stats_since, summary, note, symbols: [...]}`. Per symbol: `venues` (live now), `best` (an **edge**: the direction with the best net edge now), `crossed_directions`, `open_windows` (**windows**), `stats`, `summary` (one plain-English line) |
+| `GET /api/arbitrage/windows?symbol=&profitable_only=&limit=100` | `{open: [window], windows: [window]}` — recent closed windows, newest first (the full list only covers the last few minutes because crossings flicker; profitable ones are kept separately) |
+
+- **edge**: `symbol, buy_venue, sell_venue, buy_price, sell_price, gross_bps, fee_bps, net_bps, size, net_usdt, fundable_size` (null = balance unknown), `limited_by` (plain-English reasons).
+- **window**: `symbol, buy_venue, sell_venue, opened_at, closed_at` (null = open), `duration_s, scans, peak_gross_bps, peak` (the edge at its best net), `profitable`.
+- **stats**: `scans, crossed_scans, profitable_scans, sum_best_gross_bps, sum_best_net_bps` (÷ `scans` = averages), `windows, profitable_windows, window_seconds, duration_buckets, peak_gross_buckets, max_gross, max_net` (+ `_at`).
+- WebSocket channel `arb_update` (once a second): `{as_of, symbols: {symbol: {venues, best_net_bps, best_gross_bps, buy_venue, sell_venue, crossed_directions}}}` — refetch `/status` on it or render it directly.
+- Suggested page: the headline `summary`; a table per coin (buy on / sell on / gross / fees / net / size / fundable, net in red when negative — it almost always is); the per-symbol `summary` lines; the duration and size buckets as two small bar charts; "Detector only — nothing is traded" (`note`).
 
 ### 6 — Parallelism proof ✅ (2026-10-02, Fizza)
 

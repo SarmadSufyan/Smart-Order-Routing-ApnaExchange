@@ -10,6 +10,7 @@ from backend.gateway.dependencies import Services, default_risk_limits, get_serv
 from backend.gateway.routers import (
     admin,
     algos,
+    arbitrage,
     audit,
     auth,
     consensus,
@@ -44,6 +45,7 @@ WS_CHANNELS = [
     "execution_report",
     "wallet_update",
     "algo_update",
+    "arb_update",
 ]
 
 
@@ -76,6 +78,7 @@ async def restore_state(svc: Services) -> None:
         except (KeyError, ValueError):
             continue
     await svc.pnl_service.load()
+    await svc.arbitrage.load()
 
 
 @asynccontextmanager
@@ -129,7 +132,7 @@ async def lifespan(app: FastAPI):
     # RAFT on: agree with the cluster before anything can trade (no-op when off).
     await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
-                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls)
+                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.arbitrage)
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
@@ -197,7 +200,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos, copilot, consensus):
+                      algos, copilot, consensus, arbitrage):
     app.include_router(router_module.router)
 
 

@@ -5,6 +5,7 @@ from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.agents import Copilot, build_llm_client
 from backend.services.algos import TwapEngine
+from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
 from backend.services.consensus.client import ConsensusClient, parse_cluster
 from backend.services.consensus.wire import MessageSigner
@@ -50,6 +51,7 @@ class Services:
     volatility: VolatilityTracker
     preflight: PreflightService
     risk_controls: RiskControls
+    arbitrage: ArbitrageDetector
 
 
 _services: Services | None = None
@@ -158,6 +160,16 @@ def init_services() -> Services:
     )
 
     volatility = VolatilityTracker(aggregator, settings.symbol_list, settings.volatility_sample_interval_s)
+    # Detection only: it gets read-only lookups (books, balances, which venues can
+    # execute) — no adapter, router or order entry, so it can't trade.
+    arbitrage = ArbitrageDetector(
+        collector, venue_monitor, store, settings.symbol_list, parse_fee_schedule(settings.arb_taker_fees_bps),
+        venue_names={a.venue_id: a.name for a in registry.all()},
+        excluded_venues=routing_engine.excluded_venues, balance=wallet_service.available,
+        interval_s=settings.arb_scan_interval_ms / 1000,
+        min_net_bps=settings.arb_min_net_bps, audit_cooldown_s=settings.arb_audit_cooldown_s,
+        enabled=settings.arb_enabled,
+    )
 
     _services = Services(
         exchange_registry=registry,
@@ -183,6 +195,7 @@ def init_services() -> Services:
             stress_paths=settings.risk_stress_paths, stress_horizon_min=settings.risk_stress_horizon_min,
         ),
         risk_controls=risk_controls,
+        arbitrage=arbitrage,
     )
     return _services
 
