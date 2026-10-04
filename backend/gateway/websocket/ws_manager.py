@@ -19,6 +19,8 @@ VALID_CHANNELS = {
     "kill_switch",
     "execution_report",
     "wallet_update",
+    "algo_update",
+    "arb_update",
 }
 
 

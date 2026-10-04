@@ -811,3 +811,61 @@ Two additions, neither changes the running app:
 - **[`project-info/EXCHANGE_API_KEY_SECURITY.md`](project-info/EXCHANGE_API_KEY_SECURITY.md)** — written for the supervisor and the panel: what an exchange API key is, which keys we use (testnet/demo only; Coinbase and all price feeds need none), and every protection with a link to the code that implements it — Read + Trade only and never Withdraw; keys only in the gitignored `.env` and scanned for before every push; `SecretStr` so they never print; only the active mode's keys are loaded and mainnet needs two switches; a public data client that never gets the keys; HTTPS/WSS with per-request HMAC signatures and time stamps (done by ccxt, with each exchange's scheme in a table); a rejected key detected within one balance refresh; rate limits; `clientOrderId` so a network error can't double an order. Plus what to do if a key leaks, the honest limits, and what changes for real money (IP whitelist, small sub-account).
 - **`scripts/live_binance.py`** — shows live best bid/ask, last price and 24-hour change for the five coins from Binance's public WebSocket (`bookTicker` + `miniTicker`, one connection, no key), redrawn in place ~10 times a second. Verified: 35 redraws in 6 seconds. For showing "this is real market data" in a demo.
 - **Found while checking the code:** the `/ws` WebSocket accepts connections without a token (it validates a token only if one is sent). Logged under *Open questions → security hardening* in PROGRESS.md for the team to fix before the final demo.
+
+---
+
+## 2026-10-04 — Phase 5–6 merged into `feature/crypto-pivot`; Phase 5c: a fee-aware arbitrage detector
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+### The merge
+
+Sarmad had not started his to-do (`origin/feature/backend-v2` was still at `1fa0d96`), so Fizza took the relay back and ran it. Before merging: 226 tests and the frontend type-check pass, `scripts/raft_demo.py` printed every line the Phase 6 guide expects, a scan of the whole merge against the `.env` values found no secret, and live on testnet with RAFT on the cluster showed 3 of 3 nodes up and signed while a 4-order stress pre-flight ran on the pool of 4 processes in 321 ms vs 710 ms in one process. Then `feature/backend-v2` → `feature/crypto-pivot` as a merge commit (`4a7bb18`): the 5b copilot API, router hardening and Phase 6 are on the default branch, and the frontend can start the copilot chat panel.
+
+### What 5c does, in plain words
+
+Two shops sell the same coin. If shop A will *buy* it for more than shop B *sells* it for, you could buy at B and sell at A at the same moment. But each shop takes a commission. The detector does that sum, honestly, four times a second for every coin and every pair of exchanges:
+
+- **gross edge** = A's best bid minus B's best ask, in basis points of B's ask (1 bps = 0.01 %). Above zero = the two books are *crossed*.
+- **net edge** = what is left after **both taker fees** (each exchange's base tier: Binance 10 bps, Bybit 10, OKX 15, Gate 20, Coinbase 120 — `ARB_TAKER_FEES_BPS`). Taker because both legs would have to be IOC orders.
+- **size** = the thinner of the two top-of-book levels; **fundable** = what *our* accounts could actually do: capped by the USDT on the buy venue and the coins on the sell venue, 0 if the router can't execute that venue + coin (the router's own `excluded_venues`), with the reasons in plain English.
+- A **window** = one direction (coin, buy venue, sell venue) staying crossed over consecutive scans: how long, how big at its peak, and whether it was ever profitable after fees.
+
+### Measured live (the honest result)
+
+About 9 minutes of real-market books from Binance, Bybit and Gate (11,062 coin-scans; statistics kept across restarts since 15:30 UTC):
+
+| | |
+|---|---|
+| Books crossed (some pair, gross > 0) | **73 % of scans** (BTC 100 %, ETH 98 %) |
+| Widest pair, average gap before fees | **+0.4 bps** |
+| Best pair after taker fees, average | **−20.7 bps** |
+| Largest gap seen | +2.47 bps (SOL: buy Binance, sell Bybit) |
+| Best net edge ever | −17.5 bps |
+| Crossed windows | 249 — peak under 1 bps: 204, 1-2 bps: 43, 2-5 bps: 2 |
+| How long they lasted | < 1 s: 42 · 1-5 s: 68 · 5-30 s: 93 · 30 s-5 min: 46 |
+| **Profitable after fees** | **0 of 249** |
+
+So the ROADMAP's expectation holds, now with numbers: the exchanges' prices *do* cross — most of the time — but by a fraction of a basis point, while a taker round trip costs 20 bps (30 with Gate). Gaps this small can persist because they are probably only worth closing for firms that pay near-zero fees. **Panel line:** *"We built a fee-aware detector, not a money machine: the books cross most of the time, but never by more than the fees — and we can show the numbers."*
+
+### Design choices
+
+- **Windows are crossed (gross > 0), not profitable (net > 0)** — net is essentially always negative, so net-only windows would show nothing. Gross windows measure the "windows exist" half of the story; the `profitable` flag the other half.
+- **Pure logic first** (`detector.py` top): `edge_between` / `cross_venue_edges` (the maths), `fundable_size`, `WindowTracker` (no clock: the caller passes the time, so tests replay a synthetic market scan by scan), the plain-English summaries. The service at the bottom only feeds it live quotes.
+- **Same venues as the NBBO** (data-healthy ones), real-market books (`MARKET_DATA_MODE=mainnet`); "fundable" uses our testnet/demo balances — said in every reply (`note`).
+- **Conservative fees:** base tier, no VIP level or BNB discount; a venue without a configured fee gets the highest one, and a bad `ARB_TAKER_FEES_BPS` stops the gateway at start-up rather than detect with a wrong fee.
+- **What is kept:** the statistics are saved in the store's key/value table every minute and at shutdown (the story spans days, the gateway restarts often); the last 500 windows (and 200 profitable ones, separately, so flickering crossings don't push them out) stay in memory. **Profitable windows are audited** (`arb_opportunity`, actor `arbitrage-detector`, "Detector only — nothing was traded") — at most one per direction per minute, so a wrong fee setting can't flood the audit log.
+- **No execution path at all** (ROADMAP: "no execution path bypasses risk"). The detector receives read-only lookups — venue names, the router's `excluded_venues`, the wallet's `available` — not the registry, router or `OrderEntry`. A test walks the module's syntax tree to check it never calls an order method. Trading an edge (the optional stretch, not built) would need coins and USDT already waiting on both venues and would go through `OrderEntry` + pre-trade risk like any order.
+- **API:** `GET /api/arbitrage/status` (best edge per coin with fundable size, open windows, statistics, summaries) and `GET /api/arbitrage/windows`; WebSocket channel `arb_update` once a second. Contract for the frontend page in ROADMAP §5c. `scripts/arb_watch.py` shows it live in the terminal.
+
+### Found live: a WebSocket channel the frontend could never get
+
+Subscribing to the new `arb_update` channel returned `"channels": []`: the WebSocket manager has its own allow-list, separate from the list of channels the gateway forwards. **`algo_update` was missing from it too** — the frontend's Algo Orders page subscribes to it, and the server has silently refused that subscription since the TWAP bot was built (the app shell's 3-second poll still refreshed the page, which hid it; now slice updates arrive at once). Both added; a new test fails if a forwarded channel is not subscribable (it fails without the fix).
+
+### Honest limits
+
+Books are sampled four times a second, so part of a crossing can be one exchange's feed arriving later than another's; window durations have a 0.25 s resolution; size is the top level only; base-tier fees (a high-volume trader pays less); OKX is not in today's numbers (its key can't trade — 50124 — and some networks block it).
+
+### Files
+
+New: `backend/services/arbitrage/` (`detector.py`), `backend/shared/models/arbitrage.py`, `backend/gateway/routers/arbitrage.py`, `backend/tests/test_arbitrage/` (27 tests), `backend/tests/test_api/test_websocket_channels.py`, `scripts/arb_watch.py`. Changed: `gateway/config.py` (`ARB_*`), `dependencies.py`, `main.py` (start/stop, `arb_update`), `websocket/ws_manager.py` (`algo_update`, `arb_update`), `.env.example`, ROADMAP §5c, CLAUDE.md, `scripts/README.md`. 254 tests.

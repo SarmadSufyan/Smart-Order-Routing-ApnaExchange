@@ -91,6 +91,16 @@ class Settings(BaseSettings):
     risk_stress_horizon_min: int = 60
     volatility_sample_interval_s: float = 5.0  # live mid sampling for the stress test
 
+    # ─── Arbitrage detector (5c: detection only, never trades) ────
+    arb_enabled: bool = True
+    arb_scan_interval_ms: int = 250  # = the book sampling rate; faster sees nothing new
+    # Base-tier spot TAKER fee per exchange in bps (both legs would be IOC =
+    # taker). Defaults: each exchange's public base tier as listed in ccxt's
+    # market data (2026-10-04) — no VIP level, no BNB discount.
+    arb_taker_fees_bps: str = "binance:10,bybit:10,okx:15,gate:20,coinbase:120"
+    arb_min_net_bps: float = 0.0  # "profitable" = net edge after fees above this
+    arb_audit_cooldown_s: float = 60.0  # at most one audit per direction per this
+
     # ─── Audit log / book of record ───────────────────────────────
     # Empty = data/apnasor-<exchange_mode>.db, so testnet and mainnet records
     # never mix. ":memory:" keeps nothing (tests).
