@@ -869,3 +869,41 @@ Books are sampled four times a second, so part of a crossing can be one exchange
 ### Files
 
 New: `backend/services/arbitrage/` (`detector.py`), `backend/shared/models/arbitrage.py`, `backend/gateway/routers/arbitrage.py`, `backend/tests/test_arbitrage/` (27 tests), `backend/tests/test_api/test_websocket_channels.py`, `scripts/arb_watch.py`. Changed: `gateway/config.py` (`ARB_*`), `dependencies.py`, `main.py` (start/stop, `arb_update`), `websocket/ws_manager.py` (`algo_update`, `arb_update`), `.env.example`, ROADMAP §5c, CLAUDE.md, `scripts/README.md`. 254 tests.
+
+---
+
+## 2026-10-05 — The Arbitrage page
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §5c's last open item: a page for the arbitrage detector Fizza built. It sits in the menu under Market Data as **Arbitrage Detector** (`/arbitrage`).
+
+### What it shows
+
+- **Headline** — the detector's own one-sentence summary, and four numbers for all coins together: how often the books were crossed, the average gap before fees, the average after both taker fees (red when negative), and how many crossed windows were profitable.
+- **Right now** — per coin, the best direction: buy on / sell on (with the ask and bid), gross gap, fees, net, the size at the top of both books, the net on that size, how much our testnet/demo balances could fund (with the first reason it is limited; all reasons on hover), and how many directions are crossed now.
+- **Two bar charts** — how long crossings lasted and how wide they got before fees, with the fee range under them (both taker fees cost 20–35 bps depending on the pair, so a gap has to be wider than that to pay).
+- **Per coin** — scans, % crossed, average gap before and after fees, windows, profitable windows, the best net edge seen (pair and time), and the detector's plain-English line per coin.
+- **Recent windows** — open ones first, then the most recent closed ones; filter by coin, or show profitable ones only.
+- **Taker fees used** per exchange (an exchange without a live quote, OKX on this network, is marked) and the detector's own note.
+
+Live when it was checked (Binance, Bybit, Gate): crossed in 73 % of ~29,000 scans, +0.8 bps on average before fees, −19.4 bps after, **0 of ~540 windows profitable** — the same numbers as the detector's summary.
+
+### Design choices
+
+- **Honest framing on the page itself:** a "DETECTOR ONLY · NOTHING IS TRADED" label next to the title, the backend's `note` at the bottom, and "We could fund" explained as our testnet/demo balances. Losses are shown as losses (red), not hidden.
+- **Refresh only while the page is open.** The status lives in `dataStore` (`arbitrage`, `fetchArbitrage`) but is *not* part of `fetchAll`, which every page polls every 3 s. The page subscribes to `arb_update` (once a second) and refetches `/status` on it, skipping a tick while a request is still running, with a 5 s poll as a fallback if the WebSocket is down. The windows list changes too fast to push, so it is polled every 3 s for the chosen filter.
+- **Errors are visible:** `fetchArbitrage` resolves to an error message (like the operator actions), so the page says "Can't read the arbitrage detector: …" instead of loading forever, and keeps showing the last data it had.
+- **Bucket order is fixed in the page** (`<1 s` … `5 min+`, `0-1 bps` … `20+ bps`, matching `detector.py`): the API sends the buckets in first-seen order. A share that rounds to 0 % but isn't zero shows as "<1%".
+- **Times:** the backend's summary sentences are in UTC; the page's own times are local and say their zone (e.g. "GMT+5").
+- **New formatter** `fmtBps` in `format.ts` (signed, "-0.0" shown as "0.0"), used for every bps number on the page.
+- **Narrow screens:** grids use `auto-fit` with `min(100%, …)` so they wrap instead of squeezing; the four tiles are two pairs, so they show 4 in a row, 2 × 2 or stacked, never 3 + 1; wide tables scroll inside their own card.
+
+### Found while checking
+
+- At phone width the **app shell** is what breaks, on every page: the sidebar is always 240 px and the top bar doesn't wrap, so a page gets ~110 px. The Arbitrage page itself fits once the sidebar is collapsed. Next task (`components/AppShell.tsx`).
+- `wsClient` has no way to tell the server to stop a channel, so after leaving the page the server keeps sending `arb_update` (one small message a second) until the next login. Harmless; noted here in case the WebSocket client is reworked.
+
+### Files
+
+New: `frontend/src/pages/Arbitrage.tsx`. Changed (small, additive): `services/api.ts` (the §5c response types + `getArbitrageStatus`, `getArbitrageWindows`), `stores/dataStore.ts` (`arbitrage`, `arbWindows`, `fetchArbitrage`, `fetchArbWindows`), `format.ts` (`fmtBps`), `App.tsx` (route), `components/AppShell.tsx` (menu entry); PROGRESS.md, ROADMAP §5c. Frontend type-check passes; 254 backend tests pass (no backend change).

@@ -304,6 +304,83 @@ export interface NBBO {
   venue_quotes: Record<string, VenueQuote>
 }
 
+// ── Arbitrage detector (5c) — detection only, never trades ──────────
+/** One direction between two venues: buy at one's best ask, sell at the other's best bid. */
+export interface ArbEdge {
+  symbol: string
+  buy_venue: string
+  sell_venue: string
+  buy_price: number
+  sell_price: number
+  gross_bps: number        // > 0 = the two books are crossed
+  fee_bps: number          // both taker fees
+  net_bps: number          // gross minus fees
+  size: number             // base units at the top of both books
+  net_usdt: number         // negative = a loss
+  fundable_size: number | null  // what our testnet/demo balances could do; null = unknown
+  limited_by: string[]
+}
+
+/** A run of consecutive scans in which one direction stayed crossed. */
+export interface ArbWindow {
+  symbol: string
+  buy_venue: string
+  sell_venue: string
+  opened_at: string
+  closed_at: string | null  // null = still open
+  duration_s: number
+  scans: number
+  peak_gross_bps: number
+  peak: ArbEdge
+  profitable: boolean
+}
+
+export interface ArbSymbolStats {
+  symbol: string
+  scans: number
+  crossed_scans: number
+  profitable_scans: number
+  sum_best_gross_bps: number  // ÷ scans = average
+  sum_best_net_bps: number
+  windows: number
+  profitable_windows: number
+  window_seconds: number
+  duration_buckets: Record<string, number>
+  peak_gross_buckets: Record<string, number>
+  max_gross: ArbEdge | null
+  max_gross_at: string | null
+  max_net: ArbEdge | null
+  max_net_at: string | null
+}
+
+export interface ArbSymbolStatus {
+  symbol: string
+  venues: string[]           // venues with a live quote right now
+  best: ArbEdge | null       // best net edge right now
+  crossed_directions: number
+  open_windows: ArbWindow[]
+  stats: ArbSymbolStats
+  summary: string
+}
+
+export interface ArbStatus {
+  enabled: boolean
+  running: boolean
+  scan_interval_ms: number
+  min_net_bps: number
+  fees_bps: Record<string, number>
+  venue_names: Record<string, string>
+  stats_since: string
+  symbols: ArbSymbolStatus[]
+  summary: string
+  note: string
+}
+
+export interface ArbWindowList {
+  open: ArbWindow[]
+  windows: ArbWindow[]  // closed, newest first
+}
+
 export interface ChildOrder {
   id: string
   venue_id: string
@@ -542,6 +619,16 @@ export const api = {
 
   getQuotes: (symbol: string) =>
     request<{ symbol: string; quotes: Record<string, VenueQuote> }>(`/api/market-data/quotes?symbol=${encodeURIComponent(symbol)}`),
+
+  getArbitrageStatus: () => request<ArbStatus>('/api/arbitrage/status'),
+
+  getArbitrageWindows: (params: { symbol?: string; profitable_only?: boolean; limit?: number } = {}) => {
+    const q = new URLSearchParams()
+    if (params.symbol) q.set('symbol', params.symbol)
+    if (params.profitable_only) q.set('profitable_only', 'true')
+    if (params.limit) q.set('limit', String(params.limit))
+    return request<ArbWindowList>(`/api/arbitrage/windows?${q.toString()}`)
+  },
 
   getWallet: () => request<WalletSnapshot>('/api/wallet/'),
 

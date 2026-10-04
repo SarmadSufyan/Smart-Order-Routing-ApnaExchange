@@ -10,6 +10,7 @@ import { backendVenueToUi } from '../adapters'
 const NAV = [
   { path: '/',            label: 'Dashboard'            },
   { path: '/market-data', label: 'Market Data'          },
+  { path: '/arbitrage',   label: 'Arbitrage Detector'   },
   { path: '/algos',       label: 'Algo Orders (TWAP)'   },
   { path: '/wallet',      label: 'Wallet'               },
   { path: '/howitworks',  label: 'How It Works'         },

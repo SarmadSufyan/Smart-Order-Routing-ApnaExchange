@@ -12,6 +12,8 @@ import {
   type RiskLimits,
   type TwapParams,
   type TwapState,
+  type ArbStatus,
+  type ArbWindowList,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
 
@@ -28,6 +30,8 @@ interface DataState {
   wallet: WalletSnapshot | null
   pnl: PortfolioPnL | null
   algos: TwapState[]
+  arbitrage: ArbStatus | null
+  arbWindows: ArbWindowList | null
   loading: boolean
   lastError: string | null
 
@@ -35,6 +39,12 @@ interface DataState {
   // Resolve to [the algo, null] or [null, error message].
   startTwap: (p: TwapParams) => Promise<[TwapState | null, string | null]>
   controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') => Promise<string | null>
+
+  // Arbitrage is fetched by its page only (not in fetchAll): /status is
+  // refreshed on every arb_update, once a second, while the page is open.
+  // Resolves to an error message, or null on success.
+  fetchArbitrage: () => Promise<string | null>
+  fetchArbWindows: (symbol?: string, profitableOnly?: boolean) => Promise<void>
 
   fetchWallet: () => Promise<void>
   refreshWallet: () => Promise<void>
@@ -70,6 +80,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   wallet: null,
   pnl: null,
   algos: [],
+  arbitrage: null,
+  arbWindows: null,
   loading: false,
   lastError: null,
 
@@ -98,6 +110,23 @@ export const useDataStore = create<DataState>((set, get) => ({
       return null
     } catch (e) {
       return (e as Error).message
+    }
+  },
+
+  fetchArbitrage: async () => {
+    try {
+      set({ arbitrage: await api.getArbitrageStatus() })
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  fetchArbWindows: async (symbol, profitableOnly = false) => {
+    try {
+      set({ arbWindows: await api.getArbitrageWindows({ symbol, profitable_only: profitableOnly, limit: 50 }) })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
     }
   },
 
