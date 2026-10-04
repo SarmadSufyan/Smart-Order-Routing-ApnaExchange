@@ -799,3 +799,15 @@ Two honest limits from the first version, both fixed and re-verified live.
 Before pushing, Phase 6 was re-checked: `origin/feature/backend-v2` had not moved (nothing to merge), 226 tests and the frontend type-check pass, lint is clean on every changed file, a scan of the whole push against the `.env` secret values found nothing, and the commits carry no tool attribution.
 
 Added [`project-info/PHASE6_GUIDE.md`](project-info/PHASE6_GUIDE.md): what Phase 6 is in plain words (the kitchen and secretary analogies, the TWAP pre-flight and stress-test examples, the benchmark table), where each piece lives, a 20-minute self-check with the expected output of every step, troubleshooting, and the panel Q&A + honest limits — so whoever picks this up, or has to defend it, doesn't depend on a chat history. PROGRESS.md's Phase 6 handoff now has Sarmad's to-do list in order and states the merge status plainly: 5b, router hardening and Phase 6 all reach `feature/crypto-pivot` in one merge.
+
+---
+
+## 2026-10-04 — Before the handover: an exchange-key security note and a live-prices demo
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+Two additions, neither changes the running app:
+
+- **[`project-info/EXCHANGE_API_KEY_SECURITY.md`](project-info/EXCHANGE_API_KEY_SECURITY.md)** — written for the supervisor and the panel: what an exchange API key is, which keys we use (testnet/demo only; Coinbase and all price feeds need none), and every protection with a link to the code that implements it — Read + Trade only and never Withdraw; keys only in the gitignored `.env` and scanned for before every push; `SecretStr` so they never print; only the active mode's keys are loaded and mainnet needs two switches; a public data client that never gets the keys; HTTPS/WSS with per-request HMAC signatures and time stamps (done by ccxt, with each exchange's scheme in a table); a rejected key detected within one balance refresh; rate limits; `clientOrderId` so a network error can't double an order. Plus what to do if a key leaks, the honest limits, and what changes for real money (IP whitelist, small sub-account).
+- **`scripts/live_binance.py`** — shows live best bid/ask, last price and 24-hour change for the five coins from Binance's public WebSocket (`bookTicker` + `miniTicker`, one connection, no key), redrawn in place ~10 times a second. Verified: 35 redraws in 6 seconds. For showing "this is real market data" in a demo.
+- **Found while checking the code:** the `/ws` WebSocket accepts connections without a token (it validates a token only if one is sent). Logged under *Open questions → security hardening* in PROGRESS.md for the team to fix before the final demo.

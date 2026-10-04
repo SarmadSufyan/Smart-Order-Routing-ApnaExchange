@@ -2,6 +2,8 @@
 
 > **Audience:** anyone on the team setting up ApnaSOR locally.
 > **Last verified:** 2026-09-28 (steps checked against each exchange's official docs; environments measured live).
+> How the keys are protected once they're in `.env` (masking, signing, permissions, what to do if one leaks): [`EXCHANGE_API_KEY_SECURITY.md`](EXCHANGE_API_KEY_SECURITY.md).
+
 > **Golden rule:** keys go **only** in your local `.env` file (gitignored). Never commit them, never paste them in chat, screenshots or WhatsApp.
 
 ---
