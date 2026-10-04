@@ -246,7 +246,7 @@ export function KillSwitch() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 14 }}>
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
@@ -260,13 +260,13 @@ export function KillSwitch() {
                 : tint(C.blue, 3)
               return (
                 <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
+                  display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
                   padding: '8px 10px', borderRadius: 4, background: bg, fontSize: F.sm,
                 }}>
                   <span style={{ flexShrink: 0 }}>{sevIcon(a.sev)}</span>
                   <span style={{ color: C.dim, width: 55, flexShrink: 0, fontSize: F.xs }}>{a.time}</span>
                   <span style={{ color: C.muted, width: 90, flexShrink: 0, fontSize: F.xs }}>{a.sys}</span>
-                  <span style={{ flex: 1, color: C.text }}>{a.msg}</span>
+                  <span style={{ flex: '1 1 160px', minWidth: 0, color: C.text }}>{a.msg}</span>
                   <span style={statusStyle(a.status)}>{a.status}</span>
                 </div>
               )

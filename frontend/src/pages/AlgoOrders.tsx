@@ -7,6 +7,7 @@ import { useDataStore } from '../stores/dataStore'
 import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import type { AlgoStatus, TwapState } from '../services/api'
+import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 
 const MIN_INTERVAL_S = 3        // mirrors the backend (a slice + balance refresh take ~1-2 s)
 const TYPICAL_MIN_ORDER_USD = 5 // most venues' minimum order value
@@ -66,6 +67,7 @@ export function AlgoOrders() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [proofOrderId, setProofOrderId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
+  const isNarrow = useMediaQuery(MQ.narrow)  // the form goes above the list
 
   useEffect(() => { fetchAlgos() }, [fetchAlgos])
   useEffect(() => {
@@ -136,7 +138,7 @@ export function AlgoOrders() {
         switch pauses every running TWAP, and a restart never resumes one on its own.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 340px) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 340px) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
         {/* New TWAP */}
         <Card>
           <CardTitle>NEW TWAP</CardTitle>
@@ -227,7 +229,7 @@ export function AlgoOrders() {
         <Card>
           <CardTitle>ALGO ORDERS</CardTitle>
           {algos.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No TWAPs yet — start one on the left.</div>
+            <div style={{ padding: 30, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No TWAPs yet — start one {isNarrow ? 'above' : 'on the left'}.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 520, overflowY: 'auto' }}>
               {algos.map((a) => {
@@ -239,7 +241,7 @@ export function AlgoOrders() {
                     padding: '9px 11px', borderRadius: 4, cursor: 'pointer', background: C.surface,
                     border: `1px solid ${isSel ? C.blue : C.border}`,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.sm }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: F.sm }}>
                       <span style={{ fontWeight: 700 }}>{a.id}</span>
                       <span style={{ color: a.params.side === 'BUY' ? C.green : C.red, fontWeight: 700 }}>{a.params.side}</span>
                       <span>{fmtQty(a.params.quantity)} {a.params.symbol}</span>
@@ -297,7 +299,7 @@ export function AlgoOrders() {
             )}
             {actionError && <div style={{ fontSize: F.sm, color: C.red, marginBottom: 8 }}>{actionError}</div>}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: 8, marginBottom: 12 }}>
               <div style={tile}>
                 <div style={label}>FILLED</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtQty(a.filled_quantity)} <span style={{ fontSize: F.xs, color: C.muted }}>/ {fmtQty(a.params.quantity)} {b}</span></div>

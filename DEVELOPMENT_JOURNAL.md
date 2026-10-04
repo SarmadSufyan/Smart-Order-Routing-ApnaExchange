@@ -907,3 +907,29 @@ Live when it was checked (Binance, Bybit, Gate): crossed in 73 % of ~29,000 scan
 ### Files
 
 New: `frontend/src/pages/Arbitrage.tsx`. Changed (small, additive): `services/api.ts` (the §5c response types + `getArbitrageStatus`, `getArbitrageWindows`), `stores/dataStore.ts` (`arbitrage`, `arbWindows`, `fetchArbitrage`, `fetchArbWindows`), `format.ts` (`fmtBps`), `App.tsx` (route), `components/AppShell.tsx` (menu entry); PROGRESS.md, ROADMAP §5c. Frontend type-check passes; 254 backend tests pass (no backend change).
+
+---
+
+## 2026-10-05 — Narrow screens: the app shell and Maham's pages
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §7 asks for responsive layouts. Measured first, in the browser at real widths, before changing anything.
+
+### What was wrong
+
+The **app shell** broke every page on a phone: the sidebar was always 240 px and the top bar never wrapped. At 375 px the top bar was 427 px too wide and a page had **79 px** left; at 768 px the top bar was still 34 px too wide (page: 472 px). Inside the pages, fixed column counts did the rest — at 375 px Maham's six pages were 69 px (Algo Orders) to 287 px (Wallet) too wide: Wallet's 4 tiles and 2fr/1fr split, Algo Orders' 340 px form beside the list, Venue Connectivity's 3 cards and its table, Risk Manager's 4 gauges and 3-panel row, Kill Switch's two side-by-side panels, and Audit Log rows on one unbreakable line.
+
+### What changed
+
+- **App shell** (`components/AppShell.tsx`): below 900 px the sidebar becomes a slide-in menu behind a ☰ button, so pages get the full width (375 px phone: 343 px instead of 79; 768 px: 728 instead of 472). It closes on picking a page, tapping outside, Esc or ✕, and is `visibility: hidden` when closed so keyboard focus cannot land on off-screen links. The user name, theme toggle and Logout move into the menu. The top bar may wrap onto a second line rather than cut anything off; the clock hides below 1100 px; on phones the venue dots drop their V1/V4 labels (the name is in the tooltip) and the "ApnaSOR" word hides. **The TESTNET badge and the KILL SWITCH button stay visible at every width** — one is the honesty label, the other the emergency stop. Page padding shrinks on small screens. Wide screens are unchanged (sidebar, collapse ◀, clock).
+- **One set of breakpoints** (`hooks/useMediaQuery.ts`, new): `MQ.phone` < 600 px, `MQ.narrow` < 900 px, `MQ.compact` < 1100 px, read through `useMediaQuery` (inline styles cannot hold `@media` rules — the project's convention is inline styles with theme tokens). `useTileColumns(n)` gives a row of summary tiles n across on wide screens, 2 on medium ones, 1 on phones — never 3 + 1.
+- **Pages:** page-level splits (Wallet's holdings/exchanges, Algo Orders' form/list, Risk Manager's three panels) stack below 900 px; grids inside cards use `repeat(auto-fit, minmax(min(100%, N px), 1fr))` so they wrap by the width they actually have; rows of tiles use `useTileColumns`; wide tables scroll inside their own card (`overflowX: auto`), never the page; flex rows that held several labels wrap. Wallet's indented "↳" P&L labels keep their indent but may wrap (`pre-wrap`). Kill Switch alert messages and Audit Log summaries take their own line when less than 160 / 240 px is left (`AuditRow` is also the order timeline in the order details window — only its wrapping changed). The empty Algo Orders list says "start one above" when the form is above it.
+
+### How it was checked
+
+A small script in the browser measured, for each page, how far anything sticks out past the page's right edge (ignoring content that scrolls inside its own box): **0 px on all six pages at 375, 480, 600, 768, 900 and 1280 px** (36 checks; before: all six failed at 375). At 1280 px the layouts match the originals (4 tiles, the same two-column splits, 3 venue cards). The menu's four ways of closing were each checked, and the collapse ◀ on wide screens. Type-check passes; 254 backend tests pass (no backend change).
+
+### Files
+
+New: `frontend/src/hooks/useMediaQuery.ts`. Changed: `components/AppShell.tsx` (shared), `components/AuditTimeline.tsx`, `pages/Wallet.tsx`, `pages/AlgoOrders.tsx`, `pages/VenueHealth.tsx`, `pages/RiskManager.tsx`, `pages/KillSwitch.tsx`; PROGRESS.md, ROADMAP §7. Mahnoor's pages (Dashboard, Market Data, How It Works, Login) are not touched — the same helper can fit them.

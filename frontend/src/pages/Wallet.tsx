@@ -5,6 +5,7 @@ import { useDataStore } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
 import { fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
 import type { ReconStatus } from '../services/api'
+import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 
 const BAR_COLORS = [C.blue, C.green, C.orange, C.gold, C.purple, C.red]
 
@@ -38,6 +39,8 @@ export function Wallet() {
   const [refreshing, setRefreshing] = useState(false)
   const [rebasing, setRebasing]     = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const isNarrow    = useMediaQuery(MQ.narrow)
+  const tileColumns = useTileColumns(4)
 
   const canRebaseline = role === 'ADMIN' || role === 'RISK_MANAGER'
   const total = wallet?.total_value_usdt ?? 0
@@ -87,7 +90,7 @@ export function Wallet() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
         <div style={{ fontSize: F.lg, color: C.text }}>Wallet — Unified Portfolio</div>
         <button
           onClick={handleRefresh}
@@ -108,7 +111,7 @@ export function Wallet() {
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: tileColumns, gap: 12, marginBottom: 14 }}>
         <Card style={{ textAlign: 'center', padding: 18 }}>
           <div style={statLabel}>TOTAL VALUE</div>
           <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>{fmtUsd(total)}</div>
@@ -157,7 +160,7 @@ export function Wallet() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 2fr) minmax(0, 1fr)', gap: 14 }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
           {/* Holdings */}
@@ -252,7 +255,7 @@ export function Wallet() {
                 {(pnl?.notes ?? ['Loading…']).map((n) => <div key={n}>{n}</div>)}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 18 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.base }}>
                   <tbody>
                     {[
@@ -263,7 +266,7 @@ export function Wallet() {
                       ['  ↳ Trading P&L — ApnaSOR\'s trades', fmtPnl(pnl.trading_pnl), pnlColor(pnl.trading_pnl)],
                     ].map(([label, value, color]) => (
                       <tr key={label} style={tr}>
-                        <td style={{ padding: '6px 4px', color: C.muted, whiteSpace: 'pre' }}>{label}</td>
+                        <td style={{ padding: '6px 4px', color: C.muted, whiteSpace: 'pre-wrap' }}>{label}</td>
                         <td style={{ padding: '6px 4px', textAlign: 'right', color, fontWeight: 600 }}>{value}</td>
                       </tr>
                     ))}
@@ -296,7 +299,7 @@ export function Wallet() {
 
           {/* Reconciliation */}
           <Card>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
               <CardTitle>RECONCILIATION — OUR LEDGER VS. THE EXCHANGE</CardTitle>
               <span style={{ fontSize: F.xs, color: C.dim }}>expected = opening balances + our fills</span>
             </div>
@@ -314,7 +317,7 @@ export function Wallet() {
                     padding: '10px 12px', borderRadius: 4, background: C.surface,
                     border: `1px solid ${r.status === 'BREAK' ? tint(C.red, 45) : C.border}`,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                       <span style={{ fontWeight: 700, minWidth: 120 }}>
                         {r.name} <span style={{ color: C.dim, fontWeight: 400 }}>{r.venue_id}</span>
                       </span>
@@ -345,6 +348,7 @@ export function Wallet() {
                       <div style={{ fontSize: F.xs, color: r.status === 'BREAK' ? C.red : C.muted, marginTop: 4 }}>{r.note}</div>
                     )}
                     {diffs.length > 0 && (
+                      <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6, fontSize: F.sm }}>
                         <thead>
                           <tr>
@@ -368,6 +372,7 @@ export function Wallet() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 )
@@ -394,7 +399,7 @@ export function Wallet() {
                     padding: '10px 12px', borderRadius: 4, background: C.surface,
                     border: `1px solid ${v.error || lim?.breached ? tint(C.red, 40) : C.border}`,
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                       <span style={{ fontWeight: 700 }}>{v.name} <span style={{ color: C.dim, fontWeight: 400 }}>{v.venue_id}</span></span>
                       <span style={{
                         fontSize: F.xs, padding: '1px 6px', borderRadius: 3,
@@ -405,7 +410,7 @@ export function Wallet() {
                     {v.error ? (
                       <div style={{ fontSize: F.xs, color: C.red, marginTop: 4 }}>{v.error}</div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                         <span style={{ fontSize: F.lg, color: C.text, fontWeight: 700 }}>{fmtUsd(v.total_value_usdt)}</span>
                         {lim && (
                           <span style={{ fontSize: F.xs, color: lim.breached ? C.red : C.muted }}
@@ -466,7 +471,7 @@ export function Wallet() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
                 {recentFills.map((r, i) => (
                   <div key={`${r.child_order_id}-${i}`} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
+                    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8,
                     padding: '6px 8px', background: C.surface, borderRadius: 3, fontSize: F.sm,
                   }}>
                     <span style={{ color: C.dim, fontSize: F.xs }}>{r.timestamp.slice(11, 19)}</span>

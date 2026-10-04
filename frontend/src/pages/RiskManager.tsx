@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore'
 import { backendRiskToPositions } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { fmtPnl, fmtPrice, fmtUsd } from '../format'
+import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 
 const PORTFOLIO_LIMITS = [
   { key: 'max_trading_loss_usdt', label: 'Trading loss limit', unit: 'USDT', hint: '0 = off. Breach engages the kill switch.' },
@@ -19,6 +20,8 @@ type PortfolioLimitKey = typeof PORTFOLIO_LIMITS[number]['key']
 
 export function RiskManager() {
   const navigate = useNavigate()
+  const isNarrow    = useMediaQuery(MQ.narrow)
+  const tileColumns = useTileColumns(4)
   const riskStatus = useDataStore((s) => s.riskStatus)
   const orders     = useDataStore((s) => s.orders)
   const routingStats = useDataStore((s) => s.routingStats)
@@ -105,7 +108,7 @@ export function RiskManager() {
     <div>
       <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Risk Manager Console</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: tileColumns, gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
           <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open Positions" unit="symbols" size={120} />
         </Card>
@@ -128,8 +131,8 @@ export function RiskManager() {
         </Card>
       </div>
 
-      <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <Card style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <span style={{
             width: 12, height: 12, borderRadius: '50%',
             background: riskStatus?.kill_switch_active ? C.red : C.green,
@@ -158,7 +161,7 @@ export function RiskManager() {
       </Card>
 
       {/* Portfolio controls — watched continuously by the risk monitor */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr', gap: 12, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr)', gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
           <CardTitle>TRADING LOSS LIMIT</CardTitle>
           {portfolio && portfolio.loss_limit_usdt > 0 ? (
@@ -257,6 +260,7 @@ export function RiskManager() {
 
       <Card style={{ marginBottom: 12 }}>
         <CardTitle>PRE-TRADE CHECK BREAKDOWN</CardTitle>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
             <tr>
@@ -287,9 +291,10 @@ export function RiskManager() {
             </tr>
           </tbody>
         </table>
+        </div>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12 }}>
 
         <Card>
           <CardTitle>VENUE ALLOCATION (LAST ROUTED)</CardTitle>
@@ -318,7 +323,7 @@ export function RiskManager() {
         </Card>
 
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <CardTitle>NET TRADED SINCE OPENING BALANCES</CardTitle>
             <input
               value={search}
@@ -336,6 +341,7 @@ export function RiskManager() {
               Nothing traded since the opening balances. Holdings are on the Wallet page.
             </div>
           ) : (
+            <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
               <thead>
                 <tr>
@@ -365,6 +371,7 @@ export function RiskManager() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
 

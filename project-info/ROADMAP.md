@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-05 (5c Arbitrage page, frontend done).
+> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts for the app shell and Maham's pages).
 
 ---
 
@@ -119,7 +119,7 @@ Done when:
 - Rewrite the stale `project-info/` docs for the crypto design; `ARCHITECTURE_V2.md` for the report.
 - Production DB: the audit store is SQLite today (`backend/shared/database/store.py`, plain SQL). Add a PostgreSQL/TimescaleDB backend behind the same interface — **decision pending** (Docker image vs. a native PostgreSQL install).
 - Docker for gateway + frontend; Prometheus/Grafana if time allows.
-- Frontend: update "How It Works" for the crypto design; responsive layouts; dashboard widget for running TWAPs.
+- Frontend: update "How It Works" for the crypto design; responsive layouts (app shell + Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log ✅ 2026-10-05; Dashboard, Market Data, How It Works, Login next — shared breakpoints in `frontend/src/hooks/useMediaQuery.ts`); dashboard widget for running TWAPs.
 
 ### 8 — Live-money demo (last)
 

@@ -54,7 +54,7 @@ export function VenueHealth() {
         connection so the health monitor can be demonstrated on a real venue.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 14, marginBottom: 14 }}>
         {venues.map((v) => {
           const isOffline = v.status === 'Disconnected' || v.blacklisted
           const b = v.backend
@@ -68,7 +68,7 @@ export function VenueHealth() {
           return (
             <div key={v.id} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 6, padding: 14 }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ConnDot status={v.status} />
                   <span style={{ fontSize: F.md, fontWeight: 600 }}>{v.name}</span>
@@ -218,6 +218,7 @@ export function VenueHealth() {
 
       <Card>
         <CardTitle>VENUE COMPARISON</CardTitle>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
             <tr>
@@ -243,6 +244,7 @@ export function VenueHealth() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
