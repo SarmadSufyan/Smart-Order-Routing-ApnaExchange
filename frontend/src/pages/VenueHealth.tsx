@@ -39,13 +39,15 @@ export function VenueHealth() {
 
   async function handleDegrade(venueId: string) {
     setBusy(venueId)
-    await degradeVenue(venueId)
+    const err = await degradeVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
   async function handleRecover(venueId: string) {
     setBusy(venueId)
-    await recoverVenue(venueId)
+    const err = await recoverVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 

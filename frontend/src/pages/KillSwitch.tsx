@@ -300,7 +300,7 @@ export function KillSwitch() {
               <thead>
                 <tr>
                   <th style={th}>Venue</th>
-                  <th style={th}>Cloud</th>
+                  <th style={th}>Connection</th>
                   <th style={{ ...th, textAlign: 'right' }}>Health</th>
                   <th style={{ ...th, textAlign: 'right' }}>Status</th>
                 </tr>

@@ -18,6 +18,13 @@ export function getToken(): string | null {
   return accessToken
 }
 
+// Set by the auth store: what to do when the gateway rejects our login token.
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -29,6 +36,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
 
   if (!resp.ok) {
+    // An expired or invalid token fails every later call too: go back to the
+    // login page instead of leaving every page silently empty.
+    if (resp.status === 401 && token && path !== '/api/auth/login') onUnauthorized?.()
     const body = await resp.json().catch(() => ({ message: resp.statusText }))
     throw new Error(body.message || body.error || body.detail || resp.statusText)
   }
@@ -579,6 +589,8 @@ export interface RiskStatus {
     result: string
     reason?: string | null
     check_duration_ms: number
+    checks_passed: string[]
+    checks_failed: string[]
   }>
   limits: RiskLimits | null
   portfolio: PortfolioRiskState | null
@@ -609,6 +621,8 @@ export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
       result: c.result,
       reason: c.checks_failed?.length ? c.checks_failed.join(', ') : null,
       check_duration_ms: (c.latency_us ?? 0) / 1000,
+      checks_passed: c.checks_passed ?? [],
+      checks_failed: c.checks_failed ?? [],
     })),
     limits: r.risk_limits ?? null,
     portfolio: r.portfolio ?? null,

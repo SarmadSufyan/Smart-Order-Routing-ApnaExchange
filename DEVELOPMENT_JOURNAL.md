@@ -1000,3 +1000,31 @@ ROADMAP §6's last frontend item. Since Phase 6 every TWAP is pre-flighted slice
 ### Files
 
 Changed: `frontend/src/pages/AlgoOrders.tsx` (button, `PreflightResult` card), `services/api.ts` (shared, additive), `pages/AuditLog.tsx` (one filter); PROGRESS.md, ROADMAP §6.
+
+---
+
+## 2026-10-05 — Polish pass on Maham's pages, and an expired login that went unnoticed
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Audited the six pages (Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log) against the code and the backend's real data before changing anything, then fixed what was found.
+
+### Found while testing: an expired login left every page silently empty
+
+Logins expire after `JWT_EXPIRY_MINUTES` (60). After that every request got 401, but the app stayed on the page and showed zeros and empty panels everywhere, with no message — in a long demo the system would simply look broken. Now `services/api.ts` calls a handler on a 401 to a request that carried a token (not the login call itself), and `stores/authStore.ts` registers it: `logout('Your session expired — please log in again.')`. The app shell's existing auth guard then shows the login page, which already displays the auth store's message — so Mahnoor's Login page needed no change. Verified: reloading with an invalid token lands on the login page with that message and the token cleared; logging in again restores everything.
+
+### The polish
+
+- **Risk Manager → pre-trade check breakdown** was guesswork: it counted rejections by searching order error text for words like "kill" or "position", listed only 4 of the 7 checks, and used every order as "Total". The backend already sends its last 100 checks with `checks_passed` / `checks_failed`; `normalizeRisk` was dropping them. Now kept (`services/api.ts`) and used: all 7 checks in the backend's order (kill switch, order size, order value, orders per second, position per coin, total exposure, symbol allowed), each with passed, rejected and **not reached** (the checks stop at the first failure), rejection % of the orders the check actually looked at, and "No orders checked since the gateway started" when there is nothing. Verified with two orders that risk rejects before any venue is contacted — 20,000 XRP (order size, check 2) and 0.2 BTC ≈ $17k (order value, check 3): the table showed exactly that, including the XRP order as "not reached" at check 3.
+- **Risk Manager tiles:** "Orders routed today" was a gauge out of 500 — a limit that does not exist — now a plain number; the "Exposure used" tile repeated the exposure gauge and now shows the recent checks approved / rejected with their average time (0.10 ms); the exposure gauge says its share of the limit and is in USDT.
+- **Silent failures:** `refreshWallet`, `degradeVenue` and `recoverVenue` now resolve to an error message (like the other operator actions); Wallet shows "Couldn't refresh the balances: …" and Venue Connectivity shows Degrade / Recover errors in the venue's card.
+- **Audit Log filters** now cover every event family the backend writes: new **RAFT** (`consensus_*`), **Copilot** (`copilot_*`) and **Arbitrage** (`arb_opportunity`) filters; *Risk* adds `risk_limits_changed` and `kill_switch_release_refused`; *Routing & fills* adds `venue_trading_blocked`. The RAFT filter shows the earlier failover test ("Agreed by the RAFT cluster: kill switch release by admin (log index 8, term 137)").
+- **Kill Switch:** the blacklisted-venues column "Cloud" (from the stock design) shows the connection label, so it is now called "Connection".
+
+### Not changed (not Maham's files)
+
+`components/shared.tsx` still holds an unused `LatencyChart` with made-up NYSE/NASDAQ/BATS/IEX lines and an unused `fmtLatency` that prints a garbled "Âµs" — logged under *Open questions* in PROGRESS.md.
+
+### Files
+
+Changed: `services/api.ts`, `stores/authStore.ts`, `stores/dataStore.ts` (shared, small), `pages/RiskManager.tsx`, `pages/Wallet.tsx`, `pages/VenueHealth.tsx`, `pages/KillSwitch.tsx`, `pages/AuditLog.tsx`; PROGRESS.md. Type-check passes; 254 backend tests pass (no backend change); the changed pages fit a 375 px phone.

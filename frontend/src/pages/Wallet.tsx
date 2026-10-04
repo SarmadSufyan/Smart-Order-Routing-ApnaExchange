@@ -37,6 +37,7 @@ export function Wallet() {
   const venues           = useDataStore((s) => s.venues)
   const role             = useAuthStore((s) => s.user?.role)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const [rebasing, setRebasing]     = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const isNarrow    = useMediaQuery(MQ.narrow)
@@ -64,7 +65,7 @@ export function Wallet() {
 
   async function handleRefresh() {
     setRefreshing(true)
-    await refreshWallet()
+    setRefreshError(await refreshWallet())
     await fetchPnl()
     setRefreshing(false)
   }
@@ -104,6 +105,11 @@ export function Wallet() {
           {refreshing ? 'Refreshing…' : '↻ Refresh balances'}
         </button>
       </div>
+      {refreshError && (
+        <div style={{ marginBottom: 8, padding: '6px 10px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>
+          Couldn't refresh the balances: {refreshError} — showing the last balances read.
+        </div>
+      )}
       <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16 }}>
         Real balances read from each exchange with your API keys, valued in USDT at live mid prices from
         ApnaSOR's own order books. Read-only — funds stay on the exchange. P&L comes from our own records

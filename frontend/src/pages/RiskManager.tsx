@@ -9,6 +9,18 @@ import { SYMBOLS } from '../mockData'
 import { fmtPnl, fmtPrice, fmtUsd } from '../format'
 import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 
+// The 7 pre-trade checks in the order the backend runs them (risk_engine/checks.py).
+// They stop at the first failure, so a later check is not reached for that order.
+const PRE_TRADE_CHECKS: { key: string; name: string }[] = [
+  { key: 'kill_switch',        name: 'Kill switch' },
+  { key: 'size_limit',         name: 'Order size' },
+  { key: 'order_notional',     name: 'Order value (USDT)' },
+  { key: 'rate_limit',         name: 'Orders per second' },
+  { key: 'position_limit',     name: 'Position per coin' },
+  { key: 'notional_limit',     name: 'Total exposure' },
+  { key: 'symbol_restriction', name: 'Symbol allowed' },
+]
+
 const PORTFOLIO_LIMITS = [
   { key: 'max_trading_loss_usdt', label: 'Trading loss limit', unit: 'USDT', hint: '0 = off. Breach engages the kill switch.' },
   { key: 'max_asset_concentration_pct', label: 'Max share of one asset', unit: '%', hint: 'Non-stable assets only.' },
@@ -23,7 +35,6 @@ export function RiskManager() {
   const isNarrow    = useMediaQuery(MQ.narrow)
   const tileColumns = useTileColumns(4)
   const riskStatus = useDataStore((s) => s.riskStatus)
-  const orders     = useDataStore((s) => s.orders)
   const routingStats = useDataStore((s) => s.routingStats)
   const updateRiskLimits = useDataStore((s) => s.updateRiskLimits)
   const isAdmin = useAuthStore((s) => s.user?.role) === 'ADMIN'
@@ -65,41 +76,19 @@ export function RiskManager() {
   const notionalLimit = riskStatus?.exposure_limit || 1_000_000
   const ordersToday = routingStats?.orders_routed_today ?? 0
 
-  // Derive pre-trade check stats from recent_checks + orders
+  // The gateway's own record of its last pre-trade checks (it keeps 100).
   const recent = riskStatus?.recent_checks ?? []
-  const totalChecks = orders.length
   const approved = recent.filter((c) => c.result === 'APPROVED').length
   const rejected = recent.filter((c) => c.result !== 'APPROVED').length
   const avgMs = recent.length > 0
     ? (recent.reduce((s, c) => s + c.check_duration_ms, 0) / recent.length).toFixed(2)
     : '—'
 
-  const checks = [
-    {
-      name: 'Kill Switch',
-      total: totalChecks,
-      passed: orders.filter((o) => o.status !== 'REJECTED' || !o.rejection_reason?.toLowerCase().includes('kill')).length,
-      rejected: orders.filter((o) => o.rejection_reason?.toLowerCase().includes('kill')).length,
-    },
-    {
-      name: 'Position Limit',
-      total: totalChecks,
-      passed: orders.filter((o) => !o.rejection_reason?.toLowerCase().includes('position')).length,
-      rejected: orders.filter((o) => o.rejection_reason?.toLowerCase().includes('position')).length,
-    },
-    {
-      name: 'Notional Limit',
-      total: totalChecks,
-      passed: orders.filter((o) => !o.rejection_reason?.toLowerCase().includes('notional') && !o.rejection_reason?.toLowerCase().includes('exposure')).length,
-      rejected: orders.filter((o) => o.rejection_reason?.toLowerCase().includes('notional') || o.rejection_reason?.toLowerCase().includes('exposure')).length,
-    },
-    {
-      name: 'Symbol Check',
-      total: totalChecks,
-      passed: orders.filter((o) => !o.rejection_reason?.toLowerCase().includes('symbol')).length,
-      rejected: orders.filter((o) => o.rejection_reason?.toLowerCase().includes('symbol')).length,
-    },
-  ]
+  const checks = PRE_TRADE_CHECKS.map(({ key, name }) => {
+    const passed = recent.filter((c) => c.checks_passed.includes(key)).length
+    const rejected = recent.filter((c) => c.checks_failed.includes(key)).length
+    return { name, passed, rejected, notReached: recent.length - passed - rejected }
+  })
 
   const th: React.CSSProperties = { padding: '3px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
   const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
@@ -113,20 +102,26 @@ export function RiskManager() {
           <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open Positions" unit="symbols" size={120} />
         </Card>
         <Card style={{ textAlign: 'center' }}>
-          <ArcGauge value={Math.round(notional)} max={notionalLimit} label="Notional" unit="USD" size={120} />
-        </Card>
-        <Card style={{ textAlign: 'center' }}>
-          <ArcGauge value={ordersToday} max={500} label="Orders Routed" unit="today" size={120} />
+          <ArcGauge
+            value={Math.round(notional)} max={notionalLimit} unit="USDT" size={120}
+            label={`Exposure · ${riskStatus ? riskStatus.exposure_utilization_pct.toFixed(1) : '0.0'}% of limit`}
+          />
         </Card>
         <Card style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: F.xxl, fontWeight: 700, color: notional > 0 ? C.green : C.muted }}>
-              ${notional.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>{ordersToday.toLocaleString()}</div>
+            <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>Orders routed today</div>
+          </div>
+        </Card>
+        <Card style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }} title="The gateway's last pre-trade checks (it keeps 100)">
+            <div style={{ fontSize: F.xxl, fontWeight: 700 }}>
+              <span style={{ color: approved > 0 ? C.green : C.muted }}>{approved}</span>
+              <span style={{ color: C.dim, fontSize: F.lg }}> / </span>
+              <span style={{ color: rejected > 0 ? C.red : C.muted }}>{rejected}</span>
             </div>
-            <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>Exposure Used</div>
-            <div style={{ fontSize: F.xs, color: C.dim, marginTop: 2 }}>
-              {riskStatus ? `${riskStatus.exposure_utilization_pct.toFixed(1)}% of limit` : '—'}
-            </div>
+            <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>Pre-trade checks: approved / rejected</div>
+            <div style={{ fontSize: F.xs, color: C.dim, marginTop: 2 }}>last {recent.length} · avg {avgMs} ms</div>
           </div>
         </Card>
       </div>
@@ -265,28 +260,36 @@ export function RiskManager() {
           <thead>
             <tr>
               <th style={th}>Check</th>
-              <th style={{ ...th, textAlign: 'right' }}>Total</th>
               <th style={{ ...th, textAlign: 'right' }}>Passed</th>
               <th style={{ ...th, textAlign: 'right' }}>Rejected</th>
-              <th style={{ ...th, textAlign: 'right' }}>Rej %</th>
+              <th style={{ ...th, textAlign: 'right' }} title="An earlier check had already rejected the order, or this check did not apply">Not reached</th>
+              <th style={{ ...th, textAlign: 'right' }} title="Share of the orders this check looked at that it rejected">Rej %</th>
             </tr>
           </thead>
           <tbody>
-            {checks.map((c) => {
-              const rejPct = c.total > 0 ? (c.rejected / c.total) * 100 : 0
+            {recent.length === 0 && (
+              <tr style={tr}>
+                <td colSpan={5} style={{ padding: '14px 8px', textAlign: 'center', color: C.dim }}>
+                  No orders checked since the gateway started.
+                </td>
+              </tr>
+            )}
+            {recent.length > 0 && checks.map((c) => {
+              const looked = c.passed + c.rejected
+              const rejPct = looked > 0 ? (c.rejected / looked) * 100 : 0
               return (
                 <tr key={c.name} style={tr}>
                   <td style={{ padding: '7px 8px' }}>{c.name}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', color: C.muted }}>{c.total}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', color: C.green }}>{c.passed}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: c.passed > 0 ? C.green : C.muted }}>{c.passed}</td>
                   <td style={{ padding: '7px 8px', textAlign: 'right', color: c.rejected > 0 ? C.red : C.muted }}>{c.rejected}</td>
-                  <td style={{ padding: '7px 8px', textAlign: 'right', color: rejPct > 30 ? C.orange : C.muted }}>{rejPct.toFixed(1)}%</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: C.dim }}>{c.notReached}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', color: rejPct > 30 ? C.orange : C.muted }}>{looked > 0 ? `${rejPct.toFixed(1)}%` : '—'}</td>
                 </tr>
               )
             })}
             <tr style={{ ...tr, background: C.surface }}>
               <td style={{ padding: '7px 8px', color: C.muted, fontSize: F.xs }} colSpan={5}>
-                Recent checks: <span style={{ color: C.text }}>{recent.length}</span> · approved: <span style={{ color: C.green }}>{approved}</span> · rejected: <span style={{ color: C.red }}>{rejected}</span> · avg time: <span style={{ color: C.text }}>{avgMs} ms</span>
+                Last <span style={{ color: C.text }}>{recent.length}</span> pre-trade checks (the gateway keeps 100) · approved: <span style={{ color: C.green }}>{approved}</span> · rejected: <span style={{ color: C.red }}>{rejected}</span> · avg time: <span style={{ color: C.text }}>{avgMs} ms</span>
               </td>
             </tr>
           </tbody>

@@ -51,7 +51,7 @@ interface DataState {
   fetchConsensus: () => Promise<string | null>
 
   fetchWallet: () => Promise<void>
-  refreshWallet: () => Promise<void>
+  refreshWallet: () => Promise<string | null>
   fetchPnl: () => Promise<void>
   // Operator actions below resolve to an error message, or null on success.
   resetBaseline: (venueId?: string) => Promise<string | null>
@@ -67,8 +67,8 @@ interface DataState {
   cancelOrder: (orderId: string) => Promise<void>
   blacklistVenue: (venueId: string, reason?: string) => Promise<string | null>
   unblacklistVenue: (venueId: string) => Promise<string | null>
-  degradeVenue: (venueId: string) => Promise<void>
-  recoverVenue: (venueId: string) => Promise<void>
+  degradeVenue: (venueId: string) => Promise<string | null>
+  recoverVenue: (venueId: string) => Promise<string | null>
   activateKillSwitch: (reason: string) => Promise<string | null>
   deactivateKillSwitch: () => Promise<string | null>
   setupWebSocket: () => void
@@ -183,8 +183,9 @@ export const useDataStore = create<DataState>((set, get) => ({
   refreshWallet: async () => {
     try {
       set({ wallet: await api.refreshWallet() })
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -305,8 +306,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.degradeVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -314,8 +316,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.recoverVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
