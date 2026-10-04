@@ -125,6 +125,7 @@ scripts/                check_exchange_keys.py (all venues), check_binance_testn
 project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
 venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
 start_all.py            starts the RAFT nodes (if enabled), gateway + frontend
+.github/workflows/ci.yml  CI on every push/PR to the 3 team branches: backend tests (Linux + Windows), ruff, tsc
 data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
 
@@ -140,11 +141,14 @@ python scripts/check_exchange_keys.py            # which venues authenticate, wi
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
 python -m unittest discover -s backend/tests -t .   # all backend tests (262 as of 2026-10-06)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
+python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
 ```
 
 Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.
+**CI** (`.github/workflows/ci.yml`) runs the tests, ruff and the type-check on a clean Linux and Windows machine for
+every push and PR to the team branches; its ✅/❌ is next to each commit on GitHub (details: the Actions tab).
 **RAFT on:** set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` (make one with
 `python -c "import secrets; print(secrets.token_hex(32))"`) in `.env`, then `python start_all.py` starts the 3 nodes
 before the gateway (a killed node is restarted after 15 s). Every RAFT message is signed with that secret.

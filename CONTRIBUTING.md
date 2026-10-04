@@ -73,12 +73,15 @@ git merge origin/feature/crypto-pivot       # what Sarmad merged at the last mil
 # ...work...
 python -m unittest discover -s backend/tests -t .
 npx --prefix frontend tsc --noEmit -p frontend
+python -m ruff check backend scripts start_all.py   # backend only (pip install -r backend/requirements-dev.txt)
 git add <files>
 git commit -m "feat(copilot): parse notional orders"
 git push
 ```
 
 **Before you push:** tests pass, type-check passes, your `PROGRESS.md` row updated (backend: handoff note added), journal entry appended for anything non-trivial.
+
+**After you push — CI:** GitHub re-runs the checks on a clean machine for every push and pull request on the three team branches ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, ~3–4 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ on your branch is yours to fix before anything is merged. A newer push cancels the run for the older one.
 
 **Milestone done?** Tell Sarmad; he merges your branch into `feature/crypto-pivot`.
 
@@ -98,7 +101,7 @@ git push
 
 **Milestone merge** (backend or frontend chunk done):
 1. Open a PR: base `feature/crypto-pivot` ← `feature/backend-v2` (or `feature/frontend-v2`) → **Files changed** → scan the diff.
-2. Check: any `.env`, keys, `data/`, logs or build output committed? Frontend touching `backend/` (or the reverse) without agreement? Tests and type-check pass?
+2. Check: any `.env`, keys, `data/`, logs or build output committed? Frontend touching `backend/` (or the reverse) without agreement? CI ✅ on the PR (tests, lint, type-check)?
 3. Merge with **"Create a merge commit"** — **not** squash, and **don't delete the branch**. These are long-lived shared branches: a squash merge makes the next merge from the same branch replay old work and conflict.
 4. Tell the team to run `git fetch origin` + `git merge origin/feature/crypto-pivot`.
 
