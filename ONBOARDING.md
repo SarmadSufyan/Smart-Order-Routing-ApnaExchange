@@ -95,7 +95,7 @@ Rules for `.env`:
 - **Use your own keys, never someone else's.** If two people trade the same test account, each person's records show the other's trades as mismatches.
 - **Never commit `.env`** (it's in `.gitignore`), and never paste keys into WhatsApp, group chats, screenshots or the repo.
 - Each variable once only. If a name appears twice, the later line silently wins.
-- Backend (Fizza) also needs `ANTHROPIC_API_KEY` for the LLM copilot. Get it from Sarmad privately, never in a group chat.
+- For the LLM copilot, add `GEMINI_API_KEY`: create your **own** free key at https://aistudio.google.com/apikey (Google account → *Create API key*; **don't** enable billing). Without it everything else runs; the copilot just reports itself unavailable.
 
 ## 5. Check that everything works
 

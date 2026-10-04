@@ -12,6 +12,15 @@ from backend.shared.models.order import Order, OrderSide, OrderType
 from backend.shared.models.risk import RiskCheckResult, RiskLimits
 
 
+class RaftSecretTest(unittest.TestCase):
+    def test_raft_needs_a_long_enough_secret_but_loading_settings_never_fails(self) -> None:
+        s = Settings(_env_file=None, raft_enabled=True)  # loads fine...
+        self.assertIn("RAFT_SHARED_SECRET", s.raft_secret_problem())  # ...but RAFT won't start
+        self.assertIsNotNone(Settings(_env_file=None, raft_shared_secret="short").raft_secret_problem())
+        self.assertIsNone(Settings(_env_file=None, raft_shared_secret="x" * 32).raft_secret_problem())
+        self.assertNotIn("x" * 32, repr(Settings(_env_file=None, raft_shared_secret="x" * 32)))  # SecretStr
+
+
 class SettingsTest(unittest.TestCase):
     def test_mainnet_requires_explicit_allow(self) -> None:
         with self.assertRaises(ValidationError):

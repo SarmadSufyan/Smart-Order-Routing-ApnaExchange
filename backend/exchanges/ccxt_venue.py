@@ -49,6 +49,10 @@ logger = get_logger("ccxt_venue")
 
 FINAL_STATUSES = {"closed", "canceled", "expired", "rejected"}
 _MSG_RE = re.compile(r'"(?:msg|message|ret_msg|sMsg)"\s*:\s*"([^"]+)"')
+# Venues word "your key may not trade" in their own way, often with codes ccxt
+# doesn't map yet — found live: OKX 50124 "This API Key does not have trading
+# permission for the market" arrives as a plain ExchangeError.
+_PERMISSION_RE = re.compile(r"permission|not allowed to trade|trading (?:is )?(?:not allowed|disabled)", re.I)
 
 
 def venue_client_id(child_order_id: str) -> str:
@@ -66,6 +70,11 @@ def short_error(exc: Exception) -> str:
     text = str(exc)
     match = _MSG_RE.search(text)
     return match.group(1) if match else text[:160]
+
+
+def is_permission_error(exc: Exception) -> bool:
+    """The venue refuses our API key's right to trade — not this particular order."""
+    return isinstance(exc, AuthenticationError) or bool(_PERMISSION_RE.search(short_error(exc)))
 
 
 def _step(value: Any, precision_mode: int) -> float:
@@ -359,10 +368,14 @@ class CcxtVenueAdapter(ExchangeAdapter):
     ) -> ExecutionResult:
         cid = venue_client_id(client_order_id)
 
-        def reject(reason: str, latency_ms: float = 0.0, qty: float = quantity, venue_fault: bool = False) -> ExecutionResult:
+        # Every path through reject() means nothing was executed, so the router
+        # may send the quantity elsewhere.
+        def reject(reason: str, latency_ms: float = 0.0, qty: float = quantity, venue_fault: bool = False,
+                   blocks_trading: bool = False) -> ExecutionResult:
             return ExecutionResult(
                 exec_type=ExecType.REJECT, requested_qty=qty, client_order_id=cid,
                 latency_ms=round(latency_ms, 2), reason=reason, venue_fault=venue_fault,
+                retry_elsewhere=True, blocks_trading=blocks_trading,
             )
 
         rules = self._rules.get(symbol)
@@ -395,9 +408,11 @@ class CcxtVenueAdapter(ExchangeAdapter):
             return reject(f"insufficient balance on {self.name}: {short_error(exc)}", self._since(started), qty)
         except AuthenticationError as exc:
             self._record_auth(short_error(exc))
-            return reject(f"{self.name} rejected the API key: {short_error(exc)}", self._since(started), qty)
+            return reject(f"{self.name} rejected the API key: {short_error(exc)}", self._since(started), qty,
+                          blocks_trading=True)
         except InvalidOrder as exc:
-            return reject(f"{self.name} rejected the order: {short_error(exc)}", self._since(started), qty)
+            return reject(f"{self.name} rejected the order: {short_error(exc)}", self._since(started), qty,
+                          blocks_trading=is_permission_error(exc))
         except NetworkError as exc:
             # The request may or may not have reached the matching engine.
             # Never resend blindly — look the order up by our client id.
@@ -409,6 +424,10 @@ class CcxtVenueAdapter(ExchangeAdapter):
                     self._since(started), qty, venue_fault=True,
                 )
         except ExchangeError as exc:
+            if is_permission_error(exc):
+                # Our key's fault, not the venue's: block routing, keep its health score.
+                return reject(f"{self.name} refused this API key's trading permission: {short_error(exc)}",
+                              self._since(started), qty, blocks_trading=True)
             return reject(f"{self.name} error: {short_error(exc)}", self._since(started), qty, venue_fault=True)
 
         result = self._to_result(order, qty, self._since(started), cid)
@@ -476,6 +495,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
                 "rejected": f"rejected by {self.name}",
             }.get(status, f"not filled (status={status})")
             venue_fault = status == "rejected"
+        retry_elsewhere = filled <= 0 and status == "rejected"  # refused outright, not expired at a price
 
         fee, fee_asset = 0.0, None
         for f in order.get("fees") or ([order["fee"]] if order.get("fee") else []):
@@ -500,6 +520,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
             latency_ms=round(latency_ms, 2),
             reason=reason,
             venue_fault=venue_fault,
+            retry_elsewhere=retry_elsewhere,
         )
 
     async def cancel_all_open_orders(self) -> int:

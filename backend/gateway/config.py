@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # planned price. Decisions use mainnet books but fills happen on the
     # testnet book, so a drifted book must make a child expire, not overpay.
     child_price_protection_bps: float = 50.0
+    # A venue that refuses our key's right to trade gets no new orders for
+    # this long (then one retry); a restart clears it. Refused quantity is
+    # re-routed to the other venues either way.
+    trading_block_cooldown_s: float = 600.0
     # A venue+symbol whose EXECUTION book (testnet) sits further than this
     # from the real-market book is excluded from routing (both sides).
     coherence_threshold_bps: float = 50.0
@@ -77,10 +81,48 @@ class Settings(BaseSettings):
     default_max_venue_concentration_pct: float = 80.0
     risk_monitor_interval_s: float = 2.0
 
+    # ─── Risk batch (Phase 6: pre-flight in parallel processes) ───
+    # Worker processes for stress-tested batches; 0 = min(CPU cores, 4).
+    # Smaller batches stay in-process: below this size, process overhead
+    # costs more than it saves (scripts/benchmark_risk_batch.py measures it).
+    risk_pool_workers: int = 0
+    risk_pool_min_orders: int = 4
+    risk_stress_paths: int = 5_000  # Monte Carlo price paths per order
+    risk_stress_horizon_min: int = 60
+    volatility_sample_interval_s: float = 5.0  # live mid sampling for the stress test
+
     # ─── Audit log / book of record ───────────────────────────────
     # Empty = data/apnasor-<exchange_mode>.db, so testnet and mainnet records
     # never mix. ":memory:" keeps nothing (tests).
     database_path: str = ""
+
+    # ─── RAFT cluster (Phase 6) ───────────────────────────────────
+    # Three node processes replicate the kill switch, risk limits and venue
+    # blacklist; the gateway writes through the leader. Off = everything
+    # stays local, exactly as before. start_all.py starts the nodes.
+    raft_enabled: bool = False
+    raft_cluster_nodes: str = "127.0.0.1:9001,127.0.0.1:9002,127.0.0.1:9003"
+    # Every RAFT message (node <-> node, gateway <-> node) is signed with this
+    # (HMAC-SHA256). Required when RAFT is on; each machine makes its own.
+    raft_shared_secret: SecretStr | None = None
+    raft_data_dir: str = ""  # empty = data/raft-<exchange_mode>/ (one SQLite file per node)
+    raft_tick_ms: int = 50
+    raft_election_ticks: int = 10  # election timeout = random 10-20 ticks (0.5-1 s)
+    raft_heartbeat_ticks: int = 2  # leader heartbeat every 100 ms
+    raft_poll_interval_s: float = 0.5  # gateway re-reads the committed state
+    raft_write_timeout_s: float = 3.0  # a write without a majority fails after this
+
+    # ─── LLM copilot ──────────────────────────────────────────────
+    # The model only turns a sentence into order parameters; it never sees
+    # exchange keys and never submits anything. "off" disables the copilot.
+    llm_provider: Literal["gemini", "off"] = "gemini"
+    gemini_api_key: SecretStr | None = None  # free key from Google AI Studio
+    gemini_model: str = "gemini-3.1-flash-lite"  # fast + on the free tier (2026-10-02)
+    llm_timeout_s: float = 30.0
+    copilot_proposal_ttl_s: float = 120.0  # a proposal not confirmed in time expires
+    # Confirm refuses if the mid moved further than this since the proposal:
+    # the trader agreed to a price, not to whatever the market does next.
+    copilot_max_price_move_bps: float = 100.0
 
     # ─── Auth ─────────────────────────────────────────────────────
     jwt_secret: str = "apna-exchange-poc-secret-change-in-prod"
@@ -102,6 +144,16 @@ class Settings(BaseSettings):
             )
         return self
 
+    def raft_secret_problem(self) -> str | None:
+        """Why the RAFT secret can't be used, or None. Checked where RAFT starts
+        (start_all, the gateway, each node) — not here, so loading the settings
+        never fails just because RAFT is half set up."""
+        secret = self.raft_shared_secret.get_secret_value() if self.raft_shared_secret else ""
+        if len(secret) >= 16:
+            return None
+        return ("RAFT needs RAFT_SHARED_SECRET in .env (16+ characters) - every RAFT message is signed "
+                "with it. Generate one with:  python -c \"import secrets; print(secrets.token_hex(32))\"")
+
     @property
     def symbol_list(self) -> list[str]:
         """Unified symbols, e.g. ``["BTC/USDT", "ETH/USDT"]``."""
@@ -115,6 +167,13 @@ class Settings(BaseSettings):
             path = Path(self.database_path)
             return str(path if path.is_absolute() else PROJECT_ROOT / path)
         return str(PROJECT_ROOT / "data" / f"apnasor-{self.exchange_mode}.db")
+
+    @property
+    def resolved_raft_data_dir(self) -> str:
+        if self.raft_data_dir:
+            path = Path(self.raft_data_dir)
+            return str(path if path.is_absolute() else PROJECT_ROOT / path)
+        return str(PROJECT_ROOT / "data" / f"raft-{self.exchange_mode}")
 
     @property
     def enabled_exchange_list(self) -> list[str]:

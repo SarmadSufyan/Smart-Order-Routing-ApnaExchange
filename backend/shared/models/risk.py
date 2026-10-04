@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -64,6 +65,53 @@ class KillSwitchState(BaseModel):
 
 class KillSwitchActivateRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+class PreflightOrder(BaseModel):
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    quantity: float = Field(..., gt=0)
+
+
+class PreflightRequest(BaseModel):
+    """A basket to check without sending anything (``POST /api/risk/preflight``)."""
+
+    orders: list[PreflightOrder] = Field(..., min_length=1, max_length=200)
+    stress: bool = False  # also run the Monte Carlo stress test per order (CPU-heavy)
+    mode: Literal["auto", "serial", "pool"] = "auto"  # auto = pool only when it pays off
+
+
+class StressSummary(BaseModel):
+    position_after: float  # base units held after the order (signed)
+    var_99_usdt: float  # worst loss within the horizon on 99% of simulated paths
+    expected_shortfall_usdt: float  # average loss over the worst 1% of paths
+    horizon_min: int
+    paths: int
+    sigma_per_min_pct: float  # measured volatility, % per minute
+
+
+class PreflightItemResult(BaseModel):
+    index: int
+    symbol: str
+    side: str
+    quantity: float
+    mid_price: float
+    result: RiskCheckResult
+    checks_passed: list[str] = []
+    checks_failed: list[str] = []
+    message: str | None = None
+    position_after: float  # if this and every earlier order in the basket filled
+    stress: StressSummary | None = None
+
+
+class PreflightResponse(BaseModel):
+    all_approved: bool
+    approved: int
+    rejected: int
+    executor: str  # "in-process" or "pool (N processes)"
+    elapsed_ms: float
+    notes: list[str] = []
+    results: list[PreflightItemResult]
 
 
 class RiskStatusResponse(BaseModel):

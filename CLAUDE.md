@@ -32,16 +32,28 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
 ```
  Frontend (React 18 + TS + Vite, Zustand) ── REST + one WebSocket ──┐
                                                                     ▼
- Gateway (FastAPI, async) ── routers: orders · algos · venues · market-data · wallet · risk · audit · routing · auth
+ Gateway (FastAPI, async) ── routers: orders · algos · copilot · venues · market-data · wallet · risk · audit · routing · auth
    │
-   ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, future LLM copilot)
+   ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, LLM copilot)
    │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → best-price depth walk
    │                        → IOC LIMIT children (price-protected) sent concurrently → fills applied
-   ├─ PreTradeRiskEngine (7 checks) · KillSwitch (persisted) · PositionTracker
+   │                        → a venue's REFUSED quantity re-routed without it (≤ 2 rounds); a venue that
+   │                          refuses our key's right to trade is paused for TRADING_BLOCK_COOLDOWN_S
+   ├─ PreTradeRiskEngine (7 checks = one pure function, checks.py) · KillSwitch (persisted) · PositionTracker
+   │     └─ risk batch: pre-flight of many orders (a TWAP's slices before it starts, POST /api/risk/preflight)
+   │        + Monte Carlo stress test, on a pool of worker PROCESSES when the batch is big enough
+   ├─ RiskControls ← the ONE way to change the kill switch, risk limits, venue blacklist
+   │     └─ RAFT_ENABLED=true: written through the RAFT leader, committed by a majority; the gateway keeps
+   │        a local copy for the order path (tighten = at once even without a majority; loosen = majority)
    ├─ RiskMonitor (every 2 s): trading-loss limit → auto kill switch; concentration alerts
    ├─ MarketDataCollector + Aggregator (NBBO) · VenueHealthMonitor · CoherenceMonitor
    ├─ WalletService (real balances) · PnLService (opening balances + fills → P&L, reconciliation)
    ├─ TwapEngine (algo orders) · AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
+   ├─ Copilot: sentence → LLM (Gemini free tier) fills a strict form → code validates → proposal
+   │            → user confirms → OrderEntry / TwapEngine (the LLM never submits)
+   │
+ RAFT cluster (backend/services/consensus/, Phase 6) — 3 node processes on 127.0.0.1:9001-9003, each with its
+   own SQLite log (data/raft-<mode>/); leader election + log replication; started by start_all.py when enabled
    │
  Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync
    V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
@@ -55,7 +67,7 @@ Internal events flow over an in-process async event bus (`backend/shared/events/
 |---|---|---|---|---|
 | V1 | Binance | mainnet public feed | **spot testnet** | ✅ verified live |
 | V4 | Bybit | mainnet public feed | **Demo Trading** (not Bybit Testnet — its books drift) | ✅ verified live |
-| V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ❌ blocked by some ISPs' DNS; passphrase missing |
+| V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ⚠️ authenticates; orders get 50124 "no trading permission" (2026-10-02) — router pauses it; some ISPs' DNS blocks okx.com |
 | V6 | Gate | mainnet public feed | spot testnet | ⚠️ authenticates; spot testnet wallet empty |
 | V2 | Coinbase | mainnet public feed | none (no real testnet) — data-only, off by default | — |
 | V3 | Kraken | — | no spot testnet | not possible |
@@ -78,13 +90,20 @@ backend/
   services/
     order_state/        order_manager.py (state machine, in-flight tracking, restore), entry.py (OrderEntry)
     routing_engine/     engine.py (pipeline + child execution), strategies/best_price.py (depth walk)
-    risk_engine/        pre_trade.py, kill_switch.py, position_tracker.py, risk_monitor.py
+    risk_engine/        pre_trade.py (gate), checks.py (the 7 checks, pure), batch.py (pre-flight, stress test,
+                        process pool), preflight.py (basket API), volatility.py (live realized vol),
+                        controls.py (RiskControls: local or through RAFT), kill_switch.py, position_tracker.py,
+                        risk_monitor.py
     market_data/        collector.py, aggregator.py
     venue_monitor/      health_checker.py, coherence.py
     wallet/             portfolio.py (balances), ledger.py (pure P&L math), pnl.py (P&L + reconciliation)
     audit/              recorder.py (event bus → audit log)
     algos/              twap.py (TWAP engine; pure schedule math at the top)
-    consensus/          EMPTY — Phase 6 home for the RAFT cluster
+    agents/             copilot.py (propose / confirm / cancel), llm.py (one LLM interface; GeminiClient)
+    consensus/          RAFT: core.py (the algorithm — no I/O, no clock, tick/step), storage.py (SQLite),
+                        state_machine.py (kill switch / limits / blacklist), node.py (one node process:
+                        python -m backend.services.consensus.node --id N), client.py (gateway + scripts),
+                        wire.py (every message signed: HMAC-SHA256 + time stamp + one-time nonce)
     execution/ policy/ risk/ routing/ venue_health/   empty legacy placeholders (unused)
   shared/               models/ (Pydantic v2), database/store.py (AuditStore), events/event_bus.py,
                         exceptions.py, utils/logger.py (structlog)
@@ -97,10 +116,11 @@ frontend/src/
   services/api.ts       every REST call + response types      services/websocket.ts  one multiplexed WS
   stores/dataStore.ts   Zustand: all server state; WS events trigger refetches
   theme.ts / format.ts  colour + font tokens (C, F), number formatting (fmtPrice, fmtQty, fmtUsd, fmtPnl)
-scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py
+scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py, benchmark_risk_batch.py,
+                        raft_demo.py (kill the leader; --gateway --twap 0.0006 against the live system)
 project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
 venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
-start_all.py            starts gateway + frontend
+start_all.py            starts the RAFT nodes (if enabled), gateway + frontend
 data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
 
@@ -114,9 +134,17 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (107 as of 2026-10-01)
+python -m unittest discover -s backend/tests -t .   # all backend tests (226 as of 2026-10-02)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
+python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
+python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
 ```
+
+Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.
+**RAFT on:** set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` (make one with
+`python -c "import secrets; print(secrets.token_hex(32))"`) in `.env`, then `python start_all.py` starts the 3 nodes
+before the gateway (a killed node is restarted after 15 s). Every RAFT message is signed with that secret.
+`GET /api/consensus/status` shows leader, terms, log positions and refused messages.
 
 POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN), `trader1` (TRADER), `risk_mgr` (RISK_MANAGER) — password = username.
 
@@ -126,11 +154,11 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 
 ## Non-negotiable design rules
 
-1. **One way in.** Every order — button, TWAP, future copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly.
+1. **One way in.** Every order — button, TWAP, copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly. Likewise every change to the kill switch, risk limits or venue blacklist goes through `RiskControls` (`svc.risk_controls`), so it is replicated when RAFT is on.
 2. **Testnet / demo only** until Phase 8. Mainnet needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay empty in dev.
 3. **Children are IOC LIMIT, price-protected.** No resting orders; MARKET parents are capped at the worst planned price ± `CHILD_PRICE_PROTECTION_BPS` (and the venue's own price-limit rule).
 4. **Reality wins.** A fill reported by an exchange is always recorded (even on a cancelled parent). Never "fix" a mismatch by editing the ledger — reconciliation shows it; an operator accepts exchange balances (audited).
-5. **Fail-safe state.** The kill switch and risk limits are persisted; a restart keeps an engaged kill switch engaged and leaves running TWAPs **paused**.
+5. **Fail-safe state.** The kill switch, risk limits and venue blacklist are persisted (and replicated with RAFT on); a restart keeps an engaged kill switch engaged and leaves running TWAPs **paused**. Without a RAFT majority, *tightening* (engage, blacklist) still happens at once; *loosening* (release, un-blacklist, limit changes) is refused.
 6. **Never interrupt a call that is at the exchange** (no task cancellation mid-order). Pause/cancel take effect between steps.
 7. **Everything is audited** with an actor and a plain-English summary (`backend/shared/events/event_bus.py: audit()`).
 8. **Honest claims only** (the panel probes them): not "non-custodial" (exchanges custody funds; we read balances); arbitrage is a fee-aware *detector*; the value is integration, not a novel algorithm; only claim benchmarks we can show; testnet/demo = exchange-run fake funds.
@@ -157,14 +185,17 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 - **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
 - **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
 - **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
-- **OKX**: some ISPs' default DNS refuses `okx.com` — don't depend on OKX for a demo unless that network reaches it.
+- **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network), then `ipconfig /flushdns` — Windows caches a failed lookup. Do it on the demo laptop too. Right after a DNS change, Bybit's WebSocket can hang for ~2 min (IPv6 addresses on a network without IPv6) and then recovers by itself.
 - **Gate**: its documented test funds go to the *futures* testnet and can't move to spot; ApnaSOR trades Gate spot.
+- **Windows + local networking (RAFT):** connecting to a closed `127.0.0.1` port takes ~2 s to fail, and `localhost` may try IPv6 first — always `127.0.0.1` and short timeouts. The venv's `python.exe` is a launcher: `Popen.pid` is not the real Python's pid (`os.getpid()`); killing the launcher kills its child.
+- **Process pools on Windows** start workers by re-importing Python (~1 s cold start): keep the pool warm, and scripts that use one need `if __name__ == "__main__":`.
+- **`IsolatedAsyncioTestCase` runs asyncio in debug mode** (a stack trace per callback): fine for most tests, but timer-heavy ones (RAFT over TCP) must `set_debug(False)` or elections never settle.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 
 ## Docs you can trust
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

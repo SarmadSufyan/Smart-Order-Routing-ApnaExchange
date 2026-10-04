@@ -18,6 +18,10 @@ structlog==26.1.0
 # Auth
 python-jose[cryptography]==3.5.0
 
+# LLM copilot: plain HTTPS calls to the model API (no vendor SDK, so the
+# provider stays swappable)
+httpx==0.28.1
+
 # === Planned — not imported yet, kept so install stays one-shot ===
 # numpy==2.4.4              # risk analytics / anomaly detection (Phase 6)
 # redis[hiredis]            # cross-process state + pub/sub (Phase 2+)

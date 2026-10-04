@@ -230,6 +230,24 @@ class TwapEngineTest(unittest.IsolatedAsyncioTestCase):
             await engine.create(params(), "sarmad")  # 0.004 BTC x $100 = $0.40
         self.assertIn("algo limit", ctx.exception.message)
 
+    async def test_preflight_refuses_a_twap_that_would_cross_the_position_limit_half_way(self) -> None:
+        # Every slice (0.001) is fine on its own; the 3rd would take the BTC
+        # position to 0.003 > 0.0025. Before the pre-flight, slices 1-2 traded
+        # and then the TWAP stalled half-done.
+        entry = StubEntry()
+        engine = self.make(entry, limits=RiskLimits(max_position_per_symbol=0.0025))
+        with self.assertRaises(AlgoRejectedError) as ctx:
+            await engine.create(params(), "sarmad")
+        self.assertIn("Pre-flight: slice 3 of 4", ctx.exception.message)
+        self.assertIn("position_limit", ctx.exception.message)
+        self.assertEqual(entry.requested, [])  # nothing was sent
+        self.assertEqual(engine.list(), [])
+
+    async def test_preflight_note_on_an_accepted_twap(self) -> None:
+        engine = self.make(StubEntry())
+        algo = await engine.create(params(), "sarmad")
+        self.assertIn("Pre-flight: all 4 slices pass pre-trade risk at today's limits", algo.notes)
+
     async def test_restart_leaves_a_running_twap_paused(self) -> None:
         store = AuditStore(":memory:")
         await store.open()
