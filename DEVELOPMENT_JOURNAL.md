@@ -1087,3 +1087,68 @@ Before the reload, the dashboard was still running the old code and was refused,
 ### Files
 
 New: `backend/tests/test_api/test_websocket_auth.py`. Changed: `backend/gateway/middleware/auth.py` (`decode_access_token`, `TokenError`), `backend/gateway/websocket/ws_manager.py` (`serve`, login handshake, expiry close), `backend/gateway/main.py` (`/ws` endpoint), `frontend/src/services/websocket.ts` (auth message, stop on 4401); PROGRESS.md, ROADMAP §7, CLAUDE.md.
+
+## 2026-10-06 — The TWAP chart on small phones
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Sarmad's review of the merged pages (2026-10-05, logged in `feature/backend-v2`'s PROGRESS.md) found that `components/TwapChart.tsx` never drew narrower than 320 px (`useWidth`: `Math.max(320, …)`). Measured on Algo Orders with a TWAP selected: on a 375 px phone the chart's box is 314 px, so the chart stuck 6 px into the card's padding; on a 320 px phone the box is 258 px and the whole page scrolled sideways by 35 px.
+
+### The fix
+
+- **Minimum width 320 → 240 px** (`MIN_W`). A 320 px phone's card now fits; below 240 the plot (the width minus 150 px of axis labels) would vanish.
+- **`minWidth: 0` on the chart's box.** Inside a flex or grid cell (a Dashboard widget, say) the SVG's own width would otherwise keep the box from shrinking, so the ResizeObserver would never see the narrower size. No effect in today's block layout; it keeps the chart reusable.
+- **Time labels.** A clock label is ~50 px wide; at a 258 px chart the middle one overlapped the first, so it is left out when the plot is narrower than 160 px (`MIN_PLOT_FOR_MID_TICK`). A 375 px phone (plot 164 px) keeps all three, ~8 px apart. The last label is anchored by position, not by index 2.
+- **Legend wraps whole items** (`flexWrap`). At 320 px both labels used to shrink and break onto two lines each; now the second one moves to its own line.
+
+Measured after the fix: the chart equals its box at 320 (258 px), 375 (314), 390 (329) and 1024 px (698); the page never scrolls sideways; time labels never overlap. Type-check passes.
+
+### How it was tested
+
+- This machine has no TWAPs, and Binance / Bybit refused its network that day (Binance 451 "restricted location", Bybit 403 from CloudFront — most likely a VPN), so no real TWAP could run. The chart was tested with a made-up TWAP: the browser tab's own `fetch` answered `GET /api/algos/` with it. Nothing reached the gateway or an exchange; a reload removed it.
+- **A trap for anyone measuring layouts in an automated browser:** while the browser pane was hidden it painted no frames, so ResizeObserver never fired and the chart looked stuck at its starting width of 600 px (the page "260 px too wide"). That was the test browser, not the app — after a screenshot forced a frame, the chart had already fitted. Force a frame (screenshot) after every resize before measuring.
+
+### Sarmad's "someone is trading on my test accounts"
+
+Read-only check of this machine's `data/apnasor-testnet.db`: **no fills at all** — Maham's gateway has never had an order filled, so it is not what moved Sarmad's Binance / Bybit balances. The other half of the check (does her Wallet's reconciliation still say OK, i.e. has anyone else traded on *her* accounts?) needed the exchanges to answer her network again.
+
+**Later the same day, VPN off** (the VPN was the cause of the 451 / 403): her Wallet's reconciliation is **MATCHED on Binance and Bybit** — balances equal the opening balances captured 2026-10-04 19:42 UTC plus 0 fills. Nobody has traded on her accounts since then; had her keys been Sarmad's, his own or the stranger's trades after that time would show here as a BREAK. Limit: trades older than her opening balances are invisible to this check. Her Binance balances are the testnet's untouched starting amounts (1 BTC, 1 ETH, 10,000 USDT); her Bybit demo balances are not round (0.892 BTC, 54,890 USDT), so that account was traded before her gateway first read it — to confirm with Maham (manual demo trades on Bybit's website?).
+
+### Files
+
+Changed: `components/TwapChart.tsx`; PROGRESS.md. 254 backend tests pass (no backend change).
+
+## 2026-10-06 — Stock-era leftovers out of `components/shared.tsx`
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Closes the open question logged on 2026-10-05: `components/shared.tsx` still carried two pieces of the June stock-market POC that nothing uses.
+
+- **`LatencyChart`** drew random latency lines labelled NYSE / NASDAQ / BATS / IEX — made-up data for venues ApnaSOR has never had. Deleted so nobody reuses it on a page (the panel rejected simulated data).
+- **`fmtLatency`** printed microseconds as a garbled "Âµs". Deleted; real latencies are shown in ms by the pages themselves.
+- **Garbled comments repaired:** the file's 7 section dividers read `// â”€â”€ Card wrapper â”€â”€…` — the UTF-8 box-drawing character `─` decoded as Windows-1252, the PowerShell rewrite damage described in CLAUDE.md's gotchas (the same damage broke "µs"). Restored to `// ── Card wrapper ──…`. A search of `frontend/src` found no other file with it.
+
+Checked before deleting: neither name is referenced anywhere in `frontend/` (outside `node_modules`). After: no garbled characters left in the file, its Windows line endings unchanged, type-check passes, and a full production build (`vite build`, into a scratch folder) compiles all 77 modules. Nothing on screen changes, so no browser check was needed.
+
+### Files
+
+Changed: `components/shared.tsx` (shared — Mahnoor: pull before editing it); PROGRESS.md. 254 backend tests pass (no backend change).
+
+---
+
+## 2026-10-06 — Everything back on the default branch
+
+*By Sarmad (integration, `feature/crypto-pivot`).*
+
+Both working branches had moved on since the 2026-10-05 milestone merge: `feature/backend-v2` carried the `/ws` login fix, `feature/frontend-v2` carried Maham's TWAP chart fix and the `shared.tsx` clean-up. Anyone cloning the default branch would have missed both, and a frontend teammate would have kept running the old `websocket.ts`. So, before handing the backend relay on:
+
+- **`feature/backend-v2` → `feature/crypto-pivot`** (merge commit `65cc573`): no conflicts. The backend change and its matching `websocket.ts` change are in the same commit, so they arrive together — an old browser client is refused by the new gateway (close 4401), by design.
+- **`feature/frontend-v2` → `feature/crypto-pivot`** (merge commit): only PROGRESS.md and this journal conflicted, because both branches had added entries in the same places. Resolved by keeping both sides; Maham's "not merged yet" lines now say merged, and the open questions she closed (TWAP chart on a phone, `shared.tsx` leftovers) are struck through.
+- **Reviewed before merging:** Maham's three commits stay in the frontend (`TwapChart.tsx`, `shared.tsx`) plus docs; no keys, no attribution lines. Her check of the *someone is trading on Sarmad's accounts* question is folded into that open question: not her machine (no fills ever, her accounts reconcile since 2026-10-04 19:42 UTC); Fizza and Mahnoor still to check.
+- **`feature/backend-v2` brought level with `feature/crypto-pivot`**, so the next backend person (relay) starts from everything.
+
+Checked after merging: 262 backend tests pass, frontend type-check and production build pass.
+
+### Files
+
+PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, CLAUDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
