@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -247,24 +247,10 @@ def _consensus_health(svc: Services) -> str:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
-    svc = get_services()
-    user_id = ""
+async def websocket_endpoint(websocket: WebSocket):
+    """Live events for logged-in users only.
 
-    if token:
-        try:
-            from jose import jwt
-
-            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            user_id = payload.get("sub", "")
-        except Exception:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-
-    conn_id = await svc.ws_manager.connect(websocket, user_id)
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            await svc.ws_manager.handle_client_message(conn_id, raw)
-    except WebSocketDisconnect:
-        await svc.ws_manager.disconnect(conn_id)
+    The login token comes in the FIRST message ({"type": "auth", "token": ...}),
+    never in the URL: URLs are printed in every access log. See ws_manager.py.
+    """
+    await get_services().ws_manager.serve(websocket)

@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 from pydantic import BaseModel
 
 from backend.gateway.config import settings
@@ -80,29 +81,53 @@ def create_refresh_token(user: User) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-) -> User:
-    token = credentials.credentials
+class TokenError(Exception):
+    """A login token that must not be accepted; the message says why (never the token)."""
+
+
+def decode_access_token(token: str | None) -> tuple[User, datetime]:
+    """Validate a login (access) token: signature, expiry and shape.
+
+    The one check shared by the REST endpoints and the WebSocket.
+
+    Returns:
+        The user and the moment the token expires.
+
+    Raises:
+        TokenError: no token, a bad signature, an expired token, a refresh
+            token used as a login, or a token missing required fields.
+    """
+    if not token:
+        raise TokenError("no login token")
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret, algorithms=[settings.jwt_algorithm]
-        )
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
-        return User(
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except ExpiredSignatureError as exc:
+        raise TokenError("login expired") from exc
+    except JWTError as exc:
+        raise TokenError("invalid login token") from exc
+    if payload.get("type") == "refresh":
+        raise TokenError("a refresh token is not a login token")
+    try:
+        user = User(
             id=payload["sub"],
             username=payload["username"],
             role=UserRole(payload["role"]),
             name=payload["name"],
         )
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
-        )
+        expires_at = datetime.fromtimestamp(float(payload["exp"]), UTC)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise TokenError("invalid login token") from exc
+    return user, expires_at
+
+
+async def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+) -> User:
+    try:
+        user, _ = decode_access_token(credentials.credentials)
+    except TokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return user
 
 
 def require_role(*roles: UserRole):
