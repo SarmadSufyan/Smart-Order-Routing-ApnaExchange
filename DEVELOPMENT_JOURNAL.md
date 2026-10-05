@@ -1051,7 +1051,9 @@ Measured after the fix: the chart equals its box at 320 (258 px), 375 (314), 390
 
 ### Sarmad's "someone is trading on my test accounts"
 
-Read-only check of this machine's `data/apnasor-testnet.db`: **no fills at all** — Maham's gateway has never had an order filled, so it is not what moved Sarmad's Binance / Bybit balances. The other half of the check (does her Wallet's reconciliation still say OK, i.e. has anyone else traded on *her* accounts?) needs the exchanges to answer her network again.
+Read-only check of this machine's `data/apnasor-testnet.db`: **no fills at all** — Maham's gateway has never had an order filled, so it is not what moved Sarmad's Binance / Bybit balances. The other half of the check (does her Wallet's reconciliation still say OK, i.e. has anyone else traded on *her* accounts?) needed the exchanges to answer her network again.
+
+**Later the same day, VPN off** (the VPN was the cause of the 451 / 403): her Wallet's reconciliation is **MATCHED on Binance and Bybit** — balances equal the opening balances captured 2026-10-04 19:42 UTC plus 0 fills. Nobody has traded on her accounts since then; had her keys been Sarmad's, his own or the stranger's trades after that time would show here as a BREAK. Limit: trades older than her opening balances are invisible to this check. Her Binance balances are the testnet's untouched starting amounts (1 BTC, 1 ETH, 10,000 USDT); her Bybit demo balances are not round (0.892 BTC, 54,890 USDT), so that account was traded before her gateway first read it — to confirm with Maham (manual demo trades on Bybit's website?).
 
 ### Files
 
