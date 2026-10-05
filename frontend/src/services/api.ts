@@ -18,6 +18,13 @@ export function getToken(): string | null {
   return accessToken
 }
 
+// Set by the auth store: what to do when the gateway rejects our login token.
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -29,6 +36,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
 
   if (!resp.ok) {
+    // An expired or invalid token fails every later call too: go back to the
+    // login page instead of leaving every page silently empty.
+    if (resp.status === 401 && token && path !== '/api/auth/login') onUnauthorized?.()
     const body = await resp.json().catch(() => ({ message: resp.statusText }))
     throw new Error(body.message || body.error || body.detail || resp.statusText)
   }
@@ -304,6 +314,153 @@ export interface NBBO {
   venue_quotes: Record<string, VenueQuote>
 }
 
+// ── Arbitrage detector (5c) — detection only, never trades ──────────
+/** One direction between two venues: buy at one's best ask, sell at the other's best bid. */
+export interface ArbEdge {
+  symbol: string
+  buy_venue: string
+  sell_venue: string
+  buy_price: number
+  sell_price: number
+  gross_bps: number        // > 0 = the two books are crossed
+  fee_bps: number          // both taker fees
+  net_bps: number          // gross minus fees
+  size: number             // base units at the top of both books
+  net_usdt: number         // negative = a loss
+  fundable_size: number | null  // what our testnet/demo balances could do; null = unknown
+  limited_by: string[]
+}
+
+/** A run of consecutive scans in which one direction stayed crossed. */
+export interface ArbWindow {
+  symbol: string
+  buy_venue: string
+  sell_venue: string
+  opened_at: string
+  closed_at: string | null  // null = still open
+  duration_s: number
+  scans: number
+  peak_gross_bps: number
+  peak: ArbEdge
+  profitable: boolean
+}
+
+export interface ArbSymbolStats {
+  symbol: string
+  scans: number
+  crossed_scans: number
+  profitable_scans: number
+  sum_best_gross_bps: number  // ÷ scans = average
+  sum_best_net_bps: number
+  windows: number
+  profitable_windows: number
+  window_seconds: number
+  duration_buckets: Record<string, number>
+  peak_gross_buckets: Record<string, number>
+  max_gross: ArbEdge | null
+  max_gross_at: string | null
+  max_net: ArbEdge | null
+  max_net_at: string | null
+}
+
+export interface ArbSymbolStatus {
+  symbol: string
+  venues: string[]           // venues with a live quote right now
+  best: ArbEdge | null       // best net edge right now
+  crossed_directions: number
+  open_windows: ArbWindow[]
+  stats: ArbSymbolStats
+  summary: string
+}
+
+export interface ArbStatus {
+  enabled: boolean
+  running: boolean
+  scan_interval_ms: number
+  min_net_bps: number
+  fees_bps: Record<string, number>
+  venue_names: Record<string, string>
+  stats_since: string
+  symbols: ArbSymbolStatus[]
+  summary: string
+  note: string
+}
+
+export interface ArbWindowList {
+  open: ArbWindow[]
+  windows: ArbWindow[]  // closed, newest first
+}
+
+// ── RAFT cluster (Phase 6) — GET /api/consensus/status ──────────────
+export interface ConsensusNode {
+  id: number
+  address: string
+  reachable: boolean
+  role: string | null           // FOLLOWER / CANDIDATE / LEADER
+  term: number | null
+  leader: number | null         // who this node thinks leads
+  commit_index: number | null
+  applied_index: number | null
+  pid: number | null
+  mode: string | null           // testnet / mainnet: must match the gateway's
+  rejected_messages: number | null  // forged / too old / replayed messages refused
+}
+
+export interface ConsensusStatus {
+  enabled: boolean
+  signed: boolean               // every RAFT message carries an HMAC-SHA256 signature
+  leader: number | null
+  majority_reachable: boolean
+  nodes: ConsensusNode[]
+  pending_writes: string[]      // our changes the cluster hasn't confirmed yet
+  synced_index: number          // committed log index this gateway has adopted
+  last_sync: string | null
+  message: string
+}
+
+// ── Pre-flight (Phase 6 risk batch) — POST /api/risk/preflight ──────
+export interface PreflightOrder {
+  symbol: string
+  side: 'BUY' | 'SELL'
+  quantity: number
+}
+
+export interface PreflightStress {
+  position_after: number         // base units held after the order (signed)
+  var_99_usdt: number            // worst loss within the horizon on 99% of simulated paths
+  expected_shortfall_usdt: number  // average loss over the worst 1% of paths
+  horizon_min: number
+  paths: number
+  sigma_per_min_pct: number      // measured volatility, % per minute
+}
+
+export interface PreflightItem {
+  index: number
+  symbol: string
+  side: string
+  quantity: number
+  mid_price: number
+  result: string                 // APPROVED or REJECTED_<CHECK>
+  checks_passed: string[]
+  checks_failed: string[]
+  message: string | null
+  position_after: number         // if this and every earlier order filled
+  stress: PreflightStress | null
+}
+
+export interface PreflightResponse {
+  all_approved: boolean
+  approved: number
+  rejected: number
+  executor: string               // "in-process" or "pool (N processes)"
+  elapsed_ms: number
+  notes: string[]
+  results: PreflightItem[]
+}
+
+/** The backend checks at most this many orders in one pre-flight. */
+export const PREFLIGHT_MAX_ORDERS = 200
+
 export interface ChildOrder {
   id: string
   venue_id: string
@@ -432,6 +589,8 @@ export interface RiskStatus {
     result: string
     reason?: string | null
     check_duration_ms: number
+    checks_passed: string[]
+    checks_failed: string[]
   }>
   limits: RiskLimits | null
   portfolio: PortfolioRiskState | null
@@ -462,6 +621,8 @@ export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
       result: c.result,
       reason: c.checks_failed?.length ? c.checks_failed.join(', ') : null,
       check_duration_ms: (c.latency_us ?? 0) / 1000,
+      checks_passed: c.checks_passed ?? [],
+      checks_failed: c.checks_failed ?? [],
     })),
     limits: r.risk_limits ?? null,
     portfolio: r.portfolio ?? null,
@@ -542,6 +703,24 @@ export const api = {
 
   getQuotes: (symbol: string) =>
     request<{ symbol: string; quotes: Record<string, VenueQuote> }>(`/api/market-data/quotes?symbol=${encodeURIComponent(symbol)}`),
+
+  getArbitrageStatus: () => request<ArbStatus>('/api/arbitrage/status'),
+
+  getArbitrageWindows: (params: { symbol?: string; profitable_only?: boolean; limit?: number } = {}) => {
+    const q = new URLSearchParams()
+    if (params.symbol) q.set('symbol', params.symbol)
+    if (params.profitable_only) q.set('profitable_only', 'true')
+    if (params.limit) q.set('limit', String(params.limit))
+    return request<ArbWindowList>(`/api/arbitrage/windows?${q.toString()}`)
+  },
+
+  getConsensusStatus: () => request<ConsensusStatus>('/api/consensus/status'),
+
+  // Checks orders against pre-trade risk WITHOUT sending anything (audited).
+  preflight: (orders: PreflightOrder[], stress = false) =>
+    request<PreflightResponse>('/api/risk/preflight', {
+      method: 'POST', body: JSON.stringify({ orders, stress }),
+    }),
 
   getWallet: () => request<WalletSnapshot>('/api/wallet/'),
 

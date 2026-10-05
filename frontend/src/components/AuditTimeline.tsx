@@ -33,7 +33,7 @@ export function AuditRow({ e, showDate = false }: { e: AuditEvent; showDate?: bo
   const d = new Date(e.ts)
   const time = d.toLocaleTimeString(undefined, { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '5px 0', borderBottom: `1px solid ${C.border}40` }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, alignItems: 'baseline', padding: '5px 0', borderBottom: `1px solid ${C.border}40` }}>
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, transform: 'translateY(-1px)' }} />
       <span style={{ fontSize: F.xs, color: C.dim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {showDate && `${d.toLocaleDateString()} `}{time}
@@ -43,7 +43,7 @@ export function AuditRow({ e, showDate = false }: { e: AuditEvent; showDate?: bo
         background: tint(color, 12), color,
       }}>{e.event_type.replace(/_/g, ' ')}</span>
       {e.actor && <span style={{ fontSize: F.xs, color: C.muted, whiteSpace: 'nowrap' }}>{e.actor}</span>}
-      <span style={{ fontSize: F.sm, color: C.text, flex: 1, wordBreak: 'break-word' }}>{e.summary}</span>
+      <span style={{ fontSize: F.sm, color: C.text, flex: '1 1 240px', minWidth: 0, wordBreak: 'break-word' }}>{e.summary}</span>
     </div>
   )
 }

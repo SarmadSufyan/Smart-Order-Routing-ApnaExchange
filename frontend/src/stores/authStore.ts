@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api, setToken, getToken, type User } from '../services/api'
+import { api, setToken, getToken, setUnauthorizedHandler, type User } from '../services/api'
 import { wsClient } from '../services/websocket'
 
 interface AuthState {
@@ -8,7 +8,7 @@ interface AuthState {
   error: string | null
   loading: boolean
   login: (username: string, password: string) => Promise<boolean>
-  logout: () => void
+  logout: (reason?: string) => void  // reason is shown on the login page
   restoreSession: () => Promise<void>
 }
 
@@ -52,12 +52,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
+  logout: (reason) => {
     setToken(null)
     sessionStorage.removeItem('poc.authed')
     sessionStorage.removeItem('poc.user')
     wsClient.disconnect()
-    set({ user: null, isAuthenticated: false, error: null })
+    set({ user: null, isAuthenticated: false, error: reason ?? null })
   },
 
   restoreSession: async () => {
@@ -75,3 +75,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }))
+
+// Logins expire (JWT_EXPIRY_MINUTES); the app shell's auth guard then shows the login page.
+setUnauthorizedHandler(() => {
+  if (useAuthStore.getState().isAuthenticated) {
+    useAuthStore.getState().logout('Your session expired — please log in again.')
+  }
+})

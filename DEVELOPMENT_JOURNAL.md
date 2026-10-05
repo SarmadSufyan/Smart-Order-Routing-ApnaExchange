@@ -869,3 +869,162 @@ Books are sampled four times a second, so part of a crossing can be one exchange
 ### Files
 
 New: `backend/services/arbitrage/` (`detector.py`), `backend/shared/models/arbitrage.py`, `backend/gateway/routers/arbitrage.py`, `backend/tests/test_arbitrage/` (27 tests), `backend/tests/test_api/test_websocket_channels.py`, `scripts/arb_watch.py`. Changed: `gateway/config.py` (`ARB_*`), `dependencies.py`, `main.py` (start/stop, `arb_update`), `websocket/ws_manager.py` (`algo_update`, `arb_update`), `.env.example`, ROADMAP §5c, CLAUDE.md, `scripts/README.md`. 254 tests.
+
+---
+
+## 2026-10-05 — The Arbitrage page
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §5c's last open item: a page for the arbitrage detector Fizza built. It sits in the menu under Market Data as **Arbitrage Detector** (`/arbitrage`).
+
+### What it shows
+
+- **Headline** — the detector's own one-sentence summary, and four numbers for all coins together: how often the books were crossed, the average gap before fees, the average after both taker fees (red when negative), and how many crossed windows were profitable.
+- **Right now** — per coin, the best direction: buy on / sell on (with the ask and bid), gross gap, fees, net, the size at the top of both books, the net on that size, how much our testnet/demo balances could fund (with the first reason it is limited; all reasons on hover), and how many directions are crossed now.
+- **Two bar charts** — how long crossings lasted and how wide they got before fees, with the fee range under them (both taker fees cost 20–35 bps depending on the pair, so a gap has to be wider than that to pay).
+- **Per coin** — scans, % crossed, average gap before and after fees, windows, profitable windows, the best net edge seen (pair and time), and the detector's plain-English line per coin.
+- **Recent windows** — open ones first, then the most recent closed ones; filter by coin, or show profitable ones only.
+- **Taker fees used** per exchange (an exchange without a live quote, OKX on this network, is marked) and the detector's own note.
+
+Live when it was checked (Binance, Bybit, Gate): crossed in 73 % of ~29,000 scans, +0.8 bps on average before fees, −19.4 bps after, **0 of ~540 windows profitable** — the same numbers as the detector's summary.
+
+### Design choices
+
+- **Honest framing on the page itself:** a "DETECTOR ONLY · NOTHING IS TRADED" label next to the title, the backend's `note` at the bottom, and "We could fund" explained as our testnet/demo balances. Losses are shown as losses (red), not hidden.
+- **Refresh only while the page is open.** The status lives in `dataStore` (`arbitrage`, `fetchArbitrage`) but is *not* part of `fetchAll`, which every page polls every 3 s. The page subscribes to `arb_update` (once a second) and refetches `/status` on it, skipping a tick while a request is still running, with a 5 s poll as a fallback if the WebSocket is down. The windows list changes too fast to push, so it is polled every 3 s for the chosen filter.
+- **Errors are visible:** `fetchArbitrage` resolves to an error message (like the operator actions), so the page says "Can't read the arbitrage detector: …" instead of loading forever, and keeps showing the last data it had.
+- **Bucket order is fixed in the page** (`<1 s` … `5 min+`, `0-1 bps` … `20+ bps`, matching `detector.py`): the API sends the buckets in first-seen order. A share that rounds to 0 % but isn't zero shows as "<1%".
+- **Times:** the backend's summary sentences are in UTC; the page's own times are local and say their zone (e.g. "GMT+5").
+- **New formatter** `fmtBps` in `format.ts` (signed, "-0.0" shown as "0.0"), used for every bps number on the page.
+- **Narrow screens:** grids use `auto-fit` with `min(100%, …)` so they wrap instead of squeezing; the four tiles are two pairs, so they show 4 in a row, 2 × 2 or stacked, never 3 + 1; wide tables scroll inside their own card.
+
+### Found while checking
+
+- At phone width the **app shell** is what breaks, on every page: the sidebar is always 240 px and the top bar doesn't wrap, so a page gets ~110 px. The Arbitrage page itself fits once the sidebar is collapsed. Next task (`components/AppShell.tsx`).
+- `wsClient` has no way to tell the server to stop a channel, so after leaving the page the server keeps sending `arb_update` (one small message a second) until the next login. Harmless; noted here in case the WebSocket client is reworked.
+
+### Files
+
+New: `frontend/src/pages/Arbitrage.tsx`. Changed (small, additive): `services/api.ts` (the §5c response types + `getArbitrageStatus`, `getArbitrageWindows`), `stores/dataStore.ts` (`arbitrage`, `arbWindows`, `fetchArbitrage`, `fetchArbWindows`), `format.ts` (`fmtBps`), `App.tsx` (route), `components/AppShell.tsx` (menu entry); PROGRESS.md, ROADMAP §5c. Frontend type-check passes; 254 backend tests pass (no backend change).
+
+---
+
+## 2026-10-05 — Narrow screens: the app shell and Maham's pages
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §7 asks for responsive layouts. Measured first, in the browser at real widths, before changing anything.
+
+### What was wrong
+
+The **app shell** broke every page on a phone: the sidebar was always 240 px and the top bar never wrapped. At 375 px the top bar was 427 px too wide and a page had **79 px** left; at 768 px the top bar was still 34 px too wide (page: 472 px). Inside the pages, fixed column counts did the rest — at 375 px Maham's six pages were 69 px (Algo Orders) to 287 px (Wallet) too wide: Wallet's 4 tiles and 2fr/1fr split, Algo Orders' 340 px form beside the list, Venue Connectivity's 3 cards and its table, Risk Manager's 4 gauges and 3-panel row, Kill Switch's two side-by-side panels, and Audit Log rows on one unbreakable line.
+
+### What changed
+
+- **App shell** (`components/AppShell.tsx`): below 900 px the sidebar becomes a slide-in menu behind a ☰ button, so pages get the full width (375 px phone: 343 px instead of 79; 768 px: 728 instead of 472). It closes on picking a page, tapping outside, Esc or ✕, and is `visibility: hidden` when closed so keyboard focus cannot land on off-screen links. The user name, theme toggle and Logout move into the menu. The top bar may wrap onto a second line rather than cut anything off; the clock hides below 1100 px; on phones the venue dots drop their V1/V4 labels (the name is in the tooltip) and the "ApnaSOR" word hides. **The TESTNET badge and the KILL SWITCH button stay visible at every width** — one is the honesty label, the other the emergency stop. Page padding shrinks on small screens. Wide screens are unchanged (sidebar, collapse ◀, clock).
+- **One set of breakpoints** (`hooks/useMediaQuery.ts`, new): `MQ.phone` < 600 px, `MQ.narrow` < 900 px, `MQ.compact` < 1100 px, read through `useMediaQuery` (inline styles cannot hold `@media` rules — the project's convention is inline styles with theme tokens). `useTileColumns(n)` gives a row of summary tiles n across on wide screens, 2 on medium ones, 1 on phones — never 3 + 1.
+- **Pages:** page-level splits (Wallet's holdings/exchanges, Algo Orders' form/list, Risk Manager's three panels) stack below 900 px; grids inside cards use `repeat(auto-fit, minmax(min(100%, N px), 1fr))` so they wrap by the width they actually have; rows of tiles use `useTileColumns`; wide tables scroll inside their own card (`overflowX: auto`), never the page; flex rows that held several labels wrap. Wallet's indented "↳" P&L labels keep their indent but may wrap (`pre-wrap`). Kill Switch alert messages and Audit Log summaries take their own line when less than 160 / 240 px is left (`AuditRow` is also the order timeline in the order details window — only its wrapping changed). The empty Algo Orders list says "start one above" when the form is above it.
+
+### How it was checked
+
+A small script in the browser measured, for each page, how far anything sticks out past the page's right edge (ignoring content that scrolls inside its own box): **0 px on all six pages at 375, 480, 600, 768, 900 and 1280 px** (36 checks; before: all six failed at 375). At 1280 px the layouts match the originals (4 tiles, the same two-column splits, 3 venue cards). The menu's four ways of closing were each checked, and the collapse ◀ on wide screens. Type-check passes; 254 backend tests pass (no backend change).
+
+### Files
+
+New: `frontend/src/hooks/useMediaQuery.ts`. Changed: `components/AppShell.tsx` (shared), `components/AuditTimeline.tsx`, `pages/Wallet.tsx`, `pages/AlgoOrders.tsx`, `pages/VenueHealth.tsx`, `pages/RiskManager.tsx`, `pages/KillSwitch.tsx`; PROGRESS.md, ROADMAP §7. Mahnoor's pages (Dashboard, Market Data, How It Works, Login) are not touched — the same helper can fit them.
+
+---
+
+## 2026-10-05 — A real RAFT cluster panel, and errors that were being swallowed
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+### Why
+
+The Dashboard showed a "RAFT consensus nodes" card with three hard-coded nodes and the note "Simulated for POC — real RAFT cluster lands in M3". The real 3-node cluster has existed since Phase 6, and the panel already rejected the project once for simulated data. ROADMAP §6 lists a small cluster panel as an optional frontend item.
+
+Checking how the pages handle the cluster's answers turned up two silent failures: with RAFT on and no majority, **un-blacklisting a venue** is refused (503 `CONSENSUS_UNAVAILABLE`), but the store only wrote the error to `lastError`, so the button just stopped spinning; and **engaging the kill switch** swallowed any error the same way — an emergency stop that fails must be seen.
+
+### What changed
+
+- **`components/RaftPanel.tsx` (new, reusable)**, shown on the Kill Switch page under the big kill-switch panel. It polls `GET /api/consensus/status` every 2 s while shown (there is no WebSocket channel for it; the gateway itself re-reads the cluster every 0.5 s) and shows: a MAJORITY / NO MAJORITY chip with how many nodes are up, SIGNED when every RAFT message carries an HMAC-SHA256 signature, the backend's own one-line status, one card per node (role LEADER / FOLLOWER / CANDIDATE / UNREACHABLE, address, term, committed and applied log index, refused messages if any), changes waiting for the cluster to confirm, the log entry this gateway has adopted, and a plain explanation (tighten at once, loosen only with a majority). With RAFT off it shows the backend's message and how to turn it on — never made-up nodes.
+- **Store / API:** `ConsensusNode`, `ConsensusStatus`, `getConsensusStatus` in `services/api.ts`; `consensus` + `fetchConsensus` in `dataStore.ts` (not in `fetchAll`). `activateKillSwitch`, `blacklistVenue` and `unblacklistVenue` now resolve to an error message or null, like the other operator actions.
+- **Kill Switch page:** a failed engage shows "Kill switch NOT engaged: …" and keeps the reason box open to retry; a message is cleared once the kill switch state flips.
+- **Venue Connectivity page:** a refused blacklist / un-blacklist shows its reason inside that venue's card.
+
+### How it was checked (live, with the real cluster)
+
+RAFT was switched on for the test through environment variables on a local launch configuration (`RAFT_ENABLED`, a throwaway `RAFT_SHARED_SECRET`), so `.env` stayed untouched, and node restarts were turned off (`--raft-restart-delay 0`) to hold the no-majority state:
+
+1. All up: leader node 1, term 1, log #2 on every node, SIGNED.
+2. Leader process killed: node 2 leader in term 2 within 3 s, log #3; the panel showed node 1 UNREACHABLE and "MAJORITY · 2 OF 3 UP".
+3. A second node killed: "NO MAJORITY · 1 OF 3 UP", node 2 CANDIDATE with its term climbing.
+4. Kill switch engaged from the page: worked at once; the panel showed "Waiting for the cluster to confirm: kill_switch". Release: refused, on screen — "only 1 of 3 RAFT nodes are reachable — the kill switch release by admin needs a majority (2). Nothing changed."
+5. Gate blacklisted (at once), then un-blacklist: refused, and the reason now appears in Gate's card.
+6. Nodes 1 and 3 restarted: majority back, the waiting changes committed (log #3 → #6); un-blacklist and release then succeeded (log #8 on all three).
+7. Restored: test cluster stopped (no node processes left, ports free), gateway back with RAFT off, kill switch inactive, no venue blacklisted. These test actions are in the audit log (reason "RAFT panel test - no majority").
+
+Type-check passes; 254 backend tests pass (no backend change). The Kill Switch and Venue pages still fit a 375 px phone.
+
+### Left for Mahnoor
+
+The Dashboard's simulated card (`RAFT_NODES` in `pages/Dashboard.tsx`) can be replaced by `<RaftPanel />` from `../components/RaftPanel`.
+
+### Files
+
+New: `frontend/src/components/RaftPanel.tsx`. Changed: `services/api.ts`, `stores/dataStore.ts` (shared, additive), `pages/KillSwitch.tsx`, `pages/VenueHealth.tsx`; PROGRESS.md, ROADMAP §6.
+
+---
+
+## 2026-10-05 — Pre-flight a TWAP before starting it
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+ROADMAP §6's last frontend item. Since Phase 6 every TWAP is pre-flighted slice by slice when it starts (the risk batch), but the trader only learned "refused" afterwards, with one line of reason. The backend also offers `POST /api/risk/preflight` for a basket of orders, optionally with a Monte Carlo stress test on the worker-process pool — nothing in the UI used it.
+
+### What changed
+
+- **Algo Orders → New TWAP:** a "Pre-flight check — sends nothing" button above Start, and a "With stress test" checkbox. The slices sent are the ones the TWAP would send — cumulative targets i/k of the total, the last one exactly the total — so each is checked against the position left by the earlier ones. The backend accepts at most 200 orders per pre-flight (a TWAP may have 500 slices); above that the button is disabled with a note, and Start still checks every slice.
+- **The result card** (full width, under the form and list): one verdict — "✓ All N slices pass pre-trade risk at today's limits" or "✗ M of N slices would be rejected — first: slice i (position limit): <backend message>. Start would be refused" — with the position after the last slice; with the stress test, one sentence on the 99 % VaR and expected shortfall over the horizon for the full position, the number of paths and the measured volatility; a per-slice table (quantity, position after, pass / failed check, VaR and expected shortfall per slice); the backend's notes; and where it ran (`in-process` or `pool (N processes)`) with the time. A result is cleared when the symbol, side, quantity or slice count changes, so it can never describe a different order. It is honest about its one approximation: the even split here vs the TWAP's own rounding to the lot size, and Start checks again.
+- `services/api.ts`: `PreflightOrder`, `PreflightStress`, `PreflightItem`, `PreflightResponse`, `PREFLIGHT_MAX_ORDERS`, `api.preflight()`. The result is page-local state (a one-off answer to the form, like the Audit Log's pages), not store state.
+- Audit Log: `risk_preflight` events now appear under the *Risk* filter (the backend audits every pre-flight).
+
+### How it was checked (live, nothing sent)
+
+- 0.002 BTC in 10 slices: all pass, position +0.002 BTC, **in-process, 0.06 ms** — the 7 checks are microseconds, so the backend's auto mode correctly does not start worker processes (the benchmark's honest result).
+- The same with the stress test: **pool (4 processes), 0.9 s**; VaR 99 % grows with the position, $0.54 over 60 min for the full $172 (volatility 0.016 %/min on a quiet night).
+- 60,000 XRP in 10 slices of 6,000 (each under the per-order limits; the position limit is 50,000): **slices 1–8 pass, 9–10 fail** — "Projected XRP/USDT position 54000 exceeds 50000" — exactly the "crosses a limit half way" case the Phase 6 pre-flight was built for.
+- Changing the quantity cleared the result; the pre-flights appeared in the Audit Log under *Risk*; the page with a stress result fits a 375 px phone; no TWAP was started (0 on record). Type-check passes; 254 backend tests pass (no backend change).
+
+### Files
+
+Changed: `frontend/src/pages/AlgoOrders.tsx` (button, `PreflightResult` card), `services/api.ts` (shared, additive), `pages/AuditLog.tsx` (one filter); PROGRESS.md, ROADMAP §6.
+
+---
+
+## 2026-10-05 — Polish pass on Maham's pages, and an expired login that went unnoticed
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Audited the six pages (Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log) against the code and the backend's real data before changing anything, then fixed what was found.
+
+### Found while testing: an expired login left every page silently empty
+
+Logins expire after `JWT_EXPIRY_MINUTES` (60). After that every request got 401, but the app stayed on the page and showed zeros and empty panels everywhere, with no message — in a long demo the system would simply look broken. Now `services/api.ts` calls a handler on a 401 to a request that carried a token (not the login call itself), and `stores/authStore.ts` registers it: `logout('Your session expired — please log in again.')`. The app shell's existing auth guard then shows the login page, which already displays the auth store's message — so Mahnoor's Login page needed no change. Verified: reloading with an invalid token lands on the login page with that message and the token cleared; logging in again restores everything.
+
+### The polish
+
+- **Risk Manager → pre-trade check breakdown** was guesswork: it counted rejections by searching order error text for words like "kill" or "position", listed only 4 of the 7 checks, and used every order as "Total". The backend already sends its last 100 checks with `checks_passed` / `checks_failed`; `normalizeRisk` was dropping them. Now kept (`services/api.ts`) and used: all 7 checks in the backend's order (kill switch, order size, order value, orders per second, position per coin, total exposure, symbol allowed), each with passed, rejected and **not reached** (the checks stop at the first failure), rejection % of the orders the check actually looked at, and "No orders checked since the gateway started" when there is nothing. Verified with two orders that risk rejects before any venue is contacted — 20,000 XRP (order size, check 2) and 0.2 BTC ≈ $17k (order value, check 3): the table showed exactly that, including the XRP order as "not reached" at check 3.
+- **Risk Manager tiles:** "Orders routed today" was a gauge out of 500 — a limit that does not exist — now a plain number; the "Exposure used" tile repeated the exposure gauge and now shows the recent checks approved / rejected with their average time (0.10 ms); the exposure gauge says its share of the limit and is in USDT.
+- **Silent failures:** `refreshWallet`, `degradeVenue` and `recoverVenue` now resolve to an error message (like the other operator actions); Wallet shows "Couldn't refresh the balances: …" and Venue Connectivity shows Degrade / Recover errors in the venue's card.
+- **Audit Log filters** now cover every event family the backend writes: new **RAFT** (`consensus_*`), **Copilot** (`copilot_*`) and **Arbitrage** (`arb_opportunity`) filters; *Risk* adds `risk_limits_changed` and `kill_switch_release_refused`; *Routing & fills* adds `venue_trading_blocked`. The RAFT filter shows the earlier failover test ("Agreed by the RAFT cluster: kill switch release by admin (log index 8, term 137)").
+- **Kill Switch:** the blacklisted-venues column "Cloud" (from the stock design) shows the connection label, so it is now called "Connection".
+
+### Not changed (not Maham's files)
+
+`components/shared.tsx` still holds an unused `LatencyChart` with made-up NYSE/NASDAQ/BATS/IEX lines and an unused `fmtLatency` that prints a garbled "Âµs" — logged under *Open questions* in PROGRESS.md.
+
+### Files
+
+Changed: `services/api.ts`, `stores/authStore.ts`, `stores/dataStore.ts` (shared, small), `pages/RiskManager.tsx`, `pages/Wallet.tsx`, `pages/VenueHealth.tsx`, `pages/KillSwitch.tsx`, `pages/AuditLog.tsx`; PROGRESS.md. Type-check passes; 254 backend tests pass (no backend change); the changed pages fit a 375 px phone.

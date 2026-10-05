@@ -18,30 +18,36 @@ export function VenueHealth() {
   const recoverVenue    = useDataStore((s) => s.recoverVenue)
 
   const [busy, setBusy] = useState<string | null>(null)
+  // e.g. un-blacklisting is refused while RAFT has no majority
+  const [actionError, setActionError] = useState<{ venueId: string; text: string } | null>(null)
 
   const venues = backendVenues.map(backendVenueToUi)
 
   async function handleBlacklist(venueId: string) {
     setBusy(venueId)
-    await blacklistVenue(venueId, 'Manual operator action')
+    const err = await blacklistVenue(venueId, 'Manual operator action')
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
   async function handleUnblacklist(venueId: string) {
     setBusy(venueId)
-    await unblacklistVenue(venueId)
+    const err = await unblacklistVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
   async function handleDegrade(venueId: string) {
     setBusy(venueId)
-    await degradeVenue(venueId)
+    const err = await degradeVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
   async function handleRecover(venueId: string) {
     setBusy(venueId)
-    await recoverVenue(venueId)
+    const err = await recoverVenue(venueId)
+    setActionError(err ? { venueId, text: err } : null)
     setBusy(null)
   }
 
@@ -54,7 +60,7 @@ export function VenueHealth() {
         connection so the health monitor can be demonstrated on a real venue.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 14, marginBottom: 14 }}>
         {venues.map((v) => {
           const isOffline = v.status === 'Disconnected' || v.blacklisted
           const b = v.backend
@@ -68,7 +74,7 @@ export function VenueHealth() {
           return (
             <div key={v.id} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 6, padding: 14 }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ConnDot status={v.status} />
                   <span style={{ fontSize: F.md, fontWeight: 600 }}>{v.name}</span>
@@ -211,6 +217,14 @@ export function VenueHealth() {
                   </div>}
                 </>
               )}
+              {actionError?.venueId === v.backend.venue_id && (
+                <div style={{
+                  marginTop: 8, padding: '6px 10px', borderRadius: 4, fontSize: F.xs,
+                  background: tint(C.red, 10), border: `1px solid ${tint(C.red, 45)}`, color: C.red,
+                }}>
+                  {actionError.text}
+                </div>
+              )}
             </div>
           )
         })}
@@ -218,6 +232,7 @@ export function VenueHealth() {
 
       <Card>
         <CardTitle>VENUE COMPARISON</CardTitle>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
             <tr>
@@ -243,6 +258,7 @@ export function VenueHealth() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )

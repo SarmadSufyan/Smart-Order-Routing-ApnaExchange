@@ -12,6 +12,9 @@ import {
   type RiskLimits,
   type TwapParams,
   type TwapState,
+  type ArbStatus,
+  type ArbWindowList,
+  type ConsensusStatus,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
 
@@ -28,6 +31,9 @@ interface DataState {
   wallet: WalletSnapshot | null
   pnl: PortfolioPnL | null
   algos: TwapState[]
+  arbitrage: ArbStatus | null
+  arbWindows: ArbWindowList | null
+  consensus: ConsensusStatus | null
   loading: boolean
   lastError: string | null
 
@@ -36,8 +42,16 @@ interface DataState {
   startTwap: (p: TwapParams) => Promise<[TwapState | null, string | null]>
   controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') => Promise<string | null>
 
+  // Arbitrage is fetched by its page only (not in fetchAll): /status is
+  // refreshed on every arb_update, once a second, while the page is open.
+  // Resolves to an error message, or null on success.
+  fetchArbitrage: () => Promise<string | null>
+  fetchArbWindows: (symbol?: string, profitableOnly?: boolean) => Promise<void>
+  // Polled by the RAFT panel while it is shown; resolves to an error message or null.
+  fetchConsensus: () => Promise<string | null>
+
   fetchWallet: () => Promise<void>
-  refreshWallet: () => Promise<void>
+  refreshWallet: () => Promise<string | null>
   fetchPnl: () => Promise<void>
   // Operator actions below resolve to an error message, or null on success.
   resetBaseline: (venueId?: string) => Promise<string | null>
@@ -51,11 +65,11 @@ interface DataState {
   fetchAll: () => Promise<void>
   submitOrder: (symbol: string, side: string, qty: number, orderType?: string, limitPrice?: number) => Promise<Order | null>
   cancelOrder: (orderId: string) => Promise<void>
-  blacklistVenue: (venueId: string, reason?: string) => Promise<void>
-  unblacklistVenue: (venueId: string) => Promise<void>
-  degradeVenue: (venueId: string) => Promise<void>
-  recoverVenue: (venueId: string) => Promise<void>
-  activateKillSwitch: (reason: string) => Promise<void>
+  blacklistVenue: (venueId: string, reason?: string) => Promise<string | null>
+  unblacklistVenue: (venueId: string) => Promise<string | null>
+  degradeVenue: (venueId: string) => Promise<string | null>
+  recoverVenue: (venueId: string) => Promise<string | null>
+  activateKillSwitch: (reason: string) => Promise<string | null>
   deactivateKillSwitch: () => Promise<string | null>
   setupWebSocket: () => void
 }
@@ -70,6 +84,9 @@ export const useDataStore = create<DataState>((set, get) => ({
   wallet: null,
   pnl: null,
   algos: [],
+  arbitrage: null,
+  arbWindows: null,
+  consensus: null,
   loading: false,
   lastError: null,
 
@@ -95,6 +112,32 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.controlAlgo(id, action)
       await get().fetchAlgos()
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  fetchArbitrage: async () => {
+    try {
+      set({ arbitrage: await api.getArbitrageStatus() })
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  fetchArbWindows: async (symbol, profitableOnly = false) => {
+    try {
+      set({ arbWindows: await api.getArbitrageWindows({ symbol, profitable_only: profitableOnly, limit: 50 }) })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
+  fetchConsensus: async () => {
+    try {
+      set({ consensus: await api.getConsensusStatus() })
       return null
     } catch (e) {
       return (e as Error).message
@@ -140,8 +183,9 @@ export const useDataStore = create<DataState>((set, get) => ({
   refreshWallet: async () => {
     try {
       set({ wallet: await api.refreshWallet() })
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -241,8 +285,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.blacklistVenue(venueId, reason)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -250,8 +295,10 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.unblacklistVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      // e.g. RAFT on without a majority: loosening is refused
+      return (e as Error).message
     }
   },
 
@@ -259,8 +306,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.degradeVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -268,8 +316,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.recoverVenue(venueId)
       await get().fetchVenues()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 
@@ -277,8 +326,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     try {
       await api.activateKillSwitch(reason)
       await get().fetchRiskStatus()
+      return null
     } catch (e) {
-      set({ lastError: (e as Error).message })
+      return (e as Error).message
     }
   },
 

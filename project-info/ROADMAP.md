@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-04 (5c arbitrage detector, backend done).
+> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts; §6 RAFT cluster panel + TWAP pre-flight button).
 
 ---
 
@@ -27,8 +27,8 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 4 | Wallet + risk on real data: audit log, P&L + reconciliation, risk monitor (loss limit → kill switch, concentration), restart survival | ✅ 2026-09-29 |
 | 5a | **TWAP execution bot** | ✅ 2026-10-01 |
 | 5b | **LLM copilot** (plain English → confirmed, risk-checked orders) | ✅ API 2026-10-02 (verified live); chat panel ⏭ frontend |
-| 5c | **Arbitrage detector** (fee-aware, honest framing) | ✅ backend 2026-10-04 (verified live); page ⏭ frontend |
-| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live; frontend status panel optional) |
+| 5c | **Arbitrage detector** (fee-aware, honest framing) | ✅ backend 2026-10-04 (verified live); page ✅ 2026-10-05 (`feature/frontend-v2`, verified live) |
+| 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live); frontend RAFT panel + pre-flight button ✅ 2026-10-05 |
 | 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ |
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
 
@@ -70,7 +70,7 @@ Done when:
 
 Proposal `status`: **PROPOSED** (show the card: `message`, `conversion`, `warnings`, `estimated_notional_usdt`, `expires_at`, Confirm / Cancel; remind "nothing is sent until you confirm") · **CLARIFY** (the copilot asks `message`; no buttons) · **REFUSED** (`message` says why and what it can do; no buttons). `kind` is `order` (details in `order`) or `twap` (details in `twap`). Errors: 503 `COPILOT_UNAVAILABLE` / `LLM_UNAVAILABLE` (e.g. free-tier limit — "try again in a minute"), 404 `PROPOSAL_NOT_FOUND`, 409 `PROPOSAL_NOT_ACTIONABLE` (already confirmed, cancelled or expired after 2 min). Copilot steps appear in the Audit Log as `copilot_*` events.
 
-### 5c — Arbitrage detector ✅ backend (2026-10-04, Fizza)
+### 5c — Arbitrage detector ✅ (backend 2026-10-04, Fizza; page 2026-10-05, Maham)
 
 **Idea:** flag moments when one venue's best bid is above another venue's best ask **after fees** (crossed markets were already seen live, but usually smaller than fees).
 - Per symbol, every scan (4/s = the book sampling rate): for every two venues, both directions — gross edge = (bid_A − ask_B) / ask_B; net edge = (bid_A × (1 − fee_A) − ask_B × (1 + fee_B)) / ask_B, with each exchange's base-tier **taker** fee (`ARB_TAKER_FEES_BPS`). Size = min(top sizes); *fundable* = capped by the USDT on the buy venue and the coins on the sell venue (our testnet/demo balances), 0 if a venue can't execute that symbol.
@@ -81,7 +81,7 @@ Done when:
 - [x] Detector unit-tested with synthetic books (`backend/tests/test_arbitrage/`: edge math, fees, funding caps, windows, audit cooldown, persistence).
 - [x] Live: real (negative-net) edges from Binance, Bybit and Gate — `GET /api/arbitrage/status`, `scripts/arb_watch.py`; journal 2026-10-04.
 - [x] No execution path bypasses risk: the detector has **no** execution path (it gets read-only lookups — no adapter, router or `OrderEntry`; a test checks it).
-- [ ] UI: an Arbitrage page *(frontend — API contract below)*.
+- [x] UI: an Arbitrage page — `frontend/src/pages/Arbitrage.tsx` (2026-10-05, Maham; verified against the live detector).
 
 **API for the page** (login token needed; live contract at http://127.0.0.1:8000/docs → *arbitrage*):
 
@@ -109,7 +109,8 @@ Done when:
 - [x] Unit tests for election, log replication and commit (simulated network, crashes, splits, a 40-seed randomized safety test) + over real TCP.
 - [x] `scripts/raft_demo.py` starts 3 nodes, kills the leader and shows continuity; `--gateway --twap` does it in the middle of a live testnet TWAP.
 - [x] Journal entry with the design (2026-10-02, Phase 6).
-- [ ] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) and a pre-flight button on the Algo Orders page.
+- [x] *(optional, frontend)* a small cluster panel from `GET /api/consensus/status` (nodes, roles, leader, log index) — `frontend/src/components/RaftPanel.tsx` on the Kill Switch page (2026-10-05, Maham; verified with a live leader kill and a no-majority test).
+- [x] *(optional, frontend)* a pre-flight button on the Algo Orders page — New TWAP form, optional stress test (2026-10-05, Maham; verified live incl. a TWAP that crosses the position limit at slice 9).
 
 **API added:** `POST /api/risk/preflight` `{orders: [{symbol, side, quantity}], stress?: bool, mode?: auto|serial|pool}` → per-order verdict (`result`, `checks_failed`, `message`, `position_after`, `stress.var_99_usdt`, `stress.expected_shortfall_usdt`) + `executor` and `elapsed_ms`. `GET /api/consensus/status` → `{enabled, leader, majority_reachable, nodes: [{id, role, term, commit_index, applied_index, reachable}], pending_writes, message}`. With RAFT on, kill-switch release / limit changes / un-blacklist answer **503 `CONSENSUS_UNAVAILABLE`** at once when the cluster has no majority (show the message: "only N of 3 RAFT nodes are reachable … Nothing changed"); engaging still works. Every RAFT message is signed (HMAC-SHA256, `RAFT_SHARED_SECRET`); `status.signed` and each node's `rejected_messages` show it.
 
@@ -119,7 +120,7 @@ Done when:
 - Rewrite the stale `project-info/` docs for the crypto design; `ARCHITECTURE_V2.md` for the report.
 - Production DB: the audit store is SQLite today (`backend/shared/database/store.py`, plain SQL). Add a PostgreSQL/TimescaleDB backend behind the same interface — **decision pending** (Docker image vs. a native PostgreSQL install).
 - Docker for gateway + frontend; Prometheus/Grafana if time allows.
-- Frontend: update "How It Works" for the crypto design; responsive layouts; dashboard widget for running TWAPs.
+- Frontend: update "How It Works" for the crypto design; responsive layouts (app shell + Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log ✅ 2026-10-05; Dashboard, Market Data, How It Works, Login next — shared breakpoints in `frontend/src/hooks/useMediaQuery.ts`); dashboard widget for running TWAPs.
 
 ### 8 — Live-money demo (last)
 

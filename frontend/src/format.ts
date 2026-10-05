@@ -39,6 +39,14 @@ export function spreadBps(bid: number, ask: number): number {
   return mid > 0 ? ((ask - bid) / mid) * 10_000 : 0
 }
 
+/** Signed basis points: +0.6 bps / -19.7 bps (1 bps = 0.01%). */
+export function fmtBps(v: number | null | undefined, digits = 1): string {
+  if (v === null || v === undefined || !isFinite(v)) return '—'
+  const fixed = v.toFixed(digits)
+  // -0.0 reads as a loss that isn't there
+  return (Number(fixed) > 0 ? '+' : '') + (Number(fixed) === 0 ? (0).toFixed(digits) : fixed) + ' bps'
+}
+
 export function baseAsset(symbol: string): string {
   return symbol.split('/')[0] || symbol
 }
