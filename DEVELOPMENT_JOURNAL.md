@@ -1058,3 +1058,19 @@ Read-only check of this machine's `data/apnasor-testnet.db`: **no fills at all**
 ### Files
 
 Changed: `components/TwapChart.tsx`; PROGRESS.md. 254 backend tests pass (no backend change).
+
+## 2026-10-06 — Stock-era leftovers out of `components/shared.tsx`
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Closes the open question logged on 2026-10-05: `components/shared.tsx` still carried two pieces of the June stock-market POC that nothing uses.
+
+- **`LatencyChart`** drew random latency lines labelled NYSE / NASDAQ / BATS / IEX — made-up data for venues ApnaSOR has never had. Deleted so nobody reuses it on a page (the panel rejected simulated data).
+- **`fmtLatency`** printed microseconds as a garbled "Âµs". Deleted; real latencies are shown in ms by the pages themselves.
+- **Garbled comments repaired:** the file's 7 section dividers read `// â”€â”€ Card wrapper â”€â”€…` — the UTF-8 box-drawing character `─` decoded as Windows-1252, the PowerShell rewrite damage described in CLAUDE.md's gotchas (the same damage broke "µs"). Restored to `// ── Card wrapper ──…`. A search of `frontend/src` found no other file with it.
+
+Checked before deleting: neither name is referenced anywhere in `frontend/` (outside `node_modules`). After: no garbled characters left in the file, its Windows line endings unchanged, type-check passes, and a full production build (`vite build`, into a scratch folder) compiles all 77 modules. Nothing on screen changes, so no browser check was needed.
+
+### Files
+
+Changed: `components/shared.tsx` (shared — Mahnoor: pull before editing it); PROGRESS.md. 254 backend tests pass (no backend change).
