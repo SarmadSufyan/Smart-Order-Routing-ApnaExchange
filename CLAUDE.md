@@ -138,7 +138,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (253 as of 2026-10-04)
+python -m unittest discover -s backend/tests -t .   # all backend tests (262 as of 2026-10-06)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
@@ -194,6 +194,8 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 - **Windows + local networking (RAFT):** connecting to a closed `127.0.0.1` port takes ~2 s to fail, and `localhost` may try IPv6 first — always `127.0.0.1` and short timeouts. The venv's `python.exe` is a launcher: `Popen.pid` is not the real Python's pid (`os.getpid()`); killing the launcher kills its child.
 - **Process pools on Windows** start workers by re-importing Python (~1 s cold start): keep the pool warm, and scripts that use one need `if __name__ == "__main__":`.
 - **`IsolatedAsyncioTestCase` runs asyncio in debug mode** (a stack trace per callback): fine for most tests, but timer-heavy ones (RAFT over TCP) must `set_debug(False)` or elections never settle.
+- **A VPN breaks the exchanges**: Binance answers 451 "restricted location", Bybit 403 (seen 2026-10-06). Turn it off for live tests and the demo.
+- **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 
 ## Docs you can trust

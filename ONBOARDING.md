@@ -194,6 +194,8 @@ npx --prefix frontend tsc --noEmit -p frontend
 | `check_exchange_keys`: AUTH FAILED | Wrong key type (Bybit must be **Demo Trading**), or the secret was copied incompletely. See API_KEYS_GUIDE troubleshooting |
 | OKX "network error" / feed disconnected | Some ISPs' DNS blocks okx.com. Known; work without OKX |
 | Gate shows no balance | Known: Gate's spot testnet wallet isn't funded. Binance + Bybit are enough |
+| Binance answers **451** "restricted location", Bybit **403** | A VPN is on. Turn it off for live tests and the demo |
+| Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection now needs a login as its first message. `git merge origin/feature/crypto-pivot` (brings the new `services/websocket.ts`), restart the frontend, log in again |
 | Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR (manual trade, testnet reset, someone else using your keys). If you're sure, click **Accept exchange balances** |
 | Port 8000 / 5173 already in use | Another gateway or dev server is running. Close it (or the other terminal) |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |

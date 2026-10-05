@@ -79,7 +79,7 @@ Run from the project root with the venv's Python (a plain `python` may lack the 
 
 | # | Do | ✅ Working if |
 |---|---|---|
-| 1 | `./.venv/Scripts/python.exe -m unittest discover -s backend/tests -t .` | `Ran 226 tests` … `OK` |
+| 1 | `./.venv/Scripts/python.exe -m unittest discover -s backend/tests -t .` | `Ran 262 tests` … `OK` (226 when Phase 6 landed; the count only grows) |
 | 2 | `./.venv/Scripts/python.exe scripts/raft_demo.py` (standalone, ~10 s) | `Leader elected` · `An INTRUDER … REFUSED by every node` · `New leader … nothing lost` · `All 3 nodes hold the same state: YES` · `write refused, as it must be` |
 | 3 | Make your own secret: `./.venv/Scripts/python.exe -c "import secrets; print(secrets.token_hex(32))"` → in `.env`: `RAFT_ENABLED=true` and `RAFT_SHARED_SECRET=<that code>` (never share it) | — |
 | 4 | `./.venv/Scripts/python.exe start_all.py` (keep it open) | first `RAFT node 1/2/3 127.0.0.1:900X (pid …)`, then gateway + frontend |
