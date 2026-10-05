@@ -117,6 +117,7 @@ Done when:
 ### 7 — Polish
 
 - CI (GitHub Actions): backend tests + frontend type-check on every PR.
+- Security hardening before the final demo: ~~the `/ws` WebSocket without a login~~ ✅ 2026-10-05 (login as the first message, token out of the logs, closed at expiry); `JWT_SECRET` must be set (no default in code); CORS limited to the frontend's origin instead of `*`; the hardcoded POC users (password = username); `npm audit` findings in the frontend.
 - Rewrite the stale `project-info/` docs for the crypto design; `ARCHITECTURE_V2.md` for the report.
 - Production DB: the audit store is SQLite today (`backend/shared/database/store.py`, plain SQL). Add a PostgreSQL/TimescaleDB backend behind the same interface — **decision pending** (Docker image vs. a native PostgreSQL install).
 - Docker for gateway + frontend; Prometheus/Grafana if time allows.

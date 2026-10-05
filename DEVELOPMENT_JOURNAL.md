@@ -1028,3 +1028,62 @@ Logins expire after `JWT_EXPIRY_MINUTES` (60). After that every request got 401,
 ### Files
 
 Changed: `services/api.ts`, `stores/authStore.ts`, `stores/dataStore.ts` (shared, small), `pages/RiskManager.tsx`, `pages/Wallet.tsx`, `pages/VenueHealth.tsx`, `pages/KillSwitch.tsx`, `pages/AuditLog.tsx`; PROGRESS.md. Type-check passes; 254 backend tests pass (no backend change); the changed pages fit a 375 px phone.
+
+---
+
+## 2026-10-05 — Frontend milestone merged, and the live-events WebSocket locked to logged-in users
+
+*By Sarmad (integration + backend relay, `feature/backend-v2`).*
+
+### The milestone merge
+
+Before merging `feature/frontend-v2` into `feature/crypto-pivot`, Maham's pages were opened against the running gateway: all render with real data and the browser console stays clean, the pre-flight API answers, and after a reload at phone width every page fits (the wide tables scroll inside their own box). It was merged with a merge commit (`e5e1661`) — never a squash, because both working branches live on. Her branch already contained the latest backend, so the merged result is identical to it.
+
+One thing looked wrong and wasn't: at phone width the TWAP chart stayed 600 px wide. The chart measures itself with a `ResizeObserver`, and those only run while a page is actually drawn — the browser pane used for the check was hidden, so it never measured. On a real phone it does. The small genuine leftover (the chart never goes below 320 px) is logged for Maham.
+
+### The hole Fizza found, and two more behind it
+
+**1. No login, still connected.** `/ws` checked a token only *if one was sent*. Anyone who could reach the gateway could subscribe and receive every order, fill, balance change and kill-switch event.
+
+**2. The login token was printed in the server log.** The browser put the token in the URL (`/ws?token=…`), and the web server prints every URL it serves. The gateway's console showed a valid 60-minute admin login on every connection — on a projector during the demo, anyone could copy it.
+
+**3. A connection outlived its login.** The token was checked once, at connect time. An open connection kept streaming after the login expired, after a logout elsewhere, forever.
+
+### The fix
+
+A browser cannot put a login header on a WebSocket, so the login travels in the **first message**, which is the standard approach:
+
+```
+client → {"type": "auth", "token": "<login token>"}       (within 5 s)
+server → {"type": "authenticated", "username": "admin", "expires_at": "…"}
+client → {"type": "subscribe", "channels": [...]}
+```
+
+- **Anything else first** — no message, a subscribe, a wrong, expired or refresh token, a token in the URL — the connection is closed with code **4401** (an application code that mirrors HTTP 401) and nothing is ever sent to it.
+- **At the token's expiry** the server stops broadcasting to that connection and closes it with 4401.
+- **One token check for everything.** `decode_access_token` in `middleware/auth.py` is now used by both the REST endpoints and the WebSocket. It also refuses a *refresh* token used as a login, and a well-signed token with missing fields — that used to crash with an HTTP 500 (`KeyError`).
+- **The browser side** (`services/websocket.ts`): sends the auth message first, then subscribes (the server reads messages in order). On a 4401 it stops reconnecting: retrying the same token every 3 s would never work, and the next REST call gets a 401, which already logs out (Maham's session-expiry change).
+
+**Why not keep accepting the URL token for a while?** That would keep the token in the logs, and the new browser code ships in the same change, so there is no window where a matching client is missing. An old client is refused, which is the point.
+
+### Verified live (gateway restarted with the fix)
+
+| Who connects | Result |
+|---|---|
+| Anonymous program, no message | refused, 4401 "the first message must be a login" |
+| Token in the URL (the old way) | refused, 4401 |
+| Wrong token | refused, 4401 "invalid login token" |
+| Real login as the first message | `authenticated` → `subscribed` → live `market_data` |
+| The dashboard after reloading | connects as `"WebSocket /ws"` (no token in the log), `ws_connected username=admin` |
+
+Before the reload, the dashboard was still running the old code and was refused, which is the expected behaviour for an old client.
+
+8 new tests (`backend/tests/test_api/test_websocket_auth.py`): valid login subscribes; no login; token in the URL; wrong / expired / refresh / empty tokens; silence past the timeout; an open connection closed at expiry; `decode_access_token` on a token with missing fields. 262 tests in total.
+
+### Also found
+
+- **Someone else is trading on Sarmad's test accounts.** His Wallet shows reconciliation BREAKs: about $360 of USDT on Binance and Bybit turned into BTC and ETH through trades his gateway never made. The most likely cause is another teammate's gateway using his keys, which is exactly the "own keys per person" rule in ONBOARDING. Logged under *Open questions*. The reconciliation did its job: it caught money moving outside our records.
+
+### Files
+
+New: `backend/tests/test_api/test_websocket_auth.py`. Changed: `backend/gateway/middleware/auth.py` (`decode_access_token`, `TokenError`), `backend/gateway/websocket/ws_manager.py` (`serve`, login handshake, expiry close), `backend/gateway/main.py` (`/ws` endpoint), `frontend/src/services/websocket.ts` (auth message, stop on 4401); PROGRESS.md, ROADMAP §7, CLAUDE.md.

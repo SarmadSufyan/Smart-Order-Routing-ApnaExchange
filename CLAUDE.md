@@ -61,7 +61,7 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
 ```
 
-Internal events flow over an in-process async event bus (`backend/shared/events/event_bus.py`); the WebSocket fans selected channels out to the browser (`venue_health`, `market_data`, `nbbo_update`, `order_update`, `risk_alert`, `kill_switch`, `execution_report`, `wallet_update`, `algo_update`, `arb_update`).
+Internal events flow over an in-process async event bus (`backend/shared/events/event_bus.py`); the WebSocket fans selected channels out to the browser (`venue_health`, `market_data`, `nbbo_update`, `order_update`, `risk_alert`, `kill_switch`, `execution_report`, `wallet_update`, `algo_update`, `arb_update`). **`/ws` is for logged-in users only:** the first message must be `{"type": "auth", "token": …}` (never put a token in a URL — URLs are printed in the server log); anything else, or a bad / expired token, is closed with code 4401, and an open connection is closed when its login expires (`websocket/ws_manager.py`).
 
 ### Venues
 
