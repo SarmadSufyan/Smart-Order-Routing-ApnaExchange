@@ -12,6 +12,10 @@ import type { TwapState } from '../services/api'
 
 const H = 230
 const PAD = { top: 16, right: 86, bottom: 28, left: 64 }
+// Narrow enough for a 320 px phone's card; below this the plot would vanish.
+const MIN_W = 240
+// A clock label is ~50 px wide: three of them need this much plot width.
+const MIN_PLOT_FOR_MID_TICK = 160
 
 function useWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
   const ref = useRef<T>(null)
@@ -19,7 +23,7 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(320, entry.contentRect.width)))
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(MIN_W, entry.contentRect.width)))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -73,7 +77,7 @@ export function TwapChart({ algo, now }: { algo: TwapState; now: number }) {
   const area = `${filled.join(' ')} L${x(lineEnd)},${y(0)} L${x(t0)},${y(0)} Z`
 
   const yTicks = [0, qty / 2, qty]
-  const xTicks = [t0, t0 + (tEnd - t0) / 2, tEnd]
+  const xTicks = plotW >= MIN_PLOT_FOR_MID_TICK ? [t0, t0 + (tEnd - t0) / 2, tEnd] : [t0, tEnd]
 
   function onMove(e: React.PointerEvent<SVGRectElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -93,9 +97,11 @@ export function TwapChart({ algo, now }: { algo: TwapState; now: number }) {
   const tipLeft = hs ? Math.min(Math.max(x(hsT) + 12, 0), width - 230) : 0
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', width: '100%' }}>
+    // minWidth 0: inside a flex/grid cell the SVG's own width would otherwise stop
+    // the box from shrinking, so the observer would never see the narrower size.
+    <div ref={wrapRef} style={{ position: 'relative', width: '100%', minWidth: 0 }}>
       {/* Legend: line keys mirror the marks */}
-      <div style={{ display: 'flex', gap: 18, fontSize: F.xs, color: C.muted, marginBottom: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 18px', fontSize: F.xs, color: C.muted, marginBottom: 4 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" style={{ stroke: C.blue, strokeWidth: 2 }} /></svg>
           Filled (cumulative)
@@ -118,7 +124,7 @@ export function TwapChart({ algo, now }: { algo: TwapState; now: number }) {
           </g>
         ))}
         {xTicks.map((t, i) => (
-          <text key={`x${i}`} x={x(t)} y={H - 8} textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'}
+          <text key={`x${i}`} x={x(t)} y={H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
                 style={{ fill: C.dim, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
             {clock(t)}
           </text>

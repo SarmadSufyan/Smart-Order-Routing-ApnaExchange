@@ -1028,3 +1028,31 @@ Logins expire after `JWT_EXPIRY_MINUTES` (60). After that every request got 401,
 ### Files
 
 Changed: `services/api.ts`, `stores/authStore.ts`, `stores/dataStore.ts` (shared, small), `pages/RiskManager.tsx`, `pages/Wallet.tsx`, `pages/VenueHealth.tsx`, `pages/KillSwitch.tsx`, `pages/AuditLog.tsx`; PROGRESS.md. Type-check passes; 254 backend tests pass (no backend change); the changed pages fit a 375 px phone.
+
+## 2026-10-06 — The TWAP chart on small phones
+
+*By Maham (frontend, `feature/frontend-v2`).*
+
+Sarmad's review of the merged pages (2026-10-05, logged in `feature/backend-v2`'s PROGRESS.md) found that `components/TwapChart.tsx` never drew narrower than 320 px (`useWidth`: `Math.max(320, …)`). Measured on Algo Orders with a TWAP selected: on a 375 px phone the chart's box is 314 px, so the chart stuck 6 px into the card's padding; on a 320 px phone the box is 258 px and the whole page scrolled sideways by 35 px.
+
+### The fix
+
+- **Minimum width 320 → 240 px** (`MIN_W`). A 320 px phone's card now fits; below 240 the plot (the width minus 150 px of axis labels) would vanish.
+- **`minWidth: 0` on the chart's box.** Inside a flex or grid cell (a Dashboard widget, say) the SVG's own width would otherwise keep the box from shrinking, so the ResizeObserver would never see the narrower size. No effect in today's block layout; it keeps the chart reusable.
+- **Time labels.** A clock label is ~50 px wide; at a 258 px chart the middle one overlapped the first, so it is left out when the plot is narrower than 160 px (`MIN_PLOT_FOR_MID_TICK`). A 375 px phone (plot 164 px) keeps all three, ~8 px apart. The last label is anchored by position, not by index 2.
+- **Legend wraps whole items** (`flexWrap`). At 320 px both labels used to shrink and break onto two lines each; now the second one moves to its own line.
+
+Measured after the fix: the chart equals its box at 320 (258 px), 375 (314), 390 (329) and 1024 px (698); the page never scrolls sideways; time labels never overlap. Type-check passes.
+
+### How it was tested
+
+- This machine has no TWAPs, and Binance / Bybit refused its network that day (Binance 451 "restricted location", Bybit 403 from CloudFront — most likely a VPN), so no real TWAP could run. The chart was tested with a made-up TWAP: the browser tab's own `fetch` answered `GET /api/algos/` with it. Nothing reached the gateway or an exchange; a reload removed it.
+- **A trap for anyone measuring layouts in an automated browser:** while the browser pane was hidden it painted no frames, so ResizeObserver never fired and the chart looked stuck at its starting width of 600 px (the page "260 px too wide"). That was the test browser, not the app — after a screenshot forced a frame, the chart had already fitted. Force a frame (screenshot) after every resize before measuring.
+
+### Sarmad's "someone is trading on my test accounts"
+
+Read-only check of this machine's `data/apnasor-testnet.db`: **no fills at all** — Maham's gateway has never had an order filled, so it is not what moved Sarmad's Binance / Bybit balances. The other half of the check (does her Wallet's reconciliation still say OK, i.e. has anyone else traded on *her* accounts?) needs the exchanges to answer her network again.
+
+### Files
+
+Changed: `components/TwapChart.tsx`; PROGRESS.md. 254 backend tests pass (no backend change).
