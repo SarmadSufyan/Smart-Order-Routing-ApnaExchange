@@ -30,6 +30,7 @@ from backend.shared.events.event_bus import event_bus
 from backend.shared.exceptions import DomainError
 from backend.shared.models.execution_report import ExecType
 from backend.shared.models.risk import KillSwitchState, RiskLimits
+from backend.shared.utils.asyncio_fixes import fix_windows_connection_reset
 from backend.shared.utils.logger import get_logger, setup_logging
 
 logger = get_logger("gateway")
@@ -85,6 +86,9 @@ async def restore_state(svc: Services) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(debug=settings.debug)
+    # Before the first connection: on Windows one reset browser connection could
+    # otherwise stop uvicorn from ever reaching our shutdown below (asyncio_fixes.py).
+    fix_windows_connection_reset()
     logger.info(
         "starting_apnasor",
         exchange_mode=settings.exchange_mode,
