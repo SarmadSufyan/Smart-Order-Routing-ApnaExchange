@@ -20,6 +20,7 @@ TCP on 127.0.0.1. A forged, too-old or replayed line is refused and counted.
 import argparse
 import asyncio
 import os
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -249,6 +250,12 @@ def main() -> None:
     nodes = parse_cluster(args.nodes)
     if args.id not in nodes:
         parser.error(f"--id must be one of {sorted(nodes)}")
+    if hasattr(signal, "SIGBREAK"):
+        # Windows: start_all.py stops a node with Ctrl+Break (Ctrl+C can't be sent to one
+        # process group). Turn it into a Ctrl+C, which asyncio.run handles by cancelling
+        # the main task — raising KeyboardInterrupt straight from the handler could hit the
+        # event loop mid-callback, and a node hung on its way out (seen live, 1 of 3 nodes).
+        signal.signal(signal.SIGBREAK, lambda *_: signal.raise_signal(signal.SIGINT))
     storage = SqliteStorage(Path(args.data_dir) / f"node-{args.id}.db")
     node = RaftNode(
         args.id, nodes, storage,
@@ -259,7 +266,7 @@ def main() -> None:
     try:
         asyncio.run(node.serve_forever())
     except KeyboardInterrupt:
-        pass
+        logger.info("raft_node_stopped", node=args.id, term=node.core.term, commit=node.core.commit_index)
     finally:
         storage.close()
 

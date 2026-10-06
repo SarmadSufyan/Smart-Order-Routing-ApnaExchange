@@ -126,7 +126,9 @@ scripts/                check_exchange_keys.py (all venues), check_binance_testn
                         line for a real login password), security_check.py (tries the §7 attacks, read-only)
 project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
 venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
-start_all.py            starts the RAFT nodes (if enabled), gateway + frontend
+start_all.py            starts the RAFT nodes (if enabled; waits for a leader), gateway + frontend; refuses a second
+                        start (ports in use); Ctrl+C stops the gateway cleanly first, then everything else
+                        (project-info/START_STOP_GUIDE.md)
 .github/workflows/ci.yml  CI on every push/PR to the 3 team branches: backend tests (Linux + Windows), ruff, tsc
 data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
@@ -141,7 +143,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (295 as of 2026-10-06)
+python -m unittest discover -s backend/tests -t .   # all backend tests (314 as of 2026-10-06)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -207,6 +209,9 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 - **A VPN breaks the exchanges**: Binance answers 451 "restricted location", Bybit 403 (seen 2026-10-06). Turn it off for live tests and the demo.
 - **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
+- **The gateway's event loop is frozen ~2 s right after start** (ccxt loading the exchanges' markets). A network call with a sub-second timeout made at start-up fails although the other side answered — that was the "RAFT cluster unreachable at start-up" warning. Retry until a deadline instead of trusting one answer.
+- **uvicorn runs the app's start-up BEFORE it takes the port**: a second gateway opens the same audit database and writes to it before it fails on 8000. `start_all.py` refuses a second start for this reason; don't start a second gateway by hand either.
+- **Windows Ctrl+C / Ctrl+Break** (`start_all.py`): every child runs in its own process group, so only `start_all.py` receives Ctrl+C; it stops the gateway with Ctrl+Break (uvicorn treats it like Ctrl+C). A plain `time.sleep(60)` is woken early by Ctrl+C but **not** by Ctrl+Break (an asyncio loop is). `Popen.wait()` can't be interrupted by Ctrl+C on Windows — poll instead. Killing `npm` leaves `cmd` → `node` (Vite) running: kill the tree (`taskkill /T`).
 - **A login with a real password takes ~1 s** (scrypt, slow on purpose; checks run one at a time). Not a bug. Tests must never depend on
   the passwords in your own `.env`: use `USERS[...]` and patch the settings (see `test_api/test_logins.py`).
 
@@ -214,6 +219,6 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

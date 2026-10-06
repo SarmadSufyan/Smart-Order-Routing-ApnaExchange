@@ -42,6 +42,8 @@ logger = get_logger("risk_controls")
 
 ACTOR = "consensus"
 VIEW_MAX_AGE_S = 3.0  # an older picture of the cluster isn't trusted for a fast answer
+STARTUP_WAIT_S = 5.0  # how long start-up keeps asking before it calls the cluster unreachable
+STARTUP_RETRY_S = 0.25
 
 
 class RiskControls:
@@ -56,6 +58,7 @@ class RiskControls:
         default_limits: RiskLimits | None = None,
         poll_interval_s: float = 0.5,
         mode: str = "testnet",
+        startup_wait_s: float = STARTUP_WAIT_S,
     ) -> None:
         self._risk = risk_engine
         self._ks = risk_engine.kill_switch
@@ -65,6 +68,7 @@ class RiskControls:
         self._client = client
         self._defaults = default_limits or RiskLimits()
         self._poll_s = poll_interval_s
+        self._startup_wait_s = startup_wait_s
         self._mode = mode
         self._lock = asyncio.Lock()  # one write or one adoption at a time
         self._pending: dict[str, dict[str, Any]] = {}  # item -> command not yet confirmed by the cluster
@@ -284,13 +288,30 @@ class RiskControls:
                 self._seen_index = best["state"]["applied_index"]
                 await self._adopt(best["state"])
 
+    async def _first_contact(self) -> dict[int, dict[str, Any]]:
+        """Ask the cluster until a leader answers, for up to ``startup_wait_s``.
+
+        One quick question isn't enough at start-up: for the first seconds the
+        gateway's event loop is busy loading the exchanges' markets (measured: a
+        ~2 s freeze while ccxt loads Gate's market list), so answers that arrive
+        in time are still counted as late. With a single question, 20 of 21
+        RAFT start-ups logged "unreachable" while the cluster had a leader.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._startup_wait_s
+        while True:
+            nodes = await self._client.states()
+            self._nodes, self._last_sync = nodes, datetime.now(UTC)
+            valid = self._valid(nodes)
+            if any(s["role"] == "LEADER" for s in valid.values()) or loop.time() >= deadline:
+                return valid
+            await asyncio.sleep(STARTUP_RETRY_S)
+
     async def startup(self) -> None:
         """First contact after a restart. Anything this gateway knows as TIGHTER is kept and replicated."""
         if not self.replicated:
             return
-        nodes = await self._client.states()
-        self._nodes, self._last_sync = nodes, datetime.now(UTC)
-        valid = self._valid(nodes)
+        valid = await self._first_contact()
         best = max(valid.values(), key=lambda s: s["state"]["applied_index"], default=None)
         cluster = best["state"] if best else {}
         async with self._lock:
@@ -305,7 +326,8 @@ class RiskControls:
             keep_note = f" Kept from this gateway's own record and replicated: {', '.join(kept)}." if kept else ""
             if best is None:
                 await audit("consensus_unreachable",
-                            "RAFT cluster unreachable at start-up — using this gateway's last saved risk controls "
+                            f"RAFT cluster unreachable at start-up (no answer for {self._startup_wait_s:g} s) — "
+                            "using this gateway's last saved risk controls "
                             f"(kill switch {'ENGAGED' if self._ks.is_active else 'off'}). Tightening is replicated "
                             "when it is back; loosening needs it." + keep_note, actor="system")
                 return

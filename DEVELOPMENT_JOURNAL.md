@@ -1272,3 +1272,48 @@ Fizza's handoff asked for a merge once CI was green. Twelve commits on `feature/
 Fizza keeps the backend relay (next: `start_all.py`, then the docs). Not changed by this merge: the Login page's hard-coded venue panel (Mahnoor) and the demo laptop's real passwords (before the panel).
 
 Files: PROGRESS.md (top entry, rows, handoff, branch state), this journal.
+
+---
+
+## 2026-10-06 (night) — `start_all.py`: wait for RAFT, refuse a second start, stop everything in order
+
+*By Fizza (backend relay, `feature/backend-v2`). ROADMAP §7. Plain-English guide with every option, the decisions, a verify-yourself list and the panel Q&A: [`project-info/START_STOP_GUIDE.md`](project-info/START_STOP_GUIDE.md).*
+
+The four `start_all.py` items from the handoff note *2026-10-06 (3)*: (a) wait for a RAFT leader before starting the gateway ("RAFT cluster unreachable at start-up" at almost every start), (b) refuse a second start, (c) Ctrl+C closes everything including the frontend's process tree, (d) stop the gateway cleanly so "Gateway stopped" and the arbitrage statistics are saved. Nothing new from teammates since Sarmad's merge (`6b995e7`); CI green on it.
+
+### Measured first (the cause was not the one in the note)
+
+- **Audit log, 2026-10-02 → 06:** 20 of 21 RAFT start-ups `consensus_unreachable`; **2 `gateway_stopped` in 29 starts**.
+- **The fixed 1.5 s wait was not the problem.** Live: the nodes elected a leader at 14:50:02.9; the gateway logged "unreachable" at 14:50:08.4. A diagnostic run of the gateway's real `lifespan` with a watchdog thread (prints the main thread's stack whenever the event loop stops beating for > 0.3 s) showed the loop **frozen 1.8–2.1 s** exactly while `RiskControls.startup()` waited for the nodes. ccxt's `load_markets` was running on the event loop: `ssl.create_default_context()` (the Windows certificate store) and parsing Gate's market list (`fetch_markets`, `fetch_option_markets`). The nodes answered in milliseconds, but the answers were read after the 0.3 s / 0.5 s time-outs, so they counted as missing. Starting the risk worker pool alone freezes the loop only ~0.1 s, so that wasn't it.
+- **A second start is worse than "port in use".** uvicorn runs `lifespan` startup *before* it binds the port (`Server.startup`: `lifespan.startup()` then `create_server`). Live: the second gateway wrote `gateway_started`, `consensus_unreachable` and `gateway_stopped` into the running gateway's audit database; its Vite moved to 5174 and **survived** (`npm` → `cmd` → `node`, only the first killed). While starting, a gateway also marks unfinished orders and running TWAPs as stopped, which would touch the running gateway's records.
+- **Ctrl+C before:** everything exited in 0.7 s; the gateway never logged `shutting_down` (hard-killed by `start_all.py` in the same second), so no `gateway_stopped` and the arbitrage statistics since the last 60 s save were lost; four `KeyboardInterrupt` tracebacks from the risk workers.
+
+### Decisions (options and reasons: START_STOP_GUIDE.md)
+
+- **(a) Two parts:** `start_all.py` waits for a leader (`wait_for_leader`, poll 0.2 s, `--raft-wait` 20 s), **and** the gateway's `RiskControls.startup()` keeps asking until a leader answers, for up to 5 s (`_first_contact`). The second part is the actual fix (Fizza agreed to touch the gateway). No leader after 20 s → **start anyway with a warning** (Fizza): the gateway is fail-safe without a majority. Rejected: a longer sleep, moving the RAFT sync before the exchanges start (an adopted kill switch sweeps exchange orders), un-freezing ccxt (root cause, exchange layer — logged under *Open questions*).
+- **(b) Bind test of only the ports this start uses** (Fizza): 8000; 5173 on `127.0.0.1` and `::1` unless `--no-frontend` (Vite is on IPv6 `::1` here); 9001-9003 with RAFT on. Same socket options as asyncio (no `SO_REUSEADDR` on Windows). Owner from `netstat -ano`, recognised by the empty remote end (the word LISTENING is translated on non-English Windows). Rejected: a lock file (stale after a crash), connect tests (2 s per closed port on Windows).
+- **(c + d) Own process group per child + an ordered stop.** `CREATE_NEW_PROCESS_GROUP` (Windows) / `start_new_session` (elsewhere), so Ctrl+C reaches only `start_all.py`. Gateway: Ctrl+Break / SIGINT (uvicorn 0.49 handles SIGBREAK), wait ≤ 60 s (a clean stop lets an order already at an exchange finish — rule 6); frontend: `taskkill /T /F` / `killpg`; nodes: Ctrl+Break ≤ 5 s each, then killed. A second Ctrl+C kills everything at once; SIGINT is then ignored so a third can't interrupt the kill. Rejected: a Job Object (Windows-only ctypes, no clean stop), starting Vite with `node` directly (bypasses `package.json`), a stdin-pipe watcher in the gateway, uvicorn's `--timeout-graceful-shutdown` (cancels a request mid-order).
+
+### Design notes (what a reader wouldn't guess)
+
+- **Every Python child is two processes on Windows** (the venv launcher + the real Python). The launcher ignores console control events and waits; Ctrl+Break sent to the group reaches the real Python, and `taskkill /T` on the launcher takes both.
+- **`Popen.wait()` can't be interrupted by Ctrl+C on Windows** (`WaitForSingleObject`), so the waits poll every 0.1 s: the second Ctrl+C must work.
+- **On Windows a long `time.sleep()` wakes early for Ctrl+C only, not Ctrl+Break.** An asyncio loop wakes for any signal (`set_wakeup_fd`), so the gateway and the nodes are fine; a test child must sleep in short steps (found when the first version of the test waited 60 s).
+- **The RAFT node:** the first version mapped SIGBREAK to `signal.default_int_handler` (KeyboardInterrupt raised wherever the code is). In the first live run 1 of 3 nodes didn't stop in 5 s and was killed (harmless). Now Ctrl+Break re-raises itself as SIGINT, which `asyncio.run` handles by cancelling the main task, the same path as a real Ctrl+C. After the change, 42 of 42 node stops in a loop (with and without a client polling every 0.5 s like the gateway) took ~0.2 s each. With the old line in the same loop: one 4.6 s stop and one hung run. That is suggestive, but the hang wasn't reproducible on demand, so we don't claim the exact cause.
+- **Testing a real Ctrl+C from a script:** this tool's shell starts processes with Ctrl+C *ignored*, an attribute Windows passes to children, so the first harness run "pressed" Ctrl+C and nothing happened. The harness (not in the repo) opens `start_all.py` in its own hidden console through a stand-in shell that switches Ctrl+C back on (`SetConsoleCtrlHandler(NULL, FALSE)`), then a helper attaches to that console and calls `GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0)`, exactly what a person pressing Ctrl+C does.
+
+### Verified (live on Fizza's machine, no orders)
+
+- **Start:** `RAFT leader: node N … after 1.9-2.2 s`; **4 of 4 RAFT starts `consensus_synced`** (before: 20 of 21 unreachable).
+- **Ctrl+C with a logged-in browser** (live `/ws` open): gateway stopped cleanly in **2.8-2.9 s** (`ws_disconnected` → `shutting_down` → `shutdown_complete`), `gateway_stopped` audited, arbitrage statistics saved at that moment, frontend tree and the 3 nodes stopped (`raft_node_stopped` × 3), whole stop **3.7 s**, no ports or processes left, no tracebacks after Ctrl+C.
+- **Second start while running:** refused in 2.8 s, naming `node.exe` / `python.exe` and the pid on each of the 5 ports, with a `taskkill` line; the running instance's audit log untouched.
+- **Ctrl+C twice:** "Second Ctrl+C - stopping everything at once", nothing left.
+- **Gateway crash** (`taskkill /F` on the gateway's Python only): "Gateway exited with code 1 - stopping the rest", frontend tree and nodes stopped, nothing left (before: Vite survived this path).
+- **RAFT off + `--no-frontend`** (teammates' usual setup): gateway stopped in 2.8 s, `gateway_stopped` audited, statistics saved.
+- **Tests:** 314 (19 new: 15 in `test_start_all.py` with real child and grandchild processes and a real listening socket; 4 `test_startup_*` in `test_risk_controls.py`) on Windows, and in Linux (`python:3.14-slim`, `--cpus 2` three times, plus once on exactly 2 visible cores); ruff clean (a stale local ruff cache first reported 5 B008 in an untouched file, gone with `ruff clean`); frontend type-check (Windows + `node:24-slim`). Not exercised live: pausing a running TWAP at stop (it would need orders); existing code with its own tests.
+
+### Files
+
+New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: CLAUDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
+
+**Handover (same night):** Fizza is done for now; the backend relay goes to Sarmad. His to-do list (CI check, try it, merge, team message, docs rewrite, demo-laptop prep, the RAFT-on-for-the-demo decision) and a one-line summary of everything done so far: PROGRESS.md → *Handoff 2026-10-06 (night) — Fizza → Sarmad*.

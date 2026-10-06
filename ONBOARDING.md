@@ -112,7 +112,7 @@ Expected: `Ran 107 tests ... OK` (the count grows as we add tests).
 ```powershell
 python start_all.py
 ```
-Open http://localhost:5173 and log in as `admin` / `admin` (the demo login of a developer machine; the demo laptop uses real passwords — `project-info/SECURITY_GUIDE.md`). Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C.
+Open http://localhost:5173 and log in as `admin` / `admin` (the demo login of a developer machine; the demo laptop uses real passwords — `project-info/SECURITY_GUIDE.md`). Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C — it takes ~3–4 s (the gateway stops cleanly first, then the frontend and the RAFT nodes); Ctrl+C again stops everything at once.
 
 Your local audit database (`data/apnasor-testnet.db`) is created automatically and stays on your machine.
 
@@ -200,7 +200,7 @@ npx --prefix frontend tsc --noEmit -p frontend
 | `admin` / `admin` refused and the Login page shows no demo buttons | This machine has real passwords (`AUTH_PASSWORD_HASH_*` in `.env`): use them, or delete those lines to go back to the demo login (`project-info/SECURITY_GUIDE.md`) |
 | `start_all.py` says "Nothing was started" about `JWT_SECRET`, `CORS_ORIGINS` or `AUTH_PASSWORD_HASH_…` | The message says the fix. Usually: delete the line from `.env` (the safe default takes over) |
 | Logged out right after pulling the security update ("Your session expired") | Expected once: logins are now signed with your machine's own key. Log in again |
-| Port 8000 / 5173 already in use | Another gateway or dev server is running. Close it (or the other terminal) |
+| `start_all.py` says "Port 8000 (gateway) is already in use - by python.exe, pid …" (or 5173 / 9001–9003) | ApnaSOR is already running in another terminal — use that one or press Ctrl+C there — or an earlier start was killed without stopping its children: run the `taskkill /PID … /T /F` line the message prints. Running `npm run dev` yourself? Start with `python start_all.py --no-frontend` |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |
 | `ModuleNotFoundError: No module named 'fastapi'` (or `httpx`, `jose`) when running a script | That terminal runs the system Python, not the project's. Run `.venv\Scripts\Activate.ps1` once in that terminal (prompt starts with `(.venv)`), or call `.venv\Scripts\python.exe` instead of `python` |
 | Tests fail right after cloning | Check `git branch --show-current` shows your branch and that the venv is active |
