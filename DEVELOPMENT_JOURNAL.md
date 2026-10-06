@@ -1255,3 +1255,20 @@ The rule so far was "each person makes their own exchange accounts and keys" (CL
 **Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. **Settled the same day:** the third set of trades on Sarmad's accounts was Mahnoor's gateway on his Binance + Bybit keys (Fizza confirmed with her). So all of Sarmad's "unexplained" trades were teammates' — no leak, no key to replace.
 
 Changed: CONTRIBUTING.md, CLAUDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
+
+---
+
+## 2026-10-06 (evening) — Fizza's CI and security hardening merged
+
+*By Sarmad (integration, `feature/crypto-pivot`).*
+
+Fizza's handoff asked for a merge once CI was green. Twelve commits on `feature/backend-v2` (CI, a ruff clean-up, the per-machine login-signing key, CORS limited to our frontend + a `/ws` website check, scrypt password hashes with the demo login as a testnet-only fallback, logins audited, `SECURITY_GUIDE.md`, the shared-keys team decision). Merged with a merge commit after these checks:
+
+- **CI** on her last commit: backend tests on Linux and Windows, ruff, frontend type-check — all ✅.
+- **Code review** of the security changes. The signing key is never in the code; a short `JWT_SECRET` stops the start instead of being replaced; password checks run one at a time on their own thread; an unknown user name costs as much as a wrong password; `/ws` refuses a foreign `Origin` before the connection opens. Two things checked because they could break silently: the CORS rule now allows only GET / POST / PUT, and no endpoint or frontend call uses DELETE or PATCH; nothing in the backend, scripts or `start_all.py` still uses the removed `HARDCODED_USERS` or `settings.jwt_secret`.
+- **Locally:** 295 tests, ruff and type-check pass.
+- **Live**, with my `.env` unchanged (no `JWT_SECRET`, no password hashes): the gateway created this machine's key file and started; `scripts/security_check.py` → forged admin ticket 401, a foreign website's preflight 400, `/ws` from a foreign website 403, only the demo login works (expected on a developer machine). The Login page showed the demo buttons; logging in through it worked and its live connection opened (`ws_connected username=admin`); no browser or gateway errors.
+
+Fizza keeps the backend relay (next: `start_all.py`, then the docs). Not changed by this merge: the Login page's hard-coded venue panel (Mahnoor) and the demo laptop's real passwords (before the panel).
+
+Files: PROGRESS.md (top entry, rows, handoff, branch state), this journal.
