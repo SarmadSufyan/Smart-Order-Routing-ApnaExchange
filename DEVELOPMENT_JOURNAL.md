@@ -1252,6 +1252,6 @@ The rule so far was "each person makes their own exchange accounts and keys" (CL
 
 **Rules** (CONTRIBUTING.md *Exchange keys*): testnet / demo only, never real-money keys; keys passed privately to the one person who needs them (never group chats, screenshots or git), Read + Trade only; before the demo or a recording only the demo laptop trades, from the night before, and it accepts the exchange balances once (MATCHED); a BREAK nobody can explain means the owner replaces the key. Panel line: "our test keys are shared inside the team — they hold the exchanges' fake money; real-money keys belong to one person and one laptop."
 
-**Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. Still open: Mahnoor confirms whether her `.env` holds Sarmad's Binance + Bybit keys — that would explain the third set of trades on his accounts; if nobody made them, Sarmad replaces the keys.
+**Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. **Settled the same day:** the third set of trades on Sarmad's accounts was Mahnoor's gateway on his Binance + Bybit keys (Fizza confirmed with her). So all of Sarmad's "unexplained" trades were teammates' — no leak, no key to replace.
 
 Changed: CONTRIBUTING.md, CLAUDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
