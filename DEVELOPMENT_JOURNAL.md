@@ -1317,3 +1317,34 @@ The four `start_all.py` items from the handoff note *2026-10-06 (3)*: (a) wait f
 New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: CLAUDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
 
 **Handover (same night):** Fizza is done for now; the backend relay goes to Sarmad. His to-do list (CI check, try it, merge, team message, docs rewrite, demo-laptop prep, the RAFT-on-for-the-demo decision) and a one-line summary of everything done so far: PROGRESS.md → *Handoff 2026-10-06 (night) — Fizza → Sarmad*.
+
+## 2026-10-06 (night, later) — `start_all.py` fixes merged; Ctrl+C can hang after the browser was used
+
+*By Sarmad (took the backend relay; integration on `feature/crypto-pivot`).*
+
+Fizza's handover asked for: CI check → try it → merge. Done in that order.
+
+- **Before merging:** CI ✅ on her last commit (`9f56fd6`); locally 314 tests, ruff (0.4.10, the pinned version) and the frontend type-check pass. Merged with a merge commit (`8f019db`); its tree is identical to the tested one.
+- **Live, RAFT on.** My `.env` has RAFT off, so the run set `RAFT_ENABLED=true` and a throwaway `RAFT_SHARED_SECRET` as environment variables (they override `.env`; nothing written to it). Ctrl+C was pressed for real in `start_all.py`'s own console, with the same helper Fizza described (stand-in shell that switches Ctrl+C back on + `GenerateConsoleCtrlEvent`), because the tool's shell starts processes with Ctrl+C ignored.
+  - **Start:** `RAFT leader: node 1 (term 1), 3 of 3 nodes up - after 1.5 s`, then the gateway; audit log `consensus_synced` on both starts of the evening (2 of 2).
+  - **Second start** while running: refused, exit code 1, all 5 ports named with their programs and pids plus a `taskkill` line; the audit log shows no extra `gateway_started` (the first instance's records untouched).
+  - **Ctrl+C, no browser:** gateway stopped cleanly in **2.8 s** (`shutting_down` → adapters stopped → audit store closed → `shutdown_complete`), `gateway_stopped` audited, frontend tree and the 3 nodes stopped (`raft_node_stopped` × 3), whole stop 3.6 s, nothing left on 8000 / 5173 / 9001-9003.
+  - **Ctrl+C after logging in through the browser:** the gateway printed `Shutting down`, closed the live `/ws` connection, then **nothing for 60 s**; `start_all.py` said "did not stop in time - killed", then stopped the frontend and the nodes cleanly. No `gateway_stopped` in the audit log for that run.
+
+### Why the stop hung (measured, not guessed)
+
+- uvicorn 0.49's shutdown waits for open connections, then for running requests, then `await server.wait_closed()` — and only then runs our `lifespan` shutdown. The log showed neither "Waiting for connections to close" nor "Waiting for background tasks", so it was stuck in `wait_closed()`.
+- Earlier in that run the gateway log had two tracebacks from asyncio itself: `_ProactorBasePipeTransport._call_connection_lost` → `self._sock.shutdown(SHUT_RDWR)` → `ConnectionResetError: [WinError 10054]`, while the browser was loading the dashboard. In Python 3.14.3's `asyncio/proactor_events.py` that `shutdown()` call comes **before** `server._detach(self)`; when it raises, the server never learns that the connection is gone, and since Python 3.12 `Server.wait_closed()` waits for every connection it still counts.
+- **Reproduced in isolation** (a 40-line asyncio script, no gateway): forcing that one `shutdown()` to raise 10054 makes `wait_closed()` time out every time; without it, it returns at once. A plain client reset (RST) did not trigger the error by itself in 3 tries, which matches it being intermittent.
+- **Not OKX:** this machine can't reach okx.com (DNS), but the no-browser run had the same OKX failures and stopped in 2.8 s.
+- Fizza's live runs (also with a logged-in browser) stopped cleanly — the reset has to happen at the wrong moment during the run. A demo laptop with a browser open for an hour will very likely hit it.
+
+**Impact:** fail-safe, not unsafe — after 60 s everything is killed and the next start marks interrupted orders; reconciliation shows what the exchanges did. What is lost: the `gateway_stopped` audit line and the arbitrage statistics since the last periodic save; and a 60 s wait. Workaround until fixed: Ctrl+C twice.
+
+**Options (not decided; PROGRESS.md → *Open questions*):** (a) a guarded Windows-only fix at gateway start so a failing `shutdown()` still closes the socket and detaches (cures the cause; touches a private asyncio method); (b) run uvicorn from our own script with a time limit on `wait_closed()` only, after connections and requests are done (cancels nothing in flight); (c) uvicorn's `--timeout-graceful-shutdown` (simplest, but cancels running requests at its limit — rule 6; Fizza rejected it for that reason).
+
+Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binance had 5/5 books (the known `MOCK_VENUES` item); OKX unreachable on this machine (ISP DNS — CLAUDE.md gotcha); Bybit's WebSocket timed out a few times at start and then synced 5/5. A test RAFT log now exists on this machine (`data/raft-testnet/`, gitignored).
+
+Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), CLAUDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
+
+---

@@ -127,6 +127,7 @@ Every child was in the terminal's process group, so one Ctrl+C reached all of th
 ## Honest limits
 
 - If `start_all.py` itself is killed (Task Manager, an IDE's stop button), its children keep running. The next start's port check names them and prints the `taskkill` line. (C2 would cover this.)
+- **The clean stop can hang after the browser was used** (found 2026-10-06 night, Sarmad's live check of the merge): a browser connection reset at the wrong moment leaves Python's Windows event loop counting a connection that is gone, so uvicorn never reaches our shutdown; after 60 s `start_all.py` kills the gateway (no "Gateway stopped"). Without a browser the same machine stopped in 2.8 s. Cause, reproduction and fix options: PROGRESS.md → *Open questions*. Until it is fixed: Ctrl+C twice if "stopping cleanly …" lasts more than a few seconds.
 - The ~2 s event-loop freeze at gateway start (ccxt loading markets) is still there. It is now harmless for RAFT, but it delays the first seconds of market data (*Open questions*).
 - A port taken in the second between the check and the start gives the old failure (the gateway exits, and the rest is stopped).
 - The Linux/macOS paths (process groups, SIGINT) pass the unit tests in Linux containers, but `start_all.py` itself was run end-to-end only on Windows, the team's and the demo laptop's system.
