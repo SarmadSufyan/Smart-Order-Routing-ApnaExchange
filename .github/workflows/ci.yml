@@ -1,0 +1,87 @@
+# Continuous integration (ROADMAP §7).
+#
+# Every push and pull request on the team branches runs, each on a fresh
+# GitHub machine: the backend unit tests (Linux + Windows), a Python lint
+# (ruff) and the frontend type-check. The result is the green tick / red cross
+# next to the commit on GitHub; details on the repo's Actions tab.
+#
+# Nothing here needs a secret or an exchange key: there is no .env on the
+# runner, so every setting is at its default (RAFT off, no keys) and no test
+# talks to a network or an exchange.
+
+name: CI
+
+on:
+  push:
+    branches: [feature/backend-v2, feature/frontend-v2, feature/crypto-pivot]
+  pull_request:
+    branches: [feature/backend-v2, feature/frontend-v2, feature/crypto-pivot]
+  workflow_dispatch: # a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run still going for the older
+# one: only the latest commit's result matters, and it saves Actions minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false # show both results even when one fails
+      matrix:
+        # Linux = a clean machine nobody developed on; Windows = what the team
+        # develops and demos on (RAFT over TCP and the process pool behave
+        # differently on each).
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14" # the version the team runs
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run the backend unit tests
+        run: python -m unittest discover -s backend/tests -t .
+
+  python-lint:
+    name: Python lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install ruff (the version pinned in requirements-dev.txt)
+        run: python -m pip install "$(grep -E '^ruff==' backend/requirements-dev.txt | cut -d' ' -f1)"
+      - name: Lint
+        # Rules: backend/pyproject.toml. --output-format github marks each
+        # finding on the line it refers to in the PR's "Files changed" view.
+        run: ruff check --output-format github backend scripts start_all.py
+
+  frontend-typecheck:
+    name: Frontend type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies (exactly the locked versions)
+        run: npm ci
+      - name: Type-check (strict TypeScript; nothing is built)
+        run: npx tsc --noEmit -p .

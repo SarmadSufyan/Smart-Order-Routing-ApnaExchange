@@ -26,6 +26,11 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["backend"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares dependencies and query parameters as argument defaults on
+# purpose (B008 would flag every `= Depends(...)`).
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

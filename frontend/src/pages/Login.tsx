@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { BOOT_LINES, MOCK_VENUES } from '../mockData'
 import { useAuthStore } from '../stores/authStore'
+import { api } from '../services/api'
 
+// Shown only for users the gateway says still have the demo login
+// (GET /api/auth/demo-logins) — none on a machine with real passwords.
 const DEMO_ACCOUNTS = [
   { user: 'admin',    pass: 'admin',    role: 'ADMIN'        },
   { user: 'trader1',  pass: 'trader1',  role: 'TRADER'       },
@@ -16,10 +19,30 @@ export function Login() {
   const error   = useAuthStore((s) => s.error)
   const loading = useAuthStore((s) => s.loading)
 
-  const [user, setUser]       = useState('admin')
-  const [pass, setPass]       = useState('admin')
+  const [user, setUser]       = useState('')
+  const [pass, setPass]       = useState('')
+  const [demoUsers, setDemoUsers] = useState<string[]>([])
   const [bootIdx, setBootIdx] = useState(0)
   const [clock, setClock]     = useState('')
+
+  useEffect(() => {
+    // The gateway may still be starting when this page opens: ask again until it answers.
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    const ask = () => api.getDemoLogins()
+      .then((r) => {
+        if (stopped) return
+        setDemoUsers(r.demo_logins)
+        if (r.demo_logins.includes('admin')) {  // pre-fill only while admin / admin really works
+          setUser((u) => u || 'admin')
+          setPass((p) => p || 'admin')
+        }
+      })
+      .catch(() => { if (!stopped) retry = setTimeout(ask, 2000) })
+    ask()
+    return () => { stopped = true; clearTimeout(retry) }
+  }, [])
+  const demoAccounts = DEMO_ACCOUNTS.filter((a) => demoUsers.includes(a.user))
 
   useEffect(() => {
     const b = setInterval(() => setBootIdx((i) => Math.min(i + 1, BOOT_LINES.length)), 420)
@@ -177,30 +200,32 @@ export function Login() {
               {loading ? 'AUTHENTICATING…' : 'CONTINUE >'}
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-              <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>DEMO ACCOUNTS</span>
-              <div style={{ flex: 1, height: 1, background: C.border }} />
-            </div>
+            {demoAccounts.length > 0 && <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
+                <div style={{ flex: 1, height: 1, background: C.border }} />
+                <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>DEMO ACCOUNTS</span>
+                <div style={{ flex: 1, height: 1, background: C.border }} />
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {DEMO_ACCOUNTS.map((acct) => (
-                <button
-                  key={acct.user}
-                  type="button"
-                  onClick={() => fillDemo(acct.user, acct.pass)}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '7px 12px', border: `1px solid ${C.border}`,
-                    borderRadius: 4, background: C.surface, color: C.text,
-                    fontSize: F.sm, fontFamily: 'inherit', cursor: 'pointer',
-                  }}
-                >
-                  <span style={{ color: C.text }}>{acct.user}</span>
-                  <span style={{ color: C.dim, fontSize: F.xs }}>{acct.role}</span>
-                </button>
-              ))}
-            </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {demoAccounts.map((acct) => (
+                  <button
+                    key={acct.user}
+                    type="button"
+                    onClick={() => fillDemo(acct.user, acct.pass)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '7px 12px', border: `1px solid ${C.border}`,
+                      borderRadius: 4, background: C.surface, color: C.text,
+                      fontSize: F.sm, fontFamily: 'inherit', cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ color: C.text }}>{acct.user}</span>
+                    <span style={{ color: C.dim, fontSize: F.xs }}>{acct.role}</span>
+                  </button>
+                ))}
+              </div>
+            </>}
           </form>
 
           <div style={{

@@ -14,6 +14,7 @@ Stop: Ctrl+C
 """
 
 import argparse
+import getpass
 import os
 import sys
 import time
@@ -25,7 +26,10 @@ GREEN, RED, DIM, BOLD, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[1m", "\0
 
 
 def login(http: httpx.Client) -> None:
-    r = http.post("/api/auth/login", json={"username": "admin", "password": "admin"})  # POC login
+    r = http.post("/api/auth/login", json={"username": "admin", "password": "admin"})  # demo login
+    if r.status_code == 401:  # this gateway has a real admin password
+        password = getpass.getpass("Password for admin: ")
+        r = http.post("/api/auth/login", json={"username": "admin", "password": password})
     r.raise_for_status()
     http.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
 

@@ -87,8 +87,9 @@ backend/
                         update_id_sync.py / stream_sync.py (book integrity), registry.py (EXCHANGE_CATALOG),
                         binance/ bybit/ okx/ gate/ coinbase/ (per-venue feed + quirks)
   gateway/              main.py (lifespan: open store → restore state → start services), config.py (Settings,
-                        SecretStr keys, mainnet interlock), dependencies.py (wiring), middleware/auth.py
-                        (JWT, hardcoded POC users), routers/*, websocket/ws_manager.py
+                        SecretStr keys, mainnet interlock, CORS rule), dependencies.py (wiring),
+                        middleware/auth.py (users, logins, JWT signed with this machine's own key),
+                        middleware/passwords.py (scrypt hashes), routers/*, websocket/ws_manager.py
   services/
     order_state/        order_manager.py (state machine, in-flight tracking, restore), entry.py (OrderEntry)
     routing_engine/     engine.py (pipeline + child execution), strategies/best_price.py (depth walk)
@@ -121,10 +122,12 @@ frontend/src/
   theme.ts / format.ts  colour + font tokens (C, F), number formatting (fmtPrice, fmtQty, fmtUsd, fmtPnl)
 scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py, benchmark_risk_batch.py,
                         raft_demo.py (kill the leader; --gateway --twap 0.0006 against the live system),
-                        arb_watch.py (arbitrage detector live in the terminal)
+                        arb_watch.py (arbitrage detector live in the terminal), hash_password.py (the .env
+                        line for a real login password), security_check.py (tries the §7 attacks, read-only)
 project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
 venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
 start_all.py            starts the RAFT nodes (if enabled), gateway + frontend
+.github/workflows/ci.yml  CI on every push/PR to the 3 team branches: backend tests (Linux + Windows), ruff, tsc
 data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
 
@@ -138,19 +141,25 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (262 as of 2026-10-06)
+python -m unittest discover -s backend/tests -t .   # all backend tests (295 as of 2026-10-06)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
+python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
 ```
 
 Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.
+**CI** (`.github/workflows/ci.yml`) runs the tests, ruff and the type-check on a clean Linux and Windows machine for
+every push and PR to the team branches; its ✅/❌ is next to each commit on GitHub (details: the Actions tab).
 **RAFT on:** set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` (make one with
 `python -c "import secrets; print(secrets.token_hex(32))"`) in `.env`, then `python start_all.py` starts the 3 nodes
 before the gateway (a killed node is restarted after 15 s). Every RAFT message is signed with that secret.
 `GET /api/consensus/status` shows leader, terms, log positions and refused messages.
 
-POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN), `trader1` (TRADER), `risk_mgr` (RISK_MANAGER) — password = username.
+Logins: `admin` (ADMIN), `trader1` (TRADER), `risk_mgr` (RISK_MANAGER). On a developer machine the **demo login** works
+(password = user name; testnet only, never on mainnet). A real password is a scrypt hash in `.env`
+(`python scripts/hash_password.py admin`) — **the demo laptop must have all three**, then `python scripts/security_check.py`
+must say "Every attack was refused." Details, options and panel Q&A: `project-info/SECURITY_GUIDE.md`.
 
 **Verify on the real venues, not just in tests.** Every venue quirk so far (price-limit bands, fees in coins, lagging order history, float lot loss, fragmented inventory, venue minimums) was found live. Use small quantities (e.g. 0.0002 BTC).
 
@@ -166,6 +175,7 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 6. **Never interrupt a call that is at the exchange** (no task cancellation mid-order). Pause/cancel take effect between steps.
 7. **Everything is audited** with an actor and a plain-English summary (`backend/shared/events/event_bus.py: audit()`).
 8. **Honest claims only** (the panel probes them): not "non-custodial" (exchanges custody funds; we read balances); arbitrage is a fee-aware *detector*; the value is integration, not a novel algorithm; only claim benchmarks we can show; testnet/demo = exchange-run fake funds.
+9. **No secrets in the code.** Keys, signing secrets and password hashes live in `.env` or `data/` (per machine, gitignored); never a fixed default in the code; a bad value stops the start with the fix in the message. Only our own frontend may use the API from a browser (`CORS_ORIGINS`, the same rule on `/ws`). See `project-info/SECURITY_GUIDE.md`.
 
 ## Coding conventions
 
@@ -186,7 +196,7 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 
 - **Windows PowerShell 5.1 corrupts UTF-8 files** when you rewrite them with `Get-Content`/`Set-Content` (writes a BOM, turns `—` into `â€”`). Edit files with an editor or Python, not PowerShell pipelines.
 - **Vite on Windows can miss new files** — restart `npm run dev` before trusting what the browser shows.
-- **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
+- **The team shares one set of testnet keys (decision 2026-10-06)**, so teammates' trades show as reconciliation BREAKs on your Wallet (each ledger only knows its own fills) — expected, don't chase them. Before a demo, only the demo laptop trades and it accepts the exchange balances once. Real-money keys are never shared. Rules: CONTRIBUTING.md *Exchange keys*.
 - **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
 - **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
 - **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network), then `ipconfig /flushdns` — Windows caches a failed lookup. Do it on the demo laptop too. Right after a DNS change, Bybit's WebSocket can hang for ~2 min (IPv6 addresses on a network without IPv6) and then recovers by itself.
@@ -197,11 +207,13 @@ POC logins (hardcoded in `backend/gateway/middleware/auth.py`): `admin` (ADMIN),
 - **A VPN breaks the exchanges**: Binance answers 451 "restricted location", Bybit 403 (seen 2026-10-06). Turn it off for live tests and the demo.
 - **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
+- **A login with a real password takes ~1 s** (scrypt, slow on purpose; checks run one at a time). Not a bug. Tests must never depend on
+  the passwords in your own `.env`: use `USERS[...]` and patch the settings (see `test_api/test_logins.py`).
 
 ## Docs you can trust
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

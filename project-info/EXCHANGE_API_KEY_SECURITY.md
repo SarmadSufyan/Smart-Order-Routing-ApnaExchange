@@ -1,7 +1,7 @@
 # Exchange API keys — how ApnaSOR keeps them safe
 
 > How we create, store, load and use the API keys for Binance, Bybit, OKX and Gate, and what protects them at every step.
-> Every claim links to the code or document that proves it. How to *create* the keys: [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md).
+> Every claim links to the code or document that proves it. How to *create* the keys: [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md). Logins, the login-signing key and which websites may use the API: [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md).
 > Written 2026-10-03. Current state: **testnet / demo keys only** (exchange-run fake funds); real-money keys come only in Phase 8.
 
 ---
@@ -38,7 +38,7 @@ Whoever has the key + secret can do whatever the key is **allowed** to do on tha
 
 - Every key is created with **Read + Spot Trade only — never Withdraw**. Even if a key leaked, nobody could move money out with it. (Demo environments don't support withdrawal at all.) → [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md) §3 (per exchange) and §7 (security checklist).
 - **Testnet / demo keys only.** They hold the exchange's fake money, so a leak can't cost real money.
-- **Each person makes their own keys** — never shared on WhatsApp, chat or screenshots, and never one key for the whole team. → [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+- **Testnet keys: one shared set for the four of us** (team decision 2026-10-06 — exchange-run fake money; each exchange's key belongs to one teammate's account). A key is passed **privately** to the one person who needs it, never in a group chat, a screenshot or git; a BREAK nobody can explain means the owner replaces the key. **Real-money keys (Phase 8) are never shared:** one owner, one laptop. → [`../CONTRIBUTING.md`](../CONTRIBUTING.md) *Exchange keys*
 
 ### 3.2 Keep the secret out of the code and out of GitHub
 

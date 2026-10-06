@@ -1152,3 +1152,106 @@ Checked after merging: 262 backend tests pass, frontend type-check and productio
 ### Files
 
 PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, CLAUDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
+
+---
+
+## 2026-10-06 — CI on every push, and who was trading on Sarmad's accounts
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+ROADMAP §7 starts with CI: until now "the tests pass" meant "they passed on the laptop of whoever pushed". Now GitHub re-runs the checks on clean machines for every push and pull request on `feature/backend-v2`, `feature/frontend-v2` and `feature/crypto-pivot`, and puts a ✅ / ❌ next to the commit.
+
+### What runs (`.github/workflows/ci.yml`)
+
+- **Backend tests on Linux and Windows** (Python 3.14, the version the team runs): `pip install -r backend/requirements.txt`, then the same `unittest discover` as on our laptops. Linux because it is a machine nobody developed on; Windows because that is where we develop and demo — RAFT over TCP and the process pool behave differently on each (Linux starts worker processes another way).
+- **Python lint (ruff)** at the version pinned in `requirements-dev.txt`, with `--output-format github`, so a finding appears as a red mark on the exact line in a PR's "Files changed".
+- **Frontend type-check** (Node 24): `npm ci` (exactly the locked versions), `tsc --noEmit`.
+- No `.env` and no secrets on the runner: every setting is at its default (RAFT off, no exchange keys) and no test talks to a network or an exchange. A newer push to the same branch cancels the run still going for the older one (only the latest result matters; it saves the repo's free Actions minutes). A manual *Run workflow* button is on the Actions tab.
+
+### Ruff clean first
+
+CI would have been red from day one: ruff found 19 small things in older gateway files. Fixed without changing behaviour — unused imports, over-long import lines wrapped, `raise HTTPException(...) from None` inside `except` blocks (same HTTP answers, no misleading "during handling of the above exception" trace), one f-string without placeholders. FastAPI's `= Depends(...)` / `= Query(...)` argument defaults are allowed in `backend/pyproject.toml` (that is how FastAPI is meant to be used) instead of being rewritten. Gotcha: ruff 0.4's cache kept the old result after the config change — `--no-cache` (CI has no cache anyway).
+
+### Checked before pushing
+
+- **Linux, before GitHub ever saw it:** the repo's files in fresh Docker containers — `python:3.14-slim` pinned to 2 CPUs (GitHub's machines for a private repo have 2), CI's exact commands, the whole suite repeated to catch timing flukes (5 × 254 tests on 2026-10-04; 3 × 262 after Sarmad's `/ws` tests arrived — about 13–18 s per run, never flaky), plus `node:24-slim` for `npm ci` + type-check. Tests also pass with no `.env` at all.
+- **A red run on purpose:** in a throwaway container copy, one wrong test and one unused import — both steps exit 1 and name the file and line.
+- **Rebased onto Sarmad's work:** his `/ws` fix had rewritten two files my ruff commit also touched (`middleware/auth.py`, `websocket/ws_manager.py`); his versions kept as they are (already ruff-clean).
+- **Live, in Maham's new pages** (RAFT on, all four venues): login, Dashboard, the live connection with Sarmad's new first-message login (`ws_connected username=admin`, no token in any URL or log line), Arbitrage page, Kill Switch with the RAFT panel (3/3 nodes, signed), Algo Orders pre-flight ("nothing was sent", 10/10 slices pass), Risk Manager, Wallet, Audit Log filters, Venue Connectivity; the "order not found" (404) and "bad refresh token" (401) answers the ruff commit touched are unchanged. **No order was placed** — see the keys finding.
+
+### Finding 1: who was trading on Sarmad's accounts
+
+Sarmad's open question asked Fizza and Mahnoor to check. Fizza's `.env` holds **Sarmad's** exchange keys (Binance and Bybit; probably Gate). Read-only, from her own `data/apnasor-testnet.db` and her Wallet page:
+
+| Account | Fizza's gateway's fills | + trades **neither** gateway made (BREAK on Fizza's Wallet) | = Sarmad's "unexplained" |
+|---|---|---|---|
+| Binance BTC | +0.00221 | −0.00084 | +0.00137 ✓ |
+| Binance ETH | −0.0019 | −0.0028 | −0.0047 ✓ |
+| Binance USDT | −182 | +78 | −104 ✓ |
+| Bybit BTC | +0.00127 | +0.00154 | +0.0028 ✓ |
+| Bybit ETH | +0.0074 | 0 | +0.0074 ✓ |
+| Bybit USDT | −127 | −130 | −257 ✓ |
+
+All six match. So Sarmad's mystery is two things: Fizza's own test trades, **and a third source** — another gateway with his keys, or someone trading by hand on the exchange websites — which both of their ledgers see as foreign. Maham was already ruled out; Mahnoor is still to check. Until Fizza has her own keys she places no live orders. This is the CLAUDE.md gotcha "each person needs their own exchange accounts/keys", seen from both sides.
+
+### Finding 2: the first "profitable" arbitrage windows were an OKX glitch
+
+With OKX's feed up, the detector audited its first 10 profitable windows (09:25–09:27 UTC). All of them **sold on OKX**, across ETH, SOL and XRP at once, with gaps of 26–84 bps (crossings are normally < 2 bps), and they opened and closed in the same scans (09:25:51–09:25:58, 09:27:12–09:27:28). A real gap doesn't hit three coins on one exchange in the same instant: OKX's book was wrong for a few seconds (its feed reconnected 13 times that morning; a health ping failed at 09:21). The honest line for the panel stays "no real profitable window". A detector follow-up is logged under Open questions (skip a venue while its feed reconnects / just after a resync; flag one-venue-against-all crossings on several coins).
+
+### Files
+
+New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), CLAUDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
+
+## 2026-10-06 — Security hardening: no secrets in the code, only our frontend, real passwords
+
+*By Fizza (backend relay, `feature/backend-v2`). ROADMAP §7. Plain-English guide with every option, the panel Q&A and a checklist for the demo laptop: [`project-info/SECURITY_GUIDE.md`](project-info/SECURITY_GUIDE.md).*
+
+Three holes from *Open questions → security hardening* (logged 2026-10-02), closed in one session: the login-signing secret was written in `config.py`; CORS allowed every website; the three POC logins were password = user name in the code. A fourth turned up on the way: the Login page says "All sessions are audited", but logins weren't audited.
+
+### Decisions (options and reasons: SECURITY_GUIDE.md)
+
+- **`JWT_SECRET`: created automatically per machine** (`data/jwt-secret-<mode>.key`), not "required in `.env`" (Sarmad's first note) — equally safe, and nobody has to touch their `.env` in the last week. Fizza's choice.
+- **CORS: this machine's frontend on any port**, an exact list in `CORS_ORIGINS` otherwise, `*` refused; plus an origin check on `/ws`.
+- **Logins: option A** — real passwords as scrypt hashes in `.env`, the demo login as a testnet-only fallback, none on mainnet (B = required everywhere; C = keep and say so). Fizza delegated the choice ("whatever won't embarrass us in front of the panel"), Sarmad fine with it.
+
+### Design notes (what a reader wouldn't guess)
+
+- **`*` was worse than it looks.** With `allow_credentials=True`, Starlette 1.7 answers a `*` CORS rule by echoing the caller's own origin — every website is told "yes". Combined with `admin` / `admin`, a page on any website could log in from the trader's browser and read the ticket. Credentials are off now: we use a bearer token, never cookies.
+- **CORS doesn't cover WebSockets.** A browser opens a WebSocket from any page and only *says* where the page is from (`Origin`). `ws_manager.serve` checks it with the same rule as REST (`Settings.origin_allowed`) and refuses before accepting (HTTP 403). No `Origin` (our scripts) is allowed — they still need a ticket as the first message.
+- **Refuse, don't replace.** A `JWT_SECRET` that is a known public placeholder is ignored (logged); one set on purpose but shorter than 32 characters stops the start. A plain password pasted where a hash belongs stops the start too. Silent fallbacks hide mistakes; a refusal with the fix in the message doesn't.
+- **One key file per mode**, like the database: a testnet ticket never opens a mainnet gateway.
+- **Password checks on their own one-thread pool.** scrypt with OWASP's N=2^14, r=8, p=5 measured **0.5–1.1 s per check** on this laptop (median ~1 s; the code comment said 0.1–0.2 s until measured). `asyncio.to_thread` would use the default pool — the one `AuditStore` writes through — so a flood of logins could delay audit writes; a dedicated single thread can't, never blocks the event loop (book feeds), and caps guessing at ~1/s. An unknown user name is checked against a throw-away hash, so it costs the same as a wrong password.
+- **Tests never read the developer's `.env` passwords:** they use `USERS[...]` directly and patch the settings they need — once Fizza or the demo laptop sets real passwords, the suite still passes.
+- **Failed logins are audited with actor `unknown`** (a failed login proves nothing about who typed it), the typed name cleaned of control characters and cut to 40, never the password.
+- **The Login page** (Mahnoor's) changed minimally: `GET /api/auth/demo-logins` decides which demo buttons show and whether `admin` / `admin` is pre-filled. Without it the demo laptop would show working-looking buttons that fail. It asks again every 2 s until the gateway answers: `start_all.py` opens the page before the gateway is up, and the first version (ask once) showed no buttons on a developer machine until a reload - caught in the live check.
+
+### Verified
+
+- **Before / after with `scripts/security_check.py`** (read-only). Old code (the commit before, a separate copy on port 8001 with no `.env`, so no exchange keys): forged admin ticket → HTTP 200; `https://evil.example` preflight allowed, login ticket readable; `/ws` opened. New code, Fizza's normal `.env`: forged ticket 401; preflight 400, no allowed origin; `/ws` 403; `admin` / `admin` still works (expected on a developer machine). New code with three real passwords (throw-away test passwords passed as environment variables; `.env` untouched): **all five refused, exit code 0**.
+- **UI, no orders placed** (RAFT on, 3 of 3 signed): developer mode unchanged (three demo buttons, `admin` pre-filled, login, live prices, Kill Switch page, reloads keep the login). Real-password mode: no "DEMO ACCOUNTS", empty fields, `admin` / `admin` → "Invalid username or password", the real password logs in, the Audit Log shows `login_failed … unknown` and `admin logged in`. A browser holding a ticket signed with the old public secret → "Your session expired — please log in again" (what teammates see once after pulling).
+- `start_all.py` refuses before starting anything: a short `JWT_SECRET`, `CORS_ORIGINS=*`, a plain password in `AUTH_PASSWORD_HASH_ADMIN` — each with the fix in the message. It prints `Logins  DEMO for …` or `Logins  real passwords only`.
+- 295 backend tests (33 new) on Windows and in Linux (`python:3.14-slim`, 2 CPUs); ruff clean; frontend type-check passes (Windows and `node:24-slim`). `hash_password.py` checked in Linux with typed input (a short password refused; the printed line verifies).
+
+### Found on the way (not fixed here)
+
+- **"RAFT cluster unreachable at start-up" at almost every start since 2026-10-02** (audit log: every `gateway_started` with RAFT on but one is followed by `consensus_unreachable`). `start_all.py` waits a fixed 1.5 s after starting the nodes; on Windows they usually haven't elected a leader yet. The gateway catches up moments later (Kill Switch page: 3 of 3), but a panel member reading the Audit Log sees the warning. Fix in the `start_all.py` item: wait until the cluster reports a leader.
+- **The Login page's left panel is hard-coded** (`mockData.ts: MOCK_VENUES`, one entry): it always shows "Binance DISCONNECTED", even while Binance is connected — simulated data on the first screen the panel sees. Mahnoor's page.
+- The Audit Log page has no filter for the new `login` / `login_failed` events (they show under *Everything*). Maham's page.
+
+### Files
+
+New: `backend/gateway/middleware/passwords.py`, `scripts/hash_password.py`, `scripts/security_check.py`, `backend/tests/test_api/test_security_settings.py`, `test_logins.py`, `project-info/SECURITY_GUIDE.md`. Changed: `backend/gateway/config.py`, `main.py`, `middleware/auth.py`, `routers/auth.py`, `websocket/ws_manager.py`, `start_all.py`, `scripts/arb_watch.py`, `scripts/raft_demo.py`, `backend/tests/test_api/test_websocket_auth.py`, `frontend/src/pages/Login.tsx`, `frontend/src/services/api.ts`, `.env.example`; docs: CLAUDE.md, PROGRESS.md, ROADMAP §7, ONBOARDING.md, CONTRIBUTING.md (CI "about 2 minutes").
+
+## 2026-10-06 — Team decision: one shared set of testnet keys
+
+*Decided by Fizza (backend relay); documented on `feature/backend-v2`.*
+
+The rule so far was "each person makes their own exchange accounts and keys" (CLAUDE.md gotcha, CONTRIBUTING, ONBOARDING, EXCHANGE_API_KEY_SECURITY.md). In practice the team already shared: each exchange was set up by one person — **Gate: Fizza's account, OKX: Maham's, Binance + Bybit: Sarmad's** — and the keys were passed on. Following the rule would mean three extra accounts per person for fake money, so the team now uses **one shared set of testnet keys** on purpose.
+
+**What sharing costs (and what it doesn't).** Each laptop's ledger (`data/apnasor-testnet.db`) only knows its own fills, so a teammate's trades appear on everyone else's Wallet as reconciliation BREAKs, and each laptop's P&L counts only its own trades. That is exactly what the "someone is trading on Sarmad's accounts" question (2026-10-05) turned out to be. Checked in the code before deciding: the **automatic loss limit** uses only the laptop's own fills (`PnLService.trading_pnl` values the ledger, not the balances), so a teammate's trades can't trip it; **the kill-switch sweep** (`CcxtVenueAdapter.cancel_all_open_orders`) cancels every open order on the account — but ApnaSOR's children are IOC and never rest, so it only matters for a resting order placed by hand on an exchange website. Trading, routing, risk checks, TWAPs and market data don't care who else uses the key.
+
+**Rules** (CONTRIBUTING.md *Exchange keys*): testnet / demo only, never real-money keys; keys passed privately to the one person who needs them (never group chats, screenshots or git), Read + Trade only; before the demo or a recording only the demo laptop trades, from the night before, and it accepts the exchange balances once (MATCHED); a BREAK nobody can explain means the owner replaces the key. Panel line: "our test keys are shared inside the team — they hold the exchanges' fake money; real-money keys belong to one person and one laptop."
+
+**Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. **Settled the same day:** the third set of trades on Sarmad's accounts was Mahnoor's gateway on his Binance + Bybit keys (Fizza confirmed with her). So all of Sarmad's "unexplained" trades were teammates' — no leak, no key to replace.
+
+Changed: CONTRIBUTING.md, CLAUDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
