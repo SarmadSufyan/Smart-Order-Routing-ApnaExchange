@@ -42,7 +42,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: F.base }
 
   return (
-    <div style={{ fontFamily: "'Consolas','IBM Plex Mono',monospace" }}>
+    <div style={{ fontFamily: 'inherit' }}>
 
       {/* ── Header banner with savings highlight ── */}
       <div style={{
@@ -94,7 +94,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
       {decision.is_split && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>
-            ⚡ MULTI-VENUE SPLIT · order swept {decision.winning_venues.length} venues
+            ↯ MULTI-VENUE SPLIT · order swept {decision.winning_venues.length} venues
           </div>
           <div style={{
             display: 'flex', height: 28, borderRadius: 4, overflow: 'hidden',
@@ -158,7 +158,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                   borderBottom: `1px solid ${tint(C.border, 40)}`,
                 }}>
                   <td style={{ ...td, color: rankColor, fontWeight: c.rank === 1 ? 700 : 400 }}>
-                    {c.rank === 1 ? '🥇' : c.rank}
+                    {c.rank === 1 ? '1' : c.rank}
                   </td>
                   <td style={{ ...td, color: C.text, fontWeight: winner ? 700 : 500 }}>
                     {c.venue_id}

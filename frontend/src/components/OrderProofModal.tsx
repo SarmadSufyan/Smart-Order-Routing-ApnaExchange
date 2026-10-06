@@ -45,13 +45,14 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
   const overlay: React.CSSProperties = {
     position: 'fixed', inset: 0, zIndex: 1000,
     background: 'var(--modal-overlay)',
+    WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     padding: 16,
   }
   const modal: React.CSSProperties = {
     background: C.surface, border: `1px solid ${C.border}`,
-    borderRadius: 8, width: '100%', maxWidth: 720,
-    fontFamily: "'Consolas','IBM Plex Mono',monospace",
+    borderRadius: 24, width: '100%', maxWidth: 720,
+    fontFamily: 'inherit',
     color: C.text, maxHeight: '90vh', overflowY: 'auto',
   }
   const header: React.CSSProperties = {
@@ -61,7 +62,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
 
   return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modal}>
+      <div className="glass" style={modal}>
         <div style={header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{

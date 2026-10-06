@@ -131,7 +131,6 @@ export function RiskManager() {
           <span style={{
             width: 12, height: 12, borderRadius: '50%',
             background: riskStatus?.kill_switch_active ? C.red : C.green,
-            boxShadow: `0 0 8px ${riskStatus?.kill_switch_active ? C.red : C.green}`,
             display: 'inline-block', flexShrink: 0,
           }} />
           <span style={{ fontSize: F.lg, color: riskStatus?.kill_switch_active ? C.red : C.green, fontWeight: 600 }}>

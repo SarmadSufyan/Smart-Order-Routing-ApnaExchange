@@ -82,7 +82,7 @@ export function Dashboard() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 16px', borderRadius: 4,
               background: tint(C.orange, 10), border: `1px solid ${C.orange}`,
-              color: C.orange, fontSize: F.sm, fontFamily: "'Consolas','IBM Plex Mono',monospace",
+              color: C.orange, fontSize: F.sm, fontFamily: 'inherit',
               cursor: 'pointer', letterSpacing: '.05em', fontWeight: 600,
               transition: 'background .15s',
             }}
@@ -90,7 +90,7 @@ export function Dashboard() {
             onMouseLeave={(e) => (e.currentTarget.style.background = tint(C.orange, 10))}
             title="Pre-fills a ~$4k order on the thinnest book so the SOR walks several price levels"
           >
-            ⚡ Demo: Book Sweep
+            ↯ Demo: Book Sweep
           </button>
           <button
             onClick={() => { setDemoMode(false); setShowOrderModal(true) }}
@@ -98,7 +98,7 @@ export function Dashboard() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 18px', border: 'none', borderRadius: 4,
               background: C.blue, color: '#fff',
-              fontSize: F.base, fontFamily: "'Consolas','IBM Plex Mono',monospace",
+              fontSize: F.base, fontFamily: 'inherit',
               cursor: 'pointer', letterSpacing: '.05em', fontWeight: 600,
               transition: 'opacity .15s',
             }}
@@ -119,7 +119,7 @@ export function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <CardTitle>LIVE ORDER FLOW</CardTitle>
               <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.05em' }}>
-                ⚡ = click row to see routing proof
+                ↯ = click row to see routing proof
               </span>
             </div>
             <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -158,7 +158,7 @@ export function Dashboard() {
                       {o.venue}{venueCount > 1 ? ` +${venueCount - 1}` : ''}
                     </span>
                     {hasProof && (
-                      <span title="Routing proof available" style={{ color: C.orange, fontSize: F.sm }}>⚡</span>
+                      <span title="Routing proof available" style={{ color: C.orange, fontSize: F.sm }}>↯</span>
                     )}
                     <span style={{ color: C.dim, fontSize: F.xs, marginLeft: 'auto' }}>{fmtAge(o.ageMs)}</span>
                   </div>

@@ -50,12 +50,12 @@ export function Login() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: C.bg, color: C.text }}>
+    <div style={{ display: 'flex', height: '100vh', background: 'transparent', color: C.text }}>
 
       {/* LEFT — terminal panel */}
-      <div style={{
-        width: '46%', background: '#0A0C0E',
-        borderRight: `1px solid ${C.border}`,
+      <div className="glass" style={{
+        width: '46%', background: C.surface, margin: 16, borderRadius: 28,
+        border: `1px solid ${C.border}`,
         display: 'flex', flexDirection: 'column',
         justifyContent: 'space-between', padding: 32,
       }}>
@@ -119,7 +119,7 @@ export function Login() {
 
       {/* RIGHT — auth form */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <div style={{ width: '100%', maxWidth: 360 }}>
+        <div className="glass" style={{ width: '100%', maxWidth: 400, padding: 32, borderRadius: 28, background: C.surface, border: `1px solid ${C.border}` }}>
 
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -160,7 +160,7 @@ export function Login() {
 
             {error && (
               <div style={{
-                background: tint(C.red, 8), border: `1px solid #E24B4A40`,
+                background: tint(C.red, 8), border: `1px solid ${C.red}`,
                 borderRadius: 4, padding: '8px 12px', color: C.red, fontSize: F.sm, marginBottom: 10,
               }}>
                  {error}
@@ -168,8 +168,8 @@ export function Login() {
             )}
 
             <button type="submit" disabled={loading} style={{
-              width: '100%', height: 40, border: 'none', borderRadius: 4,
-              background: loading ? C.surface : C.accent,
+              width: '100%', height: 40, border: 'none', borderRadius: 12,
+              background: loading ? C.surface2 : C.accent,
               color: loading ? C.muted : C.bg,
               fontSize: F.base, letterSpacing: '.1em', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
