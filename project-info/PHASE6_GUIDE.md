@@ -97,7 +97,7 @@ Optional: `./.venv/Scripts/python.exe scripts/benchmark_risk_batch.py --quick` (
 - `No stress test for … yet: only N live price samples` → the gateway needs about a minute of live prices after start-up; try again.
 - `Start with all 3 nodes up` (step 9) → wait for `start_all.py` to restart a killed node (15 s).
 - A node can't start (port 9001-9003 in use) → an old `start_all.py` or node is still running; close it.
-- Two people must not run the same exchange keys (reconciliation BREAKs) — unchanged from before; RAFT data (`data/raft-testnet/`) is per machine.
+- Two people on the same exchange keys see each other's fills as reconciliation BREAKs — expected with the team's shared testnet keys (CONTRIBUTING.md *Exchange keys*); RAFT data (`data/raft-testnet/`) is per machine.
 
 ---
 

@@ -50,7 +50,16 @@ cd frontend; npm install; cd ..
 Copy-Item .env.example .env
 ```
 
-**Exchange keys — your own, never shared.** Create your **own** testnet/demo accounts and keys by following [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md), and put them in **your** `.env`. Two people trading the same testnet account break each other's reconciliation (each machine's ledger only knows its own fills). Never commit `.env`, and never paste keys into chat, WhatsApp or screenshots.
+**Exchange keys — one shared team set on testnet (team decision 2026-10-06).** The team uses one set of testnet / demo keys, one exchange per owner: **Gate — Fizza's account, OKX — Maham's, Binance + Bybit — Sarmad's**. It is the exchanges' fake money, and four people making three extra accounts each costs more than it saves. (Your own keys still work too: [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md).)
+
+What sharing costs: each laptop's ledger only knows **its own** fills, so a teammate's trades show up on your Wallet as reconciliation **BREAK**s, and your P&L counts only your own trades. That is expected — don't chase it. Trading, routing, risk checks, TWAPs and the automatic loss limit are not affected (the loss limit uses your own fills only). Rules:
+1. **Testnet / demo keys only.** Real-money keys (Phase 8) belong to one person on one laptop and are never shared.
+2. **Pass a key privately** — a direct message to the one person who needs it, deleted once it is in their `.env`. Never the group chat, a screenshot or git. Every key: Read + Spot Trade only, never Withdraw.
+3. **Before the demo or a recording:** from the night before, only the demo laptop trades. On it, Wallet → **Accept exchange balances** once per exchange → MATCHED. Tell the group when the freeze starts and ends.
+4. **A BREAK nobody can explain** (no teammate traded, nobody traded on the exchange website) means the key may have leaked: its owner deletes it on the exchange, makes a new one and sends it privately again.
+5. **The kill switch on any laptop cancels open orders on the shared accounts.** ApnaSOR's own orders never stay open (IOC), so normally nothing happens — but a resting order placed by hand on the exchange website would be cancelled.
+
+Never commit `.env`.
 
 Then:
 

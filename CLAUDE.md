@@ -196,7 +196,7 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 - **Windows PowerShell 5.1 corrupts UTF-8 files** when you rewrite them with `Get-Content`/`Set-Content` (writes a BOM, turns `—` into `â€”`). Edit files with an editor or Python, not PowerShell pipelines.
 - **Vite on Windows can miss new files** — restart `npm run dev` before trusting what the browser shows.
-- **Each person needs their own exchange accounts/keys.** Two gateways trading the same testnet account see each other's fills as reconciliation BREAKs (each ledger only knows its own fills).
+- **The team shares one set of testnet keys (decision 2026-10-06)**, so teammates' trades show as reconciliation BREAKs on your Wallet (each ledger only knows its own fills) — expected, don't chase them. Before a demo, only the demo laptop trades and it accepts the exchange balances once. Real-money keys are never shared. Rules: CONTRIBUTING.md *Exchange keys*.
 - **`data/apnasor-testnet.db` is per machine** (gitignored). Opening balances are captured automatically the first time your gateway reads your balances.
 - **`.env`: the same variable twice → the later line wins.** That once made Gate fail with "Signature mismatch" (the OKX secret had been pasted under the Gate name).
 - **OKX**: some ISPs' default DNS refuses `okx.com`. Fix: set Windows DNS to `8.8.8.8` / `8.8.4.4` (verified 2026-10-02: the OKX API answers through Google DNS; Cloudflare 1.1.1.1 failed on the same network), then `ipconfig /flushdns` — Windows caches a failed lookup. Do it on the demo laptop too. Right after a DNS change, Bybit's WebSocket can hang for ~2 min (IPv6 addresses on a network without IPv6) and then recovers by itself.

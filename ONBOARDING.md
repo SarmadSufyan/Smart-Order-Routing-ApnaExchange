@@ -81,7 +81,7 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-Fill it with **your own** exchange keys. Follow [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) step by step. The minimum to trade:
+Fill it with the exchange keys. **The team shares one set of testnet keys** (decided 2026-10-06): ask each owner privately — Gate: Fizza, OKX: Maham, Binance + Bybit: Sarmad (rules: CONTRIBUTING.md *Exchange keys*). To make your own instead, follow [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) step by step. The minimum to trade:
 
 | Exchange | What to create | Variables in `.env` |
 |---|---|---|
@@ -92,7 +92,7 @@ Optional: Gate (spot testnet) and OKX (Demo Trading, which also needs a **passph
 
 Rules for `.env`:
 - Keep `EXCHANGE_MODE=testnet`. Testnet and demo accounts use fake funds.
-- **Use your own keys, never someone else's.** If two people trade the same test account, each person's records show the other's trades as mismatches.
+- **Shared keys mean shared accounts:** a teammate's trades show on your Wallet as mismatches (reconciliation BREAKs). That's expected. Before the demo only the demo laptop trades, and it accepts the exchange balances once. Real-money keys (Phase 8) are never shared.
 - **Never commit `.env`** (it's in `.gitignore`), and never paste keys into WhatsApp, group chats, screenshots or the repo.
 - Each variable once only. If a name appears twice, the later line silently wins.
 - For the LLM copilot, add `GEMINI_API_KEY`: create your **own** free key at https://aistudio.google.com/apikey (Google account → *Create API key*; **don't** enable billing). Without it everything else runs; the copilot just reports itself unavailable.
@@ -196,7 +196,7 @@ npx --prefix frontend tsc --noEmit -p frontend
 | Gate shows no balance | Known: Gate's spot testnet wallet isn't funded. Binance + Bybit are enough |
 | Binance answers **451** "restricted location", Bybit **403** | A VPN is on. Turn it off for live tests and the demo |
 | Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection now needs a login as its first message. `git merge origin/feature/crypto-pivot` (brings the new `services/websocket.ts`), restart the frontend, log in again |
-| Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR (manual trade, testnet reset, someone else using your keys). If you're sure, click **Accept exchange balances** |
+| Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR: a teammate traded on the shared keys (expected), a manual trade, or a testnet reset. Click **Accept exchange balances** when you want a clean start. Nobody can explain it? Tell the key's owner (CONTRIBUTING.md *Exchange keys*, rule 4) |
 | `admin` / `admin` refused and the Login page shows no demo buttons | This machine has real passwords (`AUTH_PASSWORD_HASH_*` in `.env`): use them, or delete those lines to go back to the demo login (`project-info/SECURITY_GUIDE.md`) |
 | `start_all.py` says "Nothing was started" about `JWT_SECRET`, `CORS_ORIGINS` or `AUTH_PASSWORD_HASH_…` | The message says the fix. Usually: delete the line from `.env` (the safe default takes over) |
 | Logged out right after pulling the security update ("Your session expired") | Expected once: logins are now signed with your machine's own key. Log in again |
