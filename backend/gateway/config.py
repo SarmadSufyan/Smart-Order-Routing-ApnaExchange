@@ -5,6 +5,7 @@ Every setting can be overridden from the environment or the project-root
 up in reprs, logs, or validation errors.
 """
 
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,22 @@ from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# JWT_SECRET values that have been public in this repo (the old default here,
+# .env.example, the old deployment doc): anyone can read them, so they count
+# as "not set".
+PUBLIC_JWT_SECRETS = frozenset({
+    "apna-exchange-poc-secret-change-in-prod",
+    "change-me-use-a-long-random-string-in-prod",
+    "change-me-in-production-use-a-long-random-string",
+    "dev-secret-change-in-prod",
+})
+MIN_JWT_SECRET_LENGTH = 32
+
+# The default CORS rule: a page served from this machine, any port (Vite picks
+# another port when 5173 is busy).
+LOCAL_ORIGIN_REGEX = r"https?://(localhost|127\.0\.0\.1)(:\d{1,5})?"
+LOCAL_ORIGIN_RE = re.compile(LOCAL_ORIGIN_REGEX)
 
 
 class Settings(BaseSettings):
@@ -135,9 +152,19 @@ class Settings(BaseSettings):
     copilot_max_price_move_bps: float = 100.0
 
     # ─── Auth ─────────────────────────────────────────────────────
-    jwt_secret: str = "apna-exchange-poc-secret-change-in-prod"
+    # Signs every login token: whoever knows it can forge any login, so it is
+    # never written in the code. Empty (or a placeholder that was ever public
+    # in this repo) = the gateway's own random key for this machine, created
+    # the first time in data/ (see middleware/auth.py: load_jwt_secret).
+    jwt_secret: SecretStr | None = None
     jwt_algorithm: str = "HS256"
     jwt_expiry_minutes: int = 60
+
+    # ─── Browser access (CORS) ────────────────────────────────────
+    # Which web pages may use the API (and open /ws) from a browser. Empty =
+    # the frontend on this machine (localhost / 127.0.0.1, any port); else a
+    # comma-separated list of exact addresses, and only those. "*" is refused.
+    cors_origins: str = ""
 
     # extra="ignore": .env also holds keys for other tools (Vite, Postgres,
     # RAFT...). Unknown keys must not crash the gateway at startup.
@@ -163,6 +190,51 @@ class Settings(BaseSettings):
             return None
         return ("RAFT needs RAFT_SHARED_SECRET in .env (16+ characters) - every RAFT message is signed "
                 "with it. Generate one with:  python -c \"import secrets; print(secrets.token_hex(32))\"")
+
+    def jwt_secret_from_env(self) -> str | None:
+        """The JWT_SECRET from .env, or None when it is empty or a public placeholder."""
+        value = self.jwt_secret.get_secret_value().strip() if self.jwt_secret else ""
+        return value if value and value not in PUBLIC_JWT_SECRETS else None
+
+    def jwt_secret_is_placeholder(self) -> bool:
+        """True when .env holds a JWT_SECRET that is public (and therefore ignored)."""
+        value = self.jwt_secret.get_secret_value().strip() if self.jwt_secret else ""
+        return value in PUBLIC_JWT_SECRETS
+
+    def jwt_secret_problem(self) -> str | None:
+        """Why the JWT_SECRET in .env can't be used, or None (also when unset:
+        then the machine's own key is used). A secret someone set on purpose but
+        too short stops the start instead of being quietly replaced."""
+        value = self.jwt_secret_from_env()
+        if value is None or len(value) >= MIN_JWT_SECRET_LENGTH:
+            return None
+        return (f"JWT_SECRET in .env is shorter than {MIN_JWT_SECRET_LENGTH} characters - anyone who guesses it "
+                "can forge a login. Remove the line (the gateway then makes its own key for this machine) or "
+                "use a long one:  python -c \"import secrets; print(secrets.token_hex(32))\"")
+
+    @property
+    def resolved_jwt_secret_path(self) -> str:
+        """This machine's own login-signing key (testnet and mainnet logins never mix)."""
+        return str(PROJECT_ROOT / "data" / f"jwt-secret-{self.exchange_mode}.key")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """The exact browser origins from CORS_ORIGINS (empty = this machine's frontend)."""
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
+
+    def cors_problem(self) -> str | None:
+        """Why CORS_ORIGINS can't be used, or None."""
+        if "*" in self.cors_origin_list:
+            return ("CORS_ORIGINS=* would let ANY website you open use this API from your browser (log in, "
+                    "trade). List the frontend's addresses instead, e.g. CORS_ORIGINS=http://localhost:5173 - "
+                    "or leave it empty for the frontend on this machine.")
+        return None
+
+    def origin_allowed(self, origin: str) -> bool:
+        """May a page from this origin use the API? Same rule for REST (CORS) and /ws."""
+        if origins := self.cors_origin_list:
+            return origin in origins and origin != "*"
+        return LOCAL_ORIGIN_RE.fullmatch(origin) is not None
 
     @property
     def symbol_list(self) -> list[str]:

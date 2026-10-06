@@ -52,6 +52,10 @@ def main() -> None:
             [sys.executable, "-m", "backend.services.consensus.node", "--id", str(node_id)], env=env, cwd=ROOT,
         )
 
+    for problem in (settings.jwt_secret_problem(), settings.cors_problem()):
+        if problem:
+            print(f"\n  {problem}\n  Nothing was started.")
+            sys.exit(1)
     if settings.raft_enabled and (problem := settings.raft_secret_problem()):
         print(f"\n  RAFT_ENABLED=true, but: {problem}\n  Nothing was started.")
         sys.exit(1)

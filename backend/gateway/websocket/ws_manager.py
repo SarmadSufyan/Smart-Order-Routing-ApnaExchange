@@ -12,16 +12,24 @@ No auth message in time, a wrong / expired / refresh token, or anything else
 first: the connection is closed with code 4401 and nothing is ever sent. When
 the login expires, the server closes an open connection the same way, so a
 stale session can't keep receiving orders, balances and kill-switch events.
+
+Which websites: CORS doesn't cover WebSockets — a browser opens one from any
+page, saying only which site the page is from (the Origin header). A page
+from a site not allowed by CORS_ORIGINS is refused before the connection
+opens (HTTP 403), the same rule as for REST. Scripts send no Origin; they
+still need a login token.
 """
 
 import asyncio
 import json
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from backend.gateway.config import settings
 from backend.gateway.middleware.auth import TokenError, User, decode_access_token
 from backend.shared.utils.logger import get_logger
 
@@ -46,13 +54,19 @@ VALID_CHANNELS = {
 
 
 class WebSocketManager:
-    def __init__(self) -> None:
+    def __init__(self, origin_allowed: Callable[[str], bool] | None = None) -> None:
         self._connections: dict[str, WebSocket] = {}
         self._subscriptions: dict[str, set[str]] = defaultdict(set)
         self._user_map: dict[str, str] = {}
+        self._origin_allowed = origin_allowed or settings.origin_allowed
 
     async def serve(self, websocket: WebSocket) -> None:
         """Run one browser connection: login handshake, then messages until it closes."""
+        origin = websocket.headers.get("origin")
+        if origin is not None and not self._origin_allowed(origin):
+            logger.warning("ws_refused", reason="website not allowed", origin=origin, client=_client(websocket))
+            await websocket.close(code=1008)  # before accept: the browser gets HTTP 403
+            return
         await websocket.accept()
         try:
             user, expires_at = await self._authenticate(websocket)
