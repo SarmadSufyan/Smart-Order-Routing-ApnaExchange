@@ -21,8 +21,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.gateway.middleware.auth import USERS  # noqa: E402
-from backend.gateway.middleware.passwords import hash_password, password_problem, verify_password  # noqa: E402
+try:
+    from backend.gateway.middleware.auth import USERS
+    from backend.gateway.middleware.passwords import hash_password, password_problem, verify_password
+except ModuleNotFoundError as exc:  # a plain `python` on PATH, not the project's
+    sys.exit(f"This Python has no '{exc.name}' package. Run the script with the project's Python:\n"
+             "    .venv\\Scripts\\python.exe scripts\\hash_password.py <user>\n"
+             "(or activate it once per terminal: .venv\\Scripts\\Activate.ps1, then python works)")
 
 
 def main() -> int:

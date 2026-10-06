@@ -14,10 +14,15 @@ import asyncio
 import sys
 from datetime import UTC, datetime, timedelta
 
-import httpx
-from jose import jwt
-from websockets.asyncio.client import connect
-from websockets.exceptions import InvalidStatus
+try:
+    import httpx
+    from jose import jwt
+    from websockets.asyncio.client import connect
+    from websockets.exceptions import InvalidStatus
+except ModuleNotFoundError as exc:  # a plain `python` on PATH, not the project's
+    sys.exit(f"This Python has no '{exc.name}' package. Run the script with the project's Python:\n"
+             "    .venv\\Scripts\\python.exe scripts\\security_check.py\n"
+             "(or activate it once per terminal: .venv\\Scripts\\Activate.ps1, then python works)")
 
 BASE = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 OLD_PUBLIC_SECRET = "apna-exchange-poc-secret-change-in-prod"  # was written in config.py, so on GitHub

@@ -115,6 +115,8 @@ Until 2026-10-06 anyone who had read our GitHub repo could **forge an admin logi
 
 ## Demo laptop checklist (before the panel)
 
+> **Which Python:** every `python …` command here means the project's own Python. In a new terminal run `.venv\Scripts\Activate.ps1` once (the prompt then starts with `(.venv)`), or write `.venv\Scripts\python.exe` instead of `python`. A plain `python` on PATH lacks the packages and the scripts say so ("This Python has no 'fastapi' package").
+
 1. Your **own** exchange keys in `.env` (two gateways on the same accounts show each other's fills as BREAKs). VPN off.
 2. `python scripts/hash_password.py admin`, then `trader1`, then `risk_mgr` → paste the three lines into `.env`. Keep the passwords somewhere safe (a password manager or on paper with the presenter).
 3. `python start_all.py` → it must print `Logins    real passwords only (no demo logins)`.

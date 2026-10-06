@@ -202,6 +202,7 @@ npx --prefix frontend tsc --noEmit -p frontend
 | Logged out right after pulling the security update ("Your session expired") | Expected once: logins are now signed with your machine's own key. Log in again |
 | Port 8000 / 5173 already in use | Another gateway or dev server is running. Close it (or the other terminal) |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |
+| `ModuleNotFoundError: No module named 'fastapi'` (or `httpx`, `jose`) when running a script | That terminal runs the system Python, not the project's. Run `.venv\Scripts\Activate.ps1` once in that terminal (prompt starts with `(.venv)`), or call `.venv\Scripts\python.exe` instead of `python` |
 | Tests fail right after cloning | Check `git branch --show-current` shows your branch and that the venv is active |
 | `git pull` says "merge conflict" | Two people edited the same lines. Don't panic and don't force-push: ask the other person or Sarmad, and resolve it together |
 
