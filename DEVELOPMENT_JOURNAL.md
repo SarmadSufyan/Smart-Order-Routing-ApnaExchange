@@ -1348,3 +1348,41 @@ Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binanc
 Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), CLAUDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
 
 ---
+
+## 2026-10-06 (night, fix) — Ctrl+C no longer hangs after the browser was used
+
+*By Sarmad (backend relay, `feature/backend-v2`). Found at the live check of the `start_all.py` merge (entry above).*
+
+**The problem.** With a logged-in browser, Ctrl+C left the gateway in "Shutting down" until `start_all.py` killed it after 60 s: no `gateway_stopped`, arbitrage statistics not saved at the stop. Without a browser the same machine stopped in 2.8 s.
+
+**The cause, in plain words.** When a connection closes, Python's Windows event loop does four things in order: tell our code, `shutdown()` the socket, close it, and tell the server "this connection is gone" (`server._detach`). If the other side has reset the connection while nothing was reading from it, `shutdown()` fails with WinError 10054 and the last two steps never happen. The server keeps counting a connection that no longer exists. Since Python 3.12, `Server.wait_closed()` waits until that count is zero, so it waits forever, and uvicorn awaits it before it runs our shutdown. The RAFT nodes' `stop()` awaits `wait_closed()` as well.
+
+**How it was pinned down.**
+- uvicorn 0.49's shutdown order (read from its code): close the listener, wait for connections, wait for requests, `await server.wait_closed()`, *then* our `lifespan` shutdown. The hung run printed neither "Waiting for connections" nor "Waiting for background tasks", so it was `wait_closed()`.
+- The hung run's log had two asyncio tracebacks: `_ProactorBasePipeTransport._call_connection_lost` → `self._sock.shutdown(SHUT_RDWR)` → `ConnectionResetError: [WinError 10054]`. In Python 3.14.3's source that call sits before `server._detach(self)`, with no guard.
+- Forcing that one error in a 40-line script made `wait_closed()` hang every time.
+- A natural trigger, no faking: the client half-closes (the server stops reading but keeps the connection), then resets; when the server closes the connection, `shutdown()` raises 10054 and `wait_closed()` hangs — 6 of 6 runs. Why reading stops matters: when a transport pauses reading, Python 3.14 no longer issues new reads, so a reset arriving meanwhile is noticed only by `shutdown()`.
+- Not found: the browser's exact trigger on demand. Tried against the real gateway and in isolation: two pipelined requests then a reset (uvicorn pauses reading for the second), a cancelled slow request, plain resets, a reset during a large response — none hit it. It happened twice in the first browser run and never in the next one.
+
+**Options.**
+
+| Option | Verdict |
+|---|---|
+| (a) Wrap `_call_connection_lost`: if it fails part-way with an `OSError`, finish the steps it skipped (close the socket, detach, mark done) | **Chosen.** Cures the cause, for the gateway and the RAFT nodes alike; no leaked socket; nothing in flight is touched. It relies on a private asyncio method, so: Windows only, only if the method exists, installed once, and a no-op if a later Python stops raising there. |
+| (b) Start uvicorn from our own script with a time limit on `wait_closed()` only | No: needs uvicorn's private `_wait_tasks_to_complete` instead, leaves the socket open, and doesn't help the nodes. |
+| (c) uvicorn's `--timeout-graceful-shutdown` | No: at its limit it cancels requests still running, which could interrupt an order at an exchange (rule 6). Fizza rejected it for the same reason. |
+| Switch to asyncio's selector event loop on Windows | No: it changes the event loop under everything to work around one method, and has limits of its own on Windows (no asyncio subprocesses, `select()` capped at 512 sockets). |
+
+**Design notes.**
+- An `OSError` raised by the protocol itself (asyncio's clean-up finished: `_called_connection_lost` is set) is passed on unchanged; only a failure before the clean-up finished is handled.
+- Handled resets are logged at debug level (`connection_reset_closed`) instead of the old "Exception in callback" traceback.
+- Installed first thing in the gateway's `lifespan` (uvicorn runs it before it accepts connections) and in a node's `main()` before `asyncio.run`. Any new process that runs an asyncio server on Windows should call `fix_windows_connection_reset()` too (CLAUDE.md gotcha).
+- The wrapper keeps asyncio's own method as `__wrapped__`, which the test uses to show the bug before showing the fix.
+
+**Verified.**
+- `backend/tests/test_asyncio_fixes.py`, 8 tests: the wrapper on a fake transport (every OS, against asyncio's real method), installation, and on Windows real sockets: half-close then reset → `wait_closed()` **hangs with asyncio's own method** (so the test really exercises the bug) and **returns with the fix**, with nothing reaching the loop's error handler. 3 runs in a row, stable. 322 tests in all; ruff clean.
+- Live (RAFT on, a throwaway secret as environment variables, browser logged in and clicked through 8 pages, two `/ws` connections open at the stop, real Ctrl+C in `start_all.py`'s console): gateway stopped cleanly in 2.8 s, `gateway_stopped` audited, frontend and nodes stopped, 3.7 s in all, no ports left. The browser's trigger didn't happen in that run, so this shows no regression; the Windows test is the proof of the fix.
+
+Files: new `backend/shared/utils/asyncio_fixes.py`, `backend/tests/test_asyncio_fixes.py`; changed `backend/gateway/main.py` (`lifespan`), `backend/services/consensus/node.py` (`main`); docs: CLAUDE.md (repo map, test count, gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), PROGRESS.md, this journal.
+
+---
