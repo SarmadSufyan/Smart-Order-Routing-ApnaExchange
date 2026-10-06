@@ -88,7 +88,7 @@ class SigningKeyFileTest(unittest.TestCase):
 
     def test_tokens_need_a_loaded_key(self) -> None:
         with self.assertRaises(RuntimeError):
-            auth_module.create_refresh_token(auth_module.authenticate_user("admin", "admin"))
+            auth_module.create_refresh_token(auth_module.USERS["admin"])
 
 
 class AllowedOriginsTest(unittest.TestCase):

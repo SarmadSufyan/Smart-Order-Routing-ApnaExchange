@@ -159,6 +159,12 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr | None = None
     jwt_algorithm: str = "HS256"
     jwt_expiry_minutes: int = 60
+    # Real login passwords, as scrypt hashes (scripts/hash_password.py prints
+    # the line). A user without one keeps the demo login (password = user
+    # name) - except on mainnet, where that user can't log in at all.
+    auth_password_hash_admin: SecretStr | None = None
+    auth_password_hash_trader1: SecretStr | None = None
+    auth_password_hash_risk_mgr: SecretStr | None = None
 
     # ─── Browser access (CORS) ────────────────────────────────────
     # Which web pages may use the API (and open /ws) from a browser. Empty =
@@ -216,6 +222,17 @@ class Settings(BaseSettings):
     def resolved_jwt_secret_path(self) -> str:
         """This machine's own login-signing key (testnet and mainnet logins never mix)."""
         return str(PROJECT_ROOT / "data" / f"jwt-secret-{self.exchange_mode}.key")
+
+    def password_hash_for(self, username: str) -> str | None:
+        """The user's password hash from .env, or None (= demo login). Known user names only."""
+        value: SecretStr | None = getattr(self, f"auth_password_hash_{username}", None)
+        stored = value.get_secret_value().strip() if value else ""
+        return stored or None
+
+    @property
+    def demo_logins_allowed(self) -> bool:
+        """Demo logins (password = user name) work on testnet only: real money needs real passwords."""
+        return self.exchange_mode != "mainnet"
 
     @property
     def cors_origin_list(self) -> list[str]:

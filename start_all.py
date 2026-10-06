@@ -34,6 +34,7 @@ def main() -> None:
     args = parser.parse_args()
 
     from backend.gateway.config import settings  # reads .env (RAFT_ENABLED, RAFT_CLUSTER_NODES)
+    from backend.gateway.middleware.auth import demo_logins, login_setup_problems
 
     processes: list[tuple[str, subprocess.Popen]] = []
     env = os.environ.copy()
@@ -52,7 +53,7 @@ def main() -> None:
             [sys.executable, "-m", "backend.services.consensus.node", "--id", str(node_id)], env=env, cwd=ROOT,
         )
 
-    for problem in (settings.jwt_secret_problem(), settings.cors_problem()):
+    for problem in (settings.jwt_secret_problem(), settings.cors_problem(), *login_setup_problems()):
         if problem:
             print(f"\n  {problem}\n  Nothing was started.")
             sys.exit(1)
@@ -74,6 +75,11 @@ def main() -> None:
     )
     processes.append(("Gateway", gateway))
     print("  Gateway   http://127.0.0.1:8000   (Swagger: /docs)")
+    if demo := demo_logins(settings):
+        print(f"  Logins    DEMO for {', '.join(demo)} (password = user name) - "
+              "real passwords: python scripts/hash_password.py <user>")
+    else:
+        print("  Logins    real passwords only (no demo logins)")
 
     if not args.no_frontend:
         npm = shutil.which("npm")

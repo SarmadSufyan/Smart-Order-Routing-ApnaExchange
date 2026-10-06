@@ -23,6 +23,7 @@ Every step prints what happened and how long it took.
 
 import argparse
 import asyncio
+import getpass
 import os
 import secrets
 import shutil
@@ -179,7 +180,10 @@ async def standalone() -> None:
 
 # ── against the running gateway ─────────────────────────────────────────
 async def login(http) -> None:
-    r = await http.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+    r = await http.post("/api/auth/login", json={"username": "admin", "password": "admin"})  # demo login
+    if r.status_code == 401:  # this gateway has a real admin password
+        password = getpass.getpass("Password for admin: ")
+        r = await http.post("/api/auth/login", json={"username": "admin", "password": password})
     r.raise_for_status()
     http.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
 

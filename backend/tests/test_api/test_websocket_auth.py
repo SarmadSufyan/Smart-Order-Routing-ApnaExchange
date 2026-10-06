@@ -13,9 +13,8 @@ from starlette.websockets import WebSocketDisconnect
 from backend.gateway.config import settings
 from backend.gateway.middleware import auth as auth_module
 from backend.gateway.middleware.auth import (
-    HARDCODED_USERS,
+    USERS,
     TokenError,
-    authenticate_user,
     create_access_token,
     create_refresh_token,
     decode_access_token,
@@ -37,7 +36,7 @@ def tearDownModule() -> None:
 
 
 def login_token(seconds: float | None = None) -> str:
-    admin = authenticate_user("admin", HARDCODED_USERS["admin"]["password"])
+    admin = USERS["admin"]
     if seconds is None:
         return create_access_token(admin)
     payload = {"sub": admin.id, "username": admin.username, "role": admin.role.value, "name": admin.name,
@@ -85,7 +84,7 @@ class WebSocketAuthTest(unittest.TestCase):
             self.assert_refused(ws, "first message must be a login")
 
     def test_wrong_expired_and_refresh_tokens_are_refused(self) -> None:
-        admin = authenticate_user("admin", HARDCODED_USERS["admin"]["password"])
+        admin = USERS["admin"]
         cases = {
             "invalid login token": login_token()[:-4] + "AAAA",  # bad signature
             "login expired": login_token(seconds=-5),
@@ -149,7 +148,7 @@ class DecodeAccessTokenTest(unittest.TestCase):
             decode_access_token(forged)
 
     def test_refresh_tokens_decode_to_their_user_and_logins_are_not_refresh_tokens(self) -> None:
-        admin = authenticate_user("admin", HARDCODED_USERS["admin"]["password"])
+        admin = USERS["admin"]
         self.assertEqual(decode_refresh_token(create_refresh_token(admin)), admin.id)
         with self.assertRaises(TokenError):
             decode_refresh_token(login_token())

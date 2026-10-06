@@ -1,5 +1,13 @@
+"""Logins: who the users are, how a password is checked, and the login tokens (JWT).
+
+Plain-English guide, options considered and panel Q&A: project-info/SECURITY_GUIDE.md.
+"""
+
+import asyncio
+import hmac
 import os
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -12,6 +20,7 @@ from jose.exceptions import ExpiredSignatureError
 from pydantic import BaseModel
 
 from backend.gateway.config import MIN_JWT_SECRET_LENGTH, Settings, settings
+from backend.gateway.middleware.passwords import hash_password, hash_problem, verify_password
 
 # The key that signs and checks every login token. Set once at start-up by
 # load_jwt_secret() (the gateway's lifespan); never a value from the code.
@@ -85,43 +94,77 @@ class User(BaseModel):
     name: str
 
 
-HARDCODED_USERS: dict[str, dict] = {
-    "admin": {
-        "id": "user_001",
-        "username": "admin",
-        "password": "admin",
-        "role": UserRole.ADMIN,
-        "name": "System Administrator",
-    },
-    "trader1": {
-        "id": "user_002",
-        "username": "trader1",
-        "password": "trader1",
-        "role": UserRole.TRADER,
-        "name": "Trader One",
-    },
-    "risk_mgr": {
-        "id": "user_003",
-        "username": "risk_mgr",
-        "password": "risk_mgr",
-        "role": UserRole.RISK_MANAGER,
-        "name": "Risk Manager",
-    },
+# The POC's three users, one per role. Their passwords are NOT here: a real
+# password is a scrypt hash in .env (AUTH_PASSWORD_HASH_<USER>, made by
+# scripts/hash_password.py). A user without one keeps the demo login
+# (password = user name) on testnet; on mainnet that user can't log in.
+USERS: dict[str, User] = {
+    "admin": User(id="user_001", username="admin", role=UserRole.ADMIN, name="System Administrator"),
+    "trader1": User(id="user_002", username="trader1", role=UserRole.TRADER, name="Trader One"),
+    "risk_mgr": User(id="user_003", username="risk_mgr", role=UserRole.RISK_MANAGER, name="Risk Manager"),
 }
 
 security = HTTPBearer()
 
+# Password checks are slow on purpose (scrypt, ~0.1-0.2 s, 16 MiB): one at a
+# time, on their own thread. The order-book feeds never wait for a login, a
+# flood of logins can't take the thread pool the audit store writes through,
+# and guessing is capped at a few tries per second.
+_password_checks = ThreadPoolExecutor(max_workers=1, thread_name_prefix="password-check")
+_unknown_user_hash: str | None = None  # checked against for unknown names: same cost as a real user
 
-def authenticate_user(username: str, password: str) -> User | None:
-    user_data = HARDCODED_USERS.get(username)
-    if not user_data or user_data["password"] != password:
+
+def demo_logins(s: Settings = settings) -> list[str]:
+    """The users that still accept the demo login (password = user name) on this gateway."""
+    if not s.demo_logins_allowed:
+        return []
+    return [name for name in USERS if not s.password_hash_for(name)]
+
+
+def login_setup_problems(s: Settings = settings) -> list[str]:
+    """Why the login settings in .env can't be used (empty = fine). Checked before anything starts."""
+    problems = [f"AUTH_PASSWORD_HASH_{name.upper()} in .env is {problem}"
+                for name in USERS
+                if (stored := s.password_hash_for(name)) and (problem := hash_problem(stored))]
+    if not s.demo_logins_allowed and not any(s.password_hash_for(name) for name in USERS):
+        problems.append("EXCHANGE_MODE=mainnet trades real money, so demo logins (password = user name) are off - "
+                        "and no user has a real password, so nobody could log in. Make one with:  "
+                        "python scripts/hash_password.py admin")
+    return problems
+
+
+def login_summary(s: Settings = settings) -> dict[str, list[str]]:
+    """Who logs in how on this gateway, for the start-up log."""
+    real = [name for name in USERS if s.password_hash_for(name)]
+    rest = [name for name in USERS if name not in real]
+    return {"real_passwords": real, "demo_logins" if s.demo_logins_allowed else "cannot_log_in": rest}
+
+
+def authenticate_user(username: str, password: str, s: Settings = settings) -> User | None:
+    """Check a login: the real password if the user has one, else the demo login (testnet only).
+
+    CPU-heavy for real passwords: async code calls check_login() instead.
+    """
+    global _unknown_user_hash
+    user = USERS.get(username)
+    if user is None:
+        _unknown_user_hash = _unknown_user_hash or hash_password(secrets.token_hex(16))
+        verify_password(password, _unknown_user_hash)  # an unknown name costs as much as a wrong password
         return None
-    return User(
-        id=user_data["id"],
-        username=user_data["username"],
-        role=user_data["role"],
-        name=user_data["name"],
-    )
+    if stored := s.password_hash_for(username):
+        ok = verify_password(password, stored)
+    else:
+        ok = s.demo_logins_allowed and hmac.compare_digest(password.encode(), username.encode())
+    return user if ok else None
+
+
+async def check_login(username: str, password: str) -> User | None:
+    """authenticate_user() on the password-check thread (see _password_checks)."""
+    return await asyncio.get_running_loop().run_in_executor(_password_checks, authenticate_user, username, password)
+
+
+def user_by_id(user_id: str) -> User | None:
+    return next((u for u in USERS.values() if u.id == user_id), None)
 
 
 def create_access_token(user: User) -> str:

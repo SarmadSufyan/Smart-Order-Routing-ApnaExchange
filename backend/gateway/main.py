@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from backend.gateway.config import LOCAL_ORIGIN_REGEX, settings
 from backend.gateway.dependencies import Services, default_risk_limits, get_services, init_services
-from backend.gateway.middleware.auth import load_jwt_secret
+from backend.gateway.middleware.auth import load_jwt_secret, login_setup_problems, login_summary
 from backend.gateway.routers import (
     admin,
     algos,
@@ -92,8 +92,13 @@ async def lifespan(app: FastAPI):
         symbols=settings.symbol_list,
     )
     # Security settings first: a bad one stops the start before anything connects.
-    if problem := settings.cors_problem():
-        raise RuntimeError(problem)
+    if problems := [p for p in (settings.cors_problem(), *login_setup_problems()) if p]:
+        raise RuntimeError(" | ".join(problems))
+    logins = login_summary()
+    logger.info("logins", **logins)
+    if logins.get("demo_logins"):
+        logger.warning("demo_logins_active", users=logins["demo_logins"],
+                       detail="password = user name; set real ones with scripts/hash_password.py")
     jwt_key = load_jwt_secret()
     logger.info("login_signing_key_ready", **jwt_key)
     if jwt_key.get("ignored_public_placeholder"):
