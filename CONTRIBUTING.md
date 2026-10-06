@@ -81,7 +81,7 @@ git push
 
 **Before you push:** tests pass, type-check passes, your `PROGRESS.md` row updated (backend: handoff note added), journal entry appended for anything non-trivial.
 
-**After you push — CI:** GitHub re-runs the checks on a clean machine for every push and pull request on the three team branches ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, ~3–4 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ on your branch is yours to fix before anything is merged. A newer push cancels the run for the older one.
+**After you push — CI:** GitHub re-runs the checks on a clean machine for every push and pull request on the three team branches ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, about 2 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ on your branch is yours to fix before anything is merged. A newer push cancels the run for the older one.
 
 **Milestone done?** Tell Sarmad; he merges your branch into `feature/crypto-pivot`.
 
