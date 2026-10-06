@@ -1315,3 +1315,5 @@ The four `start_all.py` items from the handoff note *2026-10-06 (3)*: (a) wait f
 ### Files
 
 New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: CLAUDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
+
+**Handover (same night):** Fizza is done for now; the backend relay goes to Sarmad. His to-do list (CI check, try it, merge, team message, docs rewrite, demo-laptop prep, the RAFT-on-for-the-demo decision) and a one-line summary of everything done so far: PROGRESS.md → *Handoff 2026-10-06 (night) — Fizza → Sarmad*.
