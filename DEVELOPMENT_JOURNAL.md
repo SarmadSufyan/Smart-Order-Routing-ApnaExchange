@@ -1152,3 +1152,52 @@ Checked after merging: 262 backend tests pass, frontend type-check and productio
 ### Files
 
 PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, CLAUDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
+
+---
+
+## 2026-10-06 — CI on every push, and who was trading on Sarmad's accounts
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+ROADMAP §7 starts with CI: until now "the tests pass" meant "they passed on the laptop of whoever pushed". Now GitHub re-runs the checks on clean machines for every push and pull request on `feature/backend-v2`, `feature/frontend-v2` and `feature/crypto-pivot`, and puts a ✅ / ❌ next to the commit.
+
+### What runs (`.github/workflows/ci.yml`)
+
+- **Backend tests on Linux and Windows** (Python 3.14, the version the team runs): `pip install -r backend/requirements.txt`, then the same `unittest discover` as on our laptops. Linux because it is a machine nobody developed on; Windows because that is where we develop and demo — RAFT over TCP and the process pool behave differently on each (Linux starts worker processes another way).
+- **Python lint (ruff)** at the version pinned in `requirements-dev.txt`, with `--output-format github`, so a finding appears as a red mark on the exact line in a PR's "Files changed".
+- **Frontend type-check** (Node 24): `npm ci` (exactly the locked versions), `tsc --noEmit`.
+- No `.env` and no secrets on the runner: every setting is at its default (RAFT off, no exchange keys) and no test talks to a network or an exchange. A newer push to the same branch cancels the run still going for the older one (only the latest result matters; it saves the repo's free Actions minutes). A manual *Run workflow* button is on the Actions tab.
+
+### Ruff clean first
+
+CI would have been red from day one: ruff found 19 small things in older gateway files. Fixed without changing behaviour — unused imports, over-long import lines wrapped, `raise HTTPException(...) from None` inside `except` blocks (same HTTP answers, no misleading "during handling of the above exception" trace), one f-string without placeholders. FastAPI's `= Depends(...)` / `= Query(...)` argument defaults are allowed in `backend/pyproject.toml` (that is how FastAPI is meant to be used) instead of being rewritten. Gotcha: ruff 0.4's cache kept the old result after the config change — `--no-cache` (CI has no cache anyway).
+
+### Checked before pushing
+
+- **Linux, before GitHub ever saw it:** the repo's files in fresh Docker containers — `python:3.14-slim` pinned to 2 CPUs (GitHub's machines for a private repo have 2), CI's exact commands, the whole suite repeated to catch timing flukes (5 × 254 tests on 2026-10-04; 3 × 262 after Sarmad's `/ws` tests arrived — about 13–18 s per run, never flaky), plus `node:24-slim` for `npm ci` + type-check. Tests also pass with no `.env` at all.
+- **A red run on purpose:** in a throwaway container copy, one wrong test and one unused import — both steps exit 1 and name the file and line.
+- **Rebased onto Sarmad's work:** his `/ws` fix had rewritten two files my ruff commit also touched (`middleware/auth.py`, `websocket/ws_manager.py`); his versions kept as they are (already ruff-clean).
+- **Live, in Maham's new pages** (RAFT on, all four venues): login, Dashboard, the live connection with Sarmad's new first-message login (`ws_connected username=admin`, no token in any URL or log line), Arbitrage page, Kill Switch with the RAFT panel (3/3 nodes, signed), Algo Orders pre-flight ("nothing was sent", 10/10 slices pass), Risk Manager, Wallet, Audit Log filters, Venue Connectivity; the "order not found" (404) and "bad refresh token" (401) answers the ruff commit touched are unchanged. **No order was placed** — see the keys finding.
+
+### Finding 1: who was trading on Sarmad's accounts
+
+Sarmad's open question asked Fizza and Mahnoor to check. Fizza's `.env` holds **Sarmad's** exchange keys (Binance and Bybit; probably Gate). Read-only, from her own `data/apnasor-testnet.db` and her Wallet page:
+
+| Account | Fizza's gateway's fills | + trades **neither** gateway made (BREAK on Fizza's Wallet) | = Sarmad's "unexplained" |
+|---|---|---|---|
+| Binance BTC | +0.00221 | −0.00084 | +0.00137 ✓ |
+| Binance ETH | −0.0019 | −0.0028 | −0.0047 ✓ |
+| Binance USDT | −182 | +78 | −104 ✓ |
+| Bybit BTC | +0.00127 | +0.00154 | +0.0028 ✓ |
+| Bybit ETH | +0.0074 | 0 | +0.0074 ✓ |
+| Bybit USDT | −127 | −130 | −257 ✓ |
+
+All six match. So Sarmad's mystery is two things: Fizza's own test trades, **and a third source** — another gateway with his keys, or someone trading by hand on the exchange websites — which both of their ledgers see as foreign. Maham was already ruled out; Mahnoor is still to check. Until Fizza has her own keys she places no live orders. This is the CLAUDE.md gotcha "each person needs their own exchange accounts/keys", seen from both sides.
+
+### Finding 2: the first "profitable" arbitrage windows were an OKX glitch
+
+With OKX's feed up, the detector audited its first 10 profitable windows (09:25–09:27 UTC). All of them **sold on OKX**, across ETH, SOL and XRP at once, with gaps of 26–84 bps (crossings are normally < 2 bps), and they opened and closed in the same scans (09:25:51–09:25:58, 09:27:12–09:27:28). A real gap doesn't hit three coins on one exchange in the same instant: OKX's book was wrong for a few seconds (its feed reconnected 13 times that morning; a health ping failed at 09:21). The honest line for the panel stays "no real profitable window". A detector follow-up is logged under Open questions (skip a venue while its feed reconnects / just after a resync; flag one-venue-against-all crossings on several coins).
+
+### Files
+
+New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), CLAUDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
