@@ -17,8 +17,8 @@ import secrets
 
 SCHEME = "scrypt"
 # One of the scrypt settings in OWASP's Password Storage Cheat Sheet (N=2^14,
-# r=8, p=5): 16 MiB of memory and ~0.1-0.2 s of CPU per check on a laptop -
-# slow on purpose, so a copied hash can't be guessed quickly.
+# r=8, p=5): 16 MiB of memory and 0.5-1 s of CPU per check (measured on our
+# laptop, 2026-10-06) - slow on purpose, so a copied hash can't be guessed quickly.
 N, R, P = 2**14, 8, 5
 SALT_BYTES, KEY_BYTES = 16, 32
 MAX_MEMORY = 64 * 1024 * 1024  # OpenSSL's default cap (32 MiB) is too close to 16 MiB x overhead

@@ -112,7 +112,7 @@ Expected: `Ran 107 tests ... OK` (the count grows as we add tests).
 ```powershell
 python start_all.py
 ```
-Open http://localhost:5173 and log in as `admin` / `admin`. Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C.
+Open http://localhost:5173 and log in as `admin` / `admin` (the demo login of a developer machine; the demo laptop uses real passwords — `project-info/SECURITY_GUIDE.md`). Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C.
 
 Your local audit database (`data/apnasor-testnet.db`) is created automatically and stays on your machine.
 
@@ -197,6 +197,9 @@ npx --prefix frontend tsc --noEmit -p frontend
 | Binance answers **451** "restricted location", Bybit **403** | A VPN is on. Turn it off for live tests and the demo |
 | Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection now needs a login as its first message. `git merge origin/feature/crypto-pivot` (brings the new `services/websocket.ts`), restart the frontend, log in again |
 | Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR (manual trade, testnet reset, someone else using your keys). If you're sure, click **Accept exchange balances** |
+| `admin` / `admin` refused and the Login page shows no demo buttons | This machine has real passwords (`AUTH_PASSWORD_HASH_*` in `.env`): use them, or delete those lines to go back to the demo login (`project-info/SECURITY_GUIDE.md`) |
+| `start_all.py` says "Nothing was started" about `JWT_SECRET`, `CORS_ORIGINS` or `AUTH_PASSWORD_HASH_…` | The message says the fix. Usually: delete the line from `.env` (the safe default takes over) |
+| Logged out right after pulling the security update ("Your session expired") | Expected once: logins are now signed with your machine's own key. Log in again |
 | Port 8000 / 5173 already in use | Another gateway or dev server is running. Close it (or the other terminal) |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |
 | Tests fail right after cloning | Check `git branch --show-current` shows your branch and that the venv is active |

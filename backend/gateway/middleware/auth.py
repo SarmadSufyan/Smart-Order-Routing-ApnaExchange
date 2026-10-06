@@ -106,7 +106,7 @@ USERS: dict[str, User] = {
 
 security = HTTPBearer()
 
-# Password checks are slow on purpose (scrypt, ~0.1-0.2 s, 16 MiB): one at a
+# Password checks are slow on purpose (scrypt, 0.5-1 s, 16 MiB): one at a
 # time, on their own thread. The order-book feeds never wait for a login, a
 # flood of logins can't take the thread pool the audit store writes through,
 # and guessing is capped at a few tries per second.

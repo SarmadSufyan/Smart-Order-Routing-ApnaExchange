@@ -1201,3 +1201,43 @@ With OKX's feed up, the detector audited its first 10 profitable windows (09:25�
 ### Files
 
 New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), CLAUDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
+
+## 2026-10-06 — Security hardening: no secrets in the code, only our frontend, real passwords
+
+*By Fizza (backend relay, `feature/backend-v2`). ROADMAP §7. Plain-English guide with every option, the panel Q&A and a checklist for the demo laptop: [`project-info/SECURITY_GUIDE.md`](project-info/SECURITY_GUIDE.md).*
+
+Three holes from *Open questions → security hardening* (logged 2026-10-02), closed in one session: the login-signing secret was written in `config.py`; CORS allowed every website; the three POC logins were password = user name in the code. A fourth turned up on the way: the Login page says "All sessions are audited", but logins weren't audited.
+
+### Decisions (options and reasons: SECURITY_GUIDE.md)
+
+- **`JWT_SECRET`: created automatically per machine** (`data/jwt-secret-<mode>.key`), not "required in `.env`" (Sarmad's first note) — equally safe, and nobody has to touch their `.env` in the last week. Fizza's choice.
+- **CORS: this machine's frontend on any port**, an exact list in `CORS_ORIGINS` otherwise, `*` refused; plus an origin check on `/ws`.
+- **Logins: option A** — real passwords as scrypt hashes in `.env`, the demo login as a testnet-only fallback, none on mainnet (B = required everywhere; C = keep and say so). Fizza delegated the choice ("whatever won't embarrass us in front of the panel"), Sarmad fine with it.
+
+### Design notes (what a reader wouldn't guess)
+
+- **`*` was worse than it looks.** With `allow_credentials=True`, Starlette 1.7 answers a `*` CORS rule by echoing the caller's own origin — every website is told "yes". Combined with `admin` / `admin`, a page on any website could log in from the trader's browser and read the ticket. Credentials are off now: we use a bearer token, never cookies.
+- **CORS doesn't cover WebSockets.** A browser opens a WebSocket from any page and only *says* where the page is from (`Origin`). `ws_manager.serve` checks it with the same rule as REST (`Settings.origin_allowed`) and refuses before accepting (HTTP 403). No `Origin` (our scripts) is allowed — they still need a ticket as the first message.
+- **Refuse, don't replace.** A `JWT_SECRET` that is a known public placeholder is ignored (logged); one set on purpose but shorter than 32 characters stops the start. A plain password pasted where a hash belongs stops the start too. Silent fallbacks hide mistakes; a refusal with the fix in the message doesn't.
+- **One key file per mode**, like the database: a testnet ticket never opens a mainnet gateway.
+- **Password checks on their own one-thread pool.** scrypt with OWASP's N=2^14, r=8, p=5 measured **0.5–1.1 s per check** on this laptop (median ~1 s; the code comment said 0.1–0.2 s until measured). `asyncio.to_thread` would use the default pool — the one `AuditStore` writes through — so a flood of logins could delay audit writes; a dedicated single thread can't, never blocks the event loop (book feeds), and caps guessing at ~1/s. An unknown user name is checked against a throw-away hash, so it costs the same as a wrong password.
+- **Tests never read the developer's `.env` passwords:** they use `USERS[...]` directly and patch the settings they need — once Fizza or the demo laptop sets real passwords, the suite still passes.
+- **Failed logins are audited with actor `unknown`** (a failed login proves nothing about who typed it), the typed name cleaned of control characters and cut to 40, never the password.
+- **The Login page** (Mahnoor's) changed minimally: `GET /api/auth/demo-logins` decides which demo buttons show and whether `admin` / `admin` is pre-filled. Without it the demo laptop would show working-looking buttons that fail.
+
+### Verified
+
+- **Before / after with `scripts/security_check.py`** (read-only). Old code (the commit before, a separate copy on port 8001 with no `.env`, so no exchange keys): forged admin ticket → HTTP 200; `https://evil.example` preflight allowed, login ticket readable; `/ws` opened. New code, Fizza's normal `.env`: forged ticket 401; preflight 400, no allowed origin; `/ws` 403; `admin` / `admin` still works (expected on a developer machine). New code with three real passwords (throw-away test passwords passed as environment variables; `.env` untouched): **all five refused, exit code 0**.
+- **UI, no orders placed** (RAFT on, 3 of 3 signed): developer mode unchanged (three demo buttons, `admin` pre-filled, login, live prices, Kill Switch page, reloads keep the login). Real-password mode: no "DEMO ACCOUNTS", empty fields, `admin` / `admin` → "Invalid username or password", the real password logs in, the Audit Log shows `login_failed … unknown` and `admin logged in`. A browser holding a ticket signed with the old public secret → "Your session expired — please log in again" (what teammates see once after pulling).
+- `start_all.py` refuses before starting anything: a short `JWT_SECRET`, `CORS_ORIGINS=*`, a plain password in `AUTH_PASSWORD_HASH_ADMIN` — each with the fix in the message. It prints `Logins  DEMO for …` or `Logins  real passwords only`.
+- 295 backend tests (33 new) on Windows and in Linux (`python:3.14-slim`, 2 CPUs); ruff clean; frontend type-check passes (Windows and `node:24-slim`). `hash_password.py` checked in Linux with typed input (a short password refused; the printed line verifies).
+
+### Found on the way (not fixed here)
+
+- **"RAFT cluster unreachable at start-up" at almost every start since 2026-10-02** (audit log: every `gateway_started` with RAFT on but one is followed by `consensus_unreachable`). `start_all.py` waits a fixed 1.5 s after starting the nodes; on Windows they usually haven't elected a leader yet. The gateway catches up moments later (Kill Switch page: 3 of 3), but a panel member reading the Audit Log sees the warning. Fix in the `start_all.py` item: wait until the cluster reports a leader.
+- **The Login page's left panel is hard-coded** (`mockData.ts: MOCK_VENUES`, one entry): it always shows "Binance DISCONNECTED", even while Binance is connected — simulated data on the first screen the panel sees. Mahnoor's page.
+- The Audit Log page has no filter for the new `login` / `login_failed` events (they show under *Everything*). Maham's page.
+
+### Files
+
+New: `backend/gateway/middleware/passwords.py`, `scripts/hash_password.py`, `scripts/security_check.py`, `backend/tests/test_api/test_security_settings.py`, `test_logins.py`, `project-info/SECURITY_GUIDE.md`. Changed: `backend/gateway/config.py`, `main.py`, `middleware/auth.py`, `routers/auth.py`, `websocket/ws_manager.py`, `start_all.py`, `scripts/arb_watch.py`, `scripts/raft_demo.py`, `backend/tests/test_api/test_websocket_auth.py`, `frontend/src/pages/Login.tsx`, `frontend/src/services/api.ts`, `.env.example`; docs: CLAUDE.md, PROGRESS.md, ROADMAP §7, ONBOARDING.md, CONTRIBUTING.md (CI "about 2 minutes").

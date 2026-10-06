@@ -1,7 +1,7 @@
 # Exchange API keys — how ApnaSOR keeps them safe
 
 > How we create, store, load and use the API keys for Binance, Bybit, OKX and Gate, and what protects them at every step.
-> Every claim links to the code or document that proves it. How to *create* the keys: [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md).
+> Every claim links to the code or document that proves it. How to *create* the keys: [`API_KEYS_GUIDE.md`](API_KEYS_GUIDE.md). Logins, the login-signing key and which websites may use the API: [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md).
 > Written 2026-10-03. Current state: **testnet / demo keys only** (exchange-run fake funds); real-money keys come only in Phase 8.
 
 ---

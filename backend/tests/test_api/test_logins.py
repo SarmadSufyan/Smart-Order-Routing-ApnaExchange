@@ -47,7 +47,7 @@ class PasswordHashTest(unittest.TestCase):
         self.assertNotEqual(hash_password(REAL, **CHEAP), hash_password(REAL, **CHEAP))
 
     def test_default_cost(self) -> None:
-        stored = hash_password(REAL)  # the cost the script uses: ~0.1-0.2 s
+        stored = hash_password(REAL)  # the cost the script uses: 0.5-1 s
         self.assertTrue(stored.startswith("scrypt:16384:8:5:"))
         self.assertTrue(verify_password(REAL, stored))
         self.assertNotIn(REAL, stored)
