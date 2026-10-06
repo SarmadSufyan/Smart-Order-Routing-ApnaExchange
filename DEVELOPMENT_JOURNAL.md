@@ -1223,7 +1223,7 @@ Three holes from *Open questions → security hardening* (logged 2026-10-02), cl
 - **Password checks on their own one-thread pool.** scrypt with OWASP's N=2^14, r=8, p=5 measured **0.5–1.1 s per check** on this laptop (median ~1 s; the code comment said 0.1–0.2 s until measured). `asyncio.to_thread` would use the default pool — the one `AuditStore` writes through — so a flood of logins could delay audit writes; a dedicated single thread can't, never blocks the event loop (book feeds), and caps guessing at ~1/s. An unknown user name is checked against a throw-away hash, so it costs the same as a wrong password.
 - **Tests never read the developer's `.env` passwords:** they use `USERS[...]` directly and patch the settings they need — once Fizza or the demo laptop sets real passwords, the suite still passes.
 - **Failed logins are audited with actor `unknown`** (a failed login proves nothing about who typed it), the typed name cleaned of control characters and cut to 40, never the password.
-- **The Login page** (Mahnoor's) changed minimally: `GET /api/auth/demo-logins` decides which demo buttons show and whether `admin` / `admin` is pre-filled. Without it the demo laptop would show working-looking buttons that fail.
+- **The Login page** (Mahnoor's) changed minimally: `GET /api/auth/demo-logins` decides which demo buttons show and whether `admin` / `admin` is pre-filled. Without it the demo laptop would show working-looking buttons that fail. It asks again every 2 s until the gateway answers: `start_all.py` opens the page before the gateway is up, and the first version (ask once) showed no buttons on a developer machine until a reload - caught in the live check.
 
 ### Verified
 

@@ -26,15 +26,21 @@ export function Login() {
   const [clock, setClock]     = useState('')
 
   useEffect(() => {
-    api.getDemoLogins()
+    // The gateway may still be starting when this page opens: ask again until it answers.
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    const ask = () => api.getDemoLogins()
       .then((r) => {
+        if (stopped) return
         setDemoUsers(r.demo_logins)
         if (r.demo_logins.includes('admin')) {  // pre-fill only while admin / admin really works
           setUser((u) => u || 'admin')
           setPass((p) => p || 'admin')
         }
       })
-      .catch(() => setDemoUsers([]))
+      .catch(() => { if (!stopped) retry = setTimeout(ask, 2000) })
+    ask()
+    return () => { stopped = true; clearTimeout(retry) }
   }, [])
   const demoAccounts = DEMO_ACCOUNTS.filter((a) => demoUsers.includes(a.user))
 
