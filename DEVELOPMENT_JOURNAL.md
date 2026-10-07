@@ -1400,8 +1400,27 @@ Revisit after the panel.
 
 **Verified.** Type-check and `npm run build` pass. Live (gateway + Vite from this branch): logged in, opened every page through the sidebar (Wallet, How It Works, Market Data, Venues, Risk, Kill Switch, Audit Log, Algo Orders, Dashboard) and Arbitrage by URL — all render with data; `/order` still redirects to the dashboard, an unknown URL to `/login`, a hard reload on `/risk` lands on Risk.
 
-**Found while testing (pre-existing; not fixed — reported).** The browser console showed `InvalidStateError: … Still in CONNECTING state` from `websocket.ts`, and the gateway log `ws_refused … no login within 5 s`. Cause: `authStore.ts` calls `wsClient.connect()` twice on page load; `connect()` opens a second socket without closing the first, and the first socket's handlers use `this.ws` — by then the second socket. The first one never logs in (refused at 5 s), and its `onclose` sets `this.ws = null` and schedules a reconnect, orphaning the working connection. Live data still arrives, so it went unnoticed. Neither file is touched by the package update (it reproduces on every load). Fix described in PROGRESS.md → *Open questions*. Also noticed: the sidebar no longer has an *Arbitrage* link since the `AppShell.tsx` rewrite (`b4ebf21`).
+**Found while testing (pre-existing; fixed in the next entry).** The browser console showed `InvalidStateError: … Still in CONNECTING state` from `websocket.ts`, and the gateway log `ws_refused … no login within 5 s`. Cause: `authStore.ts` calls `wsClient.connect()` twice on page load; `connect()` opens a second socket without closing the first, and the first socket's handlers use `this.ws` — by then the second socket. The first one never logs in (refused at 5 s), and its `onclose` sets `this.ws = null` and schedules a reconnect, orphaning the working connection. Live data still arrives, so it went unnoticed. Neither file is touched by the package update (it reproduces on every load). Fix described in PROGRESS.md → *Open questions*. Also noticed: the sidebar no longer has an *Arbitrage* link since the `AppShell.tsx` rewrite (`b4ebf21`).
 
 Files: `frontend/package-lock.json`, PROGRESS.md, this journal.
+
+---
+
+## 2026-10-07 (later still) — One WebSocket per browser tab
+
+*By Maham (`feature/frontend-v2`).* Fixes the bug found in the entry above.
+
+**The bug.** Two places call `wsClient.connect(token)` when a logged-in page loads: `authStore.ts: initialAuthState` (module load) and `restoreSession`, which `App.tsx` calls from an effect — run twice in development by React's StrictMode. So 3 sockets in dev, 2 in production. `connect()` always opened a new socket and overwrote `this.ws`, and every handler read `this.ws` instead of its own socket. The older socket's `onopen` therefore sent the login on the *newest* socket, still connecting (`InvalidStateError`); the older socket itself never logged in and the gateway refused it after 5 s (`ws_refused … no login within 5 s`). Its `onclose` then set `this.ws = null` — dropping the reference to the good socket, which stayed open but orphaned (`isConnected()` false, new subscriptions not sent to it) — and scheduled a reconnect, opening yet another one. Live data mostly kept arriving, which is why it went unnoticed.
+
+**The fix (`services/websocket.ts` only).**
+- `connect()` with the same token while a socket is open or connecting does nothing. A different token (a new login) still replaces the socket.
+- `_open()` closes the socket it replaces and clears a pending reconnect timer first.
+- Each handler works on its own `const ws` and returns at once if that socket is no longer the current one — so a replaced socket's late `onclose` can't null out or reconnect over the new one.
+
+Why fix it in `websocket.ts` rather than remove the extra `connect()` calls in `authStore.ts`: the client should be safe however often it is called (StrictMode, a future caller), and `authStore.ts`'s synchronous start-up read exists on purpose (it avoids the auth-guard race). The `/ws` protocol is unchanged (login as the first message, close code 4401 stops reconnecting), so the backend needs no change.
+
+**Verified live** (gateway + Vite from this branch): a fresh page load → the gateway logged exactly one `ws_connected`, no `ws_refused`, no console errors. Gateway stopped for ~15 s (the client retried every 3 s without piling up sockets) and started again → the browser sent exactly one `auth` and one `subscribe` (6 channels), one `ws_connected`, and 155 order-book + 15 NBBO + 8 venue-health + 5 arbitrage messages arrived in the next 6 s. Logout → one `ws_disconnected`; login → one `auth` + one `subscribe` (9 channels), one `ws_connected`. Type-check passes.
+
+Files: `frontend/src/services/websocket.ts`, PROGRESS.md, this journal.
 
 ---
