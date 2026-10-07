@@ -4,17 +4,12 @@
 > When you're done, read [`CLAUDE.md`](CLAUDE.md) (project guide and rules), [`PROGRESS.md`](PROGRESS.md) (where things stand) and [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means for your workstream).
 
 **The whole idea in four lines:**
-1. Clone the repo straight onto **your team's branch** (it's private; sign in with your own GitHub account).
-2. Add **your own** `.env` by hand. It is never in git.
-3. Always `git pull` before you start and `git push` when you stop.
-4. At milestones Sarmad merges the team branches into `feature/crypto-pivot` (the default branch), and everyone syncs.
+1. Clone the repo on **`feature/crypto-pivot`** (it's private; sign in with your own GitHub account).
+2. Add your `.env` by hand. It is never in git.
+3. **One person works at a time** (a relay, for backend and frontend alike). Sarmad decides who has it.
+4. Take the relay: `git pull`, read the newest handoff note. Hand it on: push, write a handoff note, tell the group.
 
-**Who works where:**
-
-| People | Branch | How you share it |
-|---|---|---|
-| **Fizza ⇄ Sarmad** (backend) | `feature/backend-v2` | **Relay**: one of you at a time, never together. Pull, work, push, leave a handoff note in `PROGRESS.md` |
-| **Mahnoor + Maham** (frontend) | `feature/frontend-v2` | Same branch, **different pages** (see the table in `PROGRESS.md`). Pull before each session, push after |
+**Since 2026-10-07 everyone works on `feature/crypto-pivot`.** `feature/backend-v2` and `feature/frontend-v2` are retired; Mahnoor and Maham's redesign is kept on `theme/liquid-glass` as a theme.
 
 ---
 
@@ -31,30 +26,19 @@ Use the assistant in **local** mode on your own computer, not in a cloud session
 
 ## 2. Clone — the exact command for you
 
-Open PowerShell in the folder where you keep projects (e.g. `cd D:\`) and run **your** line. It downloads the repo into a folder called `apnasor`, already on your branch:
+Open PowerShell in the folder where you keep projects (e.g. `cd D:\`). It downloads the repo into a folder called `apnasor`:
 
-**Mahnoor and Maham (frontend):**
 ```powershell
-git clone -b feature/frontend-v2 https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
-```
-
-**Fizza (backend):**
-```powershell
-git clone -b feature/backend-v2 https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
-```
-
-**Sarmad** already has the repo at `D:\Sor-Fyp`, so there's no clone:
-```powershell
-cd D:\Sor-Fyp
-git fetch origin
-git checkout feature/backend-v2
-git pull
-```
-
-Then (Mahnoor, Maham, Fizza):
-```powershell
+git clone -b feature/crypto-pivot https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
 cd apnasor
-git branch --show-current     # must print your branch name
+git branch --show-current     # must print feature/crypto-pivot
+```
+
+**Already have a clone** (e.g. Sarmad at `D:\Sor-Fyp`, or an old clone on `feature/backend-v2` / `feature/frontend-v2`):
+```powershell
+git fetch origin
+git checkout feature/crypto-pivot
+git pull
 ```
 
 - The repo is private. If Git asks you to sign in, use the GitHub account Sarmad invited (a browser window opens).
@@ -116,41 +100,27 @@ Open http://localhost:5173 and log in as `admin` / `admin` (the demo login of a 
 
 Your local audit database (`data/apnasor-testnet.db`) is created automatically and stays on your machine.
 
-## 6. Your branch and your part
+## 6. The relay (how the four of us share the work)
 
-Your branch already exists, and you're on it after cloning. Your part is in the *Who is working on what* table in `PROGRESS.md`:
-
-| Who | Branch | Your part (details in ROADMAP) |
-|---|---|---|
-| Fizza ⇄ Sarmad | `feature/backend-v2` | In order: LLM copilot API (§5b) → multiprocessing risk + RAFT (§6) → arbitrage detector (§5c) → CI + doc rewrite (§7) |
-| Mahnoor | `feature/frontend-v2` | How It Works (rewrite for the crypto design), Dashboard (+ running-TWAP widget), Market Data, Login; later the copilot chat panel |
-| Maham | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; responsive / narrow-screen fixes |
-
-**Frontend (two people, one branch):** stay inside your own pages. For the shared files (`services/api.ts`, `stores/dataStore.ts`, `App.tsx`, `components/AppShell.tsx`, `components/shared.tsx`, `theme.ts`, `format.ts`): `git pull` right before you edit, commit and push right after, and tell the other person.
-
-**Backend relay (Fizza ⇄ Sarmad):** never work at the same time.
-1. Message the other person ("taking backend").
+Everyone works on `feature/crypto-pivot`, backend and frontend, **one person at a time**. Sarmad decides who has the relay.
+1. Message the group ("taking it").
 2. `git pull`.
-3. Read the newest **handoff note** in `PROGRESS.md`.
-4. Work.
-5. Tests pass, push **everything**, then add your handoff note: what's done, what's half-done (file + function), the exact next step.
-6. Message the other person ("backend free, pushed").
+3. Read the newest **handoff note** in `PROGRESS.md` and continue from its "next step".
+4. Work. Push small finished pieces as you go.
+5. Tests + type-check pass, push **everything**, check CI ✅ on GitHub, then add your handoff note: what's done, what's half-done (file + function), the exact next step.
+6. Message the group ("free, pushed").
 
 ## 7. Working with your AI coding assistant
 
 Open your `apnasor` folder in the desktop app (local mode). The project guide (`CLAUDE.md`) loads automatically and tells it the rules.
 
-**First message of every session.** Frontend (use your name; your pages are in PROGRESS.md):
+**First message of every session** (use your name):
 
-> Run `git pull`. Read CLAUDE.md, PROGRESS.md and project-info/ROADMAP.md. I'm **Maham** on the frontend, branch `feature/frontend-v2`. Only touch my pages from the "Who is working on what" table; for shared files, pull first and keep changes small. Plan against the ROADMAP, list risks you find in the code, then build. Verify with the type-check and in the browser.
-
-Backend relay:
-
-> Run `git pull`. Read CLAUDE.md, PROGRESS.md (the newest backend handoff note first) and project-info/ROADMAP.md. I'm **Fizza** on the backend relay, branch `feature/backend-v2`. Continue from the handoff note: plan against the ROADMAP "done" criteria, list risks and contradictions you find in the code, then build. Verify with tests and a small live testnet order.
+> Run `git checkout feature/crypto-pivot` and `git pull`. Read CLAUDE.md, PROGRESS.md (the newest handoff note first) and project-info/ROADMAP.md. I'm **Maham** and I have the relay. Continue from the handoff note: plan against the ROADMAP "done" criteria, list risks and contradictions you find in the code, then build backend and screens together. Verify with tests, the type-check, the browser and a small live testnet order.
 
 **Last message of every session:**
 
-> Run the tests and the type-check. Update my row in PROGRESS.md (backend: also add a handoff note at the top of the relay table), append a dated entry to DEVELOPMENT_JOURNAL.md, then commit with a conventional message and push my branch.
+> Run the tests and the type-check. Add a handoff note at the top of the relay table in PROGRESS.md, append a dated entry to DEVELOPMENT_JOURNAL.md, then commit with a conventional message and push feature/crypto-pivot. Tell me when CI is green.
 
 Rules:
 - **One session at a time.** Two sessions in the same folder overwrite each other's files. Finish and push one before starting the next.
@@ -162,9 +132,8 @@ Rules:
 **Every time you sit down:**
 
 ```powershell
-git pull                                    # what your teammate pushed to your branch
-git fetch origin
-git merge origin/feature/crypto-pivot       # what Sarmad merged (e.g. new backend endpoints for the frontend)
+git checkout feature/crypto-pivot
+git pull                                    # what the last person pushed
 ```
 
 **While you work:** commit small, push often (`git push`).
@@ -175,14 +144,12 @@ python -m unittest discover -s backend/tests -t .
 npx --prefix frontend tsc --noEmit -p frontend
 ```
 
-**Milestones:** when a chunk is done (e.g. the copilot API works, or a set of pages is finished), tell Sarmad. He merges `feature/backend-v2` / `feature/frontend-v2` into `feature/crypto-pivot`, and everyone's next `git merge origin/feature/crypto-pivot` picks it up. That's how the frontend gets the copilot API for its chat panel.
-
 ## 9. Don'ts
 
 - Don't commit `.env`, `data/`, logs or build output (`frontend/dist`).
-- Don't push to `main` or `feature/crypto-pivot`. Only push your own branch.
-- Frontend doesn't change `backend/`, and backend doesn't change `frontend/`, without asking. If the frontend needs a new API field, ask the backend relay.
-- Don't start a backend session while the other relay person is working.
+- Don't push to `main`. Push to `feature/crypto-pivot` only while you hold the relay.
+- Don't start a session while someone else has the relay.
+- Don't work on `feature/backend-v2`, `feature/frontend-v2` (retired) or `theme/liquid-glass` (a kept theme).
 - Don't rewrite files with PowerShell `Get-Content | Set-Content`; it corrupts UTF-8 (`—` becomes `â€”`). Use an editor.
 - Don't use mainnet (real-money) keys. That's Phase 8, done together.
 
@@ -195,7 +162,7 @@ npx --prefix frontend tsc --noEmit -p frontend
 | OKX "network error" / feed disconnected | Some ISPs' DNS blocks okx.com. Known; work without OKX |
 | Gate shows no balance | Known: Gate's spot testnet wallet isn't funded. Binance + Bybit are enough |
 | Binance answers **451** "restricted location", Bybit **403** | A VPN is on. Turn it off for live tests and the demo |
-| Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection now needs a login as its first message. `git merge origin/feature/crypto-pivot` (brings the new `services/websocket.ts`), restart the frontend, log in again |
+| Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection needs a login as its first message. `git checkout feature/crypto-pivot` + `git pull`, restart the frontend, log in again |
 | Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR: a teammate traded on the shared keys (expected), a manual trade, or a testnet reset. Click **Accept exchange balances** when you want a clean start. Nobody can explain it? Tell the key's owner (CONTRIBUTING.md *Exchange keys*, rule 4) |
 | `admin` / `admin` refused and the Login page shows no demo buttons | This machine has real passwords (`AUTH_PASSWORD_HASH_*` in `.env`): use them, or delete those lines to go back to the demo login (`project-info/SECURITY_GUIDE.md`) |
 | `start_all.py` says "Nothing was started" about `JWT_SECRET`, `CORS_ORIGINS` or `AUTH_PASSWORD_HASH_…` | The message says the fix. Usually: delete the line from `.env` (the safe default takes over) |
@@ -203,7 +170,7 @@ npx --prefix frontend tsc --noEmit -p frontend
 | `start_all.py` says "Port 8000 (gateway) is already in use - by python.exe, pid …" (or 5173 / 9001–9003) | ApnaSOR is already running in another terminal — use that one or press Ctrl+C there — or an earlier start was killed without stopping its children: run the `taskkill /PID … /T /F` line the message prints. Running `npm run dev` yourself? Start with `python start_all.py --no-frontend` |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |
 | `ModuleNotFoundError: No module named 'fastapi'` (or `httpx`, `jose`) when running a script | That terminal runs the system Python, not the project's. Run `.venv\Scripts\Activate.ps1` once in that terminal (prompt starts with `(.venv)`), or call `.venv\Scripts\python.exe` instead of `python` |
-| Tests fail right after cloning | Check `git branch --show-current` shows your branch and that the venv is active |
+| Tests fail right after cloning | Check `git branch --show-current` shows `feature/crypto-pivot` and that the venv is active |
 | `git pull` says "merge conflict" | Two people edited the same lines. Don't panic and don't force-push: ask the other person or Sarmad, and resolve it together |
 
 Stuck for more than 30 minutes? Ask in the group (without keys or screenshots of `.env`).

@@ -1,34 +1,27 @@
 # Contributing — Team Workflow
 
 > Simple workflow for our 4-person team. Read once, follow the loop.
-> **New on the team? Start with [`ONBOARDING.md`](ONBOARDING.md)** (clone, `.env`, first run, your branch).
+> **New on the team? Start with [`ONBOARDING.md`](ONBOARDING.md)** (clone, `.env`, first run, the relay).
 > Before any work: [`CLAUDE.md`](CLAUDE.md) (project guide and rules) → [`PROGRESS.md`](PROGRESS.md) (state + who is working on what) → [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means).
 
 ---
 
-## The model in one picture
+## The model in one picture (since 2026-10-07)
 
 ```
-feature/crypto-pivot  (default branch — only Sarmad merges into it, at milestones)
-   ▲            ▲
-   │            └── feature/frontend-v2   Mahnoor + Maham   (same branch, different pages)
-   └─────────────── feature/backend-v2    Fizza ⇄ Sarmad    (relay: one at a time)
+feature/crypto-pivot   ← THE branch. Everyone works here — backend AND frontend — ONE person at a time (a relay)
+theme/liquid-glass     ← Mahnoor + Maham's redesign (glass look + copilot drawer), kept as a theme, not the product
+feature/backend-v2, feature/frontend-v2   ← retired 2026-10-07 (history only, don't work on them)
 ```
 
-- **Two working branches**, both already on GitHub. Clone straight onto yours (exact commands in [`ONBOARDING.md`](ONBOARDING.md)).
-- **Pull before you start, push when you stop.**
-- **Backend relay:** Fizza and Sarmad never work at the same time. Whoever takes over pulls, reads the newest **handoff note** in `PROGRESS.md`, continues, then pushes everything and writes a new note.
-- **Frontend:** Mahnoor and Maham each own a set of pages (table in `PROGRESS.md`). Shared frontend files: pull right before editing, push right after, tell the other.
-- **Milestones:** Sarmad merges `feature/backend-v2` / `feature/frontend-v2` into `feature/crypto-pivot`; everyone then runs `git merge origin/feature/crypto-pivot` to get the other team's work (e.g. new API endpoints for the frontend).
+- **One branch, one person at a time.** Sarmad decides who has the relay. Nobody works in parallel, so there are no merges and no conflicts.
+- **Taking the relay:** message the group ("taking it") → `git pull` → read the newest **handoff note** in `PROGRESS.md` → continue from its "next step".
+- **Handing it on:** tests + type-check pass → commit → `git push` → CI ✅ on GitHub → add a handoff note (done, half-done with file + function, exact next step) → push → message the group ("free, pushed").
+- **Finish small pieces and push them.** Never leave work only on your laptop: the next person starts from what is on GitHub.
+- The product is built in phases (ROADMAP *Full product*): all algorithms → research and prediction tools → bots and agents (proven on testnet) → real money. Backend and the pages that use it are built together.
 - The repo is **private**; collaborators sign in with their own GitHub account. `main` keeps the June POC until `feature/crypto-pivot` is merged into it later.
 
-| People | Branch | Scope | Spec |
-|---|---|---|---|
-| Fizza ⇄ Sarmad | `feature/backend-v2` | LLM copilot API → multiprocessing risk + RAFT → arbitrage detector → CI + doc rewrite | ROADMAP §5b, §6, §5c, §7 |
-| Mahnoor | `feature/frontend-v2` | How It Works, Dashboard (+ TWAP widget), Market Data, Login; later the copilot chat panel | ROADMAP §5b UI, §7 |
-| Maham | `feature/frontend-v2` | Wallet, Algo Orders, Venue Connectivity, Risk Manager, Kill Switch, Audit Log; responsive fixes | ROADMAP §7 |
-
-**Files that cause merge conflicts** — keep edits small and additive (append, don't reorder): frontend `services/api.ts`, `stores/dataStore.ts`, `App.tsx`, `components/AppShell.tsx`, `components/shared.tsx`, `theme.ts`, `format.ts`; backend `gateway/dependencies.py`, `gateway/main.py`; and `PROGRESS.md`. In `DEVELOPMENT_JOURNAL.md` everyone **appends** at the end; on a conflict keep both entries.
+In `DEVELOPMENT_JOURNAL.md` everyone **appends** at the end.
 
 ---
 
@@ -37,10 +30,8 @@ feature/crypto-pivot  (default branch — only Sarmad merges into it, at milesto
 Full step-by-step version with checks and troubleshooting: [`ONBOARDING.md`](ONBOARDING.md).
 
 ```powershell
-# frontend (Mahnoor, Maham):
-git clone -b feature/frontend-v2 https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
-# backend (Fizza):
-git clone -b feature/backend-v2 https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
+git clone -b feature/crypto-pivot https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange.git apnasor
+# already have a clone?  git fetch origin; git checkout feature/crypto-pivot; git pull
 
 cd apnasor
 python -m venv .venv
@@ -76,10 +67,9 @@ Your local audit database (`data/apnasor-testnet.db`) is created automatically a
 ## Daily loop
 
 ```powershell
-git pull                                    # what your teammate pushed to your branch
-git fetch origin
-git merge origin/feature/crypto-pivot       # what Sarmad merged at the last milestone
-# ...work...
+git checkout feature/crypto-pivot
+git pull                                    # what the last person pushed
+# read the newest handoff note in PROGRESS.md, then work
 python -m unittest discover -s backend/tests -t .
 npx --prefix frontend tsc --noEmit -p frontend
 python -m ruff check backend scripts start_all.py   # backend only (pip install -r backend/requirements-dev.txt)
@@ -88,11 +78,9 @@ git commit -m "feat(copilot): parse notional orders"
 git push
 ```
 
-**Before you push:** tests pass, type-check passes, your `PROGRESS.md` row updated (backend: handoff note added), journal entry appended for anything non-trivial.
+**Before you push:** tests pass, type-check passes, a handoff note at the top of the relay table in `PROGRESS.md`, a journal entry for anything non-trivial.
 
-**After you push — CI:** GitHub re-runs the checks on a clean machine for every push and pull request on the three team branches ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, about 2 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ on your branch is yours to fix before anything is merged. A newer push cancels the run for the older one.
-
-**Milestone done?** Tell Sarmad; he merges your branch into `feature/crypto-pivot`.
+**After you push — CI:** GitHub re-runs the checks on a clean machine for every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, about 2 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ is yours to fix before you hand the relay on. A newer push cancels the run for the older one.
 
 ---
 
@@ -104,17 +92,11 @@ git push
 
 ---
 
-## For Sarmad (reviewing and merging)
+## Taking over from someone
 
-**Taking over the backend relay from Fizza:** `git checkout feature/backend-v2`, `git pull`, read her handoff note in `PROGRESS.md`, review her commits (`git log -p origin/feature/backend-v2`), run the tests, then continue.
+`git checkout feature/crypto-pivot`, `git pull`, read their handoff note in `PROGRESS.md`, look at what they did (`git log -p -5`), run the tests, then continue from their "next step". If CI is ❌ on their last commit, fixing it comes first.
 
-**Milestone merge** (backend or frontend chunk done):
-1. Open a PR: base `feature/crypto-pivot` ← `feature/backend-v2` (or `feature/frontend-v2`) → **Files changed** → scan the diff.
-2. Check: any `.env`, keys, `data/`, logs or build output committed? Frontend touching `backend/` (or the reverse) without agreement? CI ✅ on the PR (tests, lint, type-check)?
-3. Merge with **"Create a merge commit"** — **not** squash, and **don't delete the branch**. These are long-lived shared branches: a squash merge makes the next merge from the same branch replay old work and conflict.
-4. Tell the team to run `git fetch origin` + `git merge origin/feature/crypto-pivot`.
-
-Branch protection for `main` and `feature/crypto-pivot` (optional, set once): Settings → Branches → require a pull request before merging; approvals not required (single reviewer).
+**Themes:** `theme/liquid-glass` holds Mahnoor and Maham's redesign (2026-10-07). It is kept as a visual theme to borrow from, not merged as the product. Don't delete it.
 
 ---
 
@@ -133,8 +115,7 @@ test(raft): leader re-election after the leader process dies
 ```powershell
 git status                    # what's changed
 git log --oneline -5          # last 5 commits
-git pull                      # latest of your branch
-git merge origin/feature/crypto-pivot   # bring in what's been merged
+git pull                      # latest of feature/crypto-pivot
 git stash / git stash pop     # shelve changes temporarily
 ```
 
