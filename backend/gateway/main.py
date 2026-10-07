@@ -115,8 +115,8 @@ async def lifespan(app: FastAPI):
     await restore_state(svc)
     svc.audit_recorder.start()
     svc.pnl_service.start()
-    await svc.twap_engine.load()  # after the recorder: interrupted TWAPs are paused, and that is audited
-    svc.twap_engine.start()
+    await svc.algo_engine.load()  # after the recorder: interrupted algos are paused, and that is audited
+    svc.algo_engine.start()
 
     # Fan every internal event out to WebSocket subscribers of that channel.
     for channel in WS_CHANNELS:
@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
     logger.info("shutting_down")
     # Algos first: running TWAPs are paused and an in-flight slice finishes
     # while the exchanges and the router are still up.
-    await svc.twap_engine.stop()
+    await svc.algo_engine.stop()
     await record_audit("gateway_stopped", "Gateway stopped", actor="system")
     for service in reversed(background):
         await service.stop()

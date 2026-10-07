@@ -40,7 +40,7 @@ interface DataState {
 
   fetchAlgos: () => Promise<void>
   // Resolve to [the algo, null] or [null, error message].
-  startTwap: (p: TwapParams) => Promise<[TwapState | null, string | null]>
+  startTwap: (p: TwapParams) => Promise<[TwapState | null, string | null]>  // any algo kind (p.kind)
   controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') => Promise<string | null>
 
   // Arbitrage is fetched by its page only (not in fetchAll): /status is
@@ -102,7 +102,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   startTwap: async (p) => {
     try {
-      const algo = await api.startTwap(p)
+      const algo = await api.startAlgo(p)
       await get().fetchAlgos()
       return [algo, null]
     } catch (e) {

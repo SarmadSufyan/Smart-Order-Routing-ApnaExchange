@@ -235,17 +235,54 @@ export interface AuditEventList {
   store: string
 }
 
-// ── Algo (parent) orders — TWAP ──────────────────────────────────────
+// ── Algo (parent) orders — TWAP, VWAP, IS, POV, ICEBERG ─────────────
 export type AlgoStatus = 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED'
+export type AlgoKind = 'TWAP' | 'VWAP' | 'IS' | 'POV' | 'ICEBERG'
+export type Urgency = 'LOW' | 'MEDIUM' | 'HIGH'
+
+/** Every execution algorithm (backend: shared/models/strategy.py, services/algos/). */
+export const ALGO_KINDS: { id: AlgoKind; label: string; hint: string }[] = [
+  { id: 'TWAP', label: 'TWAP', hint: 'Equal slices, evenly spaced over the window.' },
+  { id: 'VWAP', label: 'VWAP', hint: "Slices follow the market's real volume over the same time on past days; judged against the market's VWAP." },
+  { id: 'IS', label: 'Implementation shortfall', hint: 'Almgren–Chriss: front-loaded by urgency to cut exposure to price moves; shows expected cost and risk.' },
+  { id: 'POV', label: 'POV (% of volume)', hint: 'Trades a fixed share of the real market volume as it happens — the smallest footprint, no fixed end.' },
+  { id: 'ICEBERG', label: 'Iceberg', hint: 'Never shows more than a display size; takes liquidity only at or better than your limit, piece by piece.' },
+]
+
+export function algoKindLabel(kind?: string | null): string {
+  return ALGO_KINDS.find((k) => k.id === kind)?.label ?? (kind || 'TWAP')
+}
 
 export interface TwapParams {
+  kind?: AlgoKind
   symbol: string
   side: string
   quantity: number
   duration_s: number
-  slices: number
+  slices?: number | null
   limit_price?: number | null
   jitter_pct?: number
+  routing?: RoutingStrategyName
+  volume_days?: number          // VWAP
+  urgency?: Urgency             // IS
+  participation_pct?: number | null  // POV
+  check_interval_s?: number     // POV
+  display_qty?: number | null   // ICEBERG
+  refresh_s?: number            // ICEBERG
+  size_variance_pct?: number    // ICEBERG
+}
+export type AlgoParams = TwapParams
+
+export interface AlgoRecommendation {
+  choice: string                // 'SINGLE' | AlgoKind | 'NONE'
+  params: AlgoParams | null
+  reasons: string[]
+  warnings: string[]
+  alternatives: string[]
+  metrics: {
+    mid?: number; spread_bps?: number; impact_now_bps?: number | null; volume_per_min?: number | null
+    volume_venues?: string[]; min_tradable?: number; quantity?: number; notional_usdt?: number
+  }
 }
 
 export interface TwapSlice {
@@ -285,8 +322,16 @@ export interface TwapState {
   arrival_slippage_bps: number | null
   interval_twap: number | null
   vs_interval_twap_bps: number | null
+  market_vwap?: number | null              // the real market's VWAP over the run
+  vs_market_vwap_bps?: number | null
+  market_volume?: number | null            // POV: real-market volume since the start
+  participation_actual_pct?: number | null // POV
+  waiting_reason?: string | null           // POV / ICEBERG: why nothing was sent at the last check
+  deadline_at?: string | null              // POV / ICEBERG
+  plan?: Record<string, unknown>           // kind-specific numbers (IS cost/risk, VWAP profile, ...)
   notes: string[]
 }
+export type AlgoState = TwapState
 
 export interface VenueQuote {
   venue_id: string
@@ -774,6 +819,13 @@ export const api = {
 
   startTwap: (p: TwapParams) =>
     request<TwapState>('/api/algos/twap', { method: 'POST', body: JSON.stringify(p) }),
+
+  startAlgo: (p: AlgoParams) =>
+    request<AlgoState>('/api/algos/', { method: 'POST', body: JSON.stringify(p) }),
+
+  recommendAlgo: (req: { symbol: string; side: string; quantity: number; urgency: Urgency;
+                         max_duration_s: number; routing?: RoutingStrategyName }) =>
+    request<AlgoRecommendation>('/api/algos/recommend', { method: 'POST', body: JSON.stringify(req) }),
 
   controlAlgo: (id: string, action: 'pause' | 'resume' | 'cancel') =>
     request<TwapState>(`/api/algos/${id}/${action}`, { method: 'POST' }),

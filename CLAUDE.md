@@ -21,7 +21,7 @@ Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070
 
 ## What it is (one paragraph)
 
-A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then walks the **consolidated order book** to split the order across venues at the best prices and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book, and a **TWAP bot** slices large orders over time through the same order path. An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades).
+A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then splits it across venues with a **routing strategy** (best price including fees, liquidity sweep, or smart) and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Large orders can be worked over time by an **execution algorithm** — TWAP, VWAP, implementation shortfall, POV or iceberg — or **Auto** picks one and explains why. Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book; every execution algorithm's children go through the same order path. An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades).
 
 > **History:** until June 2026 this was a simulated 5-venue *stock* system. The FYP panel rejected simulated data, so the team pivoted to real crypto exchanges (July 2026). The simulators live on the `archive/venue-simulators` branch. **Several docs in `project-info/` still describe the old design — see "Docs you can trust" below.**
 
@@ -35,7 +35,8 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
  Gateway (FastAPI, async) ── routers: orders · algos · copilot · venues · market-data · wallet · risk · audit · routing · arbitrage · auth
    │
    ├─ OrderEntry.submit()  ← the ONE way an order enters (REST endpoint, TWAP bot, LLM copilot)
-   │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → best-price depth walk
+   │     └─ RoutingEngine: symbol → lot size → pre-trade risk → funding gate → the order's routing strategy
+   │                        (best price incl. fees · liquidity sweep under one price cap · smart = + fill reliability)
    │                        → IOC LIMIT children (price-protected) sent concurrently → fills applied
    │                        → a venue's REFUSED quantity re-routed without it (≤ 2 rounds); a venue that
    │                          refuses our key's right to trade is paused for TRADING_BLOCK_COOLDOWN_S
@@ -48,7 +49,10 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    ├─ RiskMonitor (every 2 s): trading-loss limit → auto kill switch; concentration alerts
    ├─ MarketDataCollector + Aggregator (NBBO) · VenueHealthMonitor · CoherenceMonitor
    ├─ WalletService (real balances) · PnLService (opening balances + fills → P&L, reconciliation)
-   ├─ TwapEngine (algo orders) · AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
+   ├─ AlgoEngine: TWAP · VWAP · IS (Almgren–Chriss) · POV · ICEBERG + Auto recommendation — every child through OrderEntry
+   │     └─ MarketHistory: real-market 1-min candles (public data, all exchanges summed) for VWAP profiles, POV volume,
+   │        the market-VWAP benchmark                                    (project-info/ALGORITHMS_GUIDE.md)
+   ├─ AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
    ├─ ArbitrageDetector (4 scans/s): every venue pair, both directions, gross vs after taker fees → windows +
    │     statistics (saved), profitable windows audited. Detection only: read-only lookups, cannot trade
    ├─ Copilot: sentence → LLM (Gemini free tier) fills a strict form → code validates → proposal
@@ -98,11 +102,12 @@ backend/
                         process pool), preflight.py (basket API), volatility.py (live realized vol),
                         controls.py (RiskControls: local or through RAFT), kill_switch.py, position_tracker.py,
                         risk_monitor.py
-    market_data/        collector.py, aggregator.py
+    market_data/        collector.py, aggregator.py, history.py (real-market 1-min candles, merged across exchanges)
     venue_monitor/      health_checker.py, coherence.py
     wallet/             portfolio.py (balances), ledger.py (pure P&L math), pnl.py (P&L + reconciliation)
     audit/              recorder.py (event bus → audit log)
-    algos/              twap.py (TWAP engine; pure schedule math at the top)
+    algos/              engine.py (AlgoEngine: every kind + auto), schedules.py (pure maths: VWAP profile, Almgren–
+                        Chriss, POV, iceberg, auto choice, min-slice merge), twap.py (old import path)
     arbitrage/          detector.py (5c: pure edge math + WindowTracker at the top, ArbitrageDetector service)
     agents/             copilot.py (propose / confirm / cancel), llm.py (one LLM interface; GeminiClient)
     consensus/          RAFT: core.py (the algorithm — no I/O, no clock, tick/step), storage.py (SQLite),
@@ -144,7 +149,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (347 as of 2026-10-07)
+python -m unittest discover -s backend/tests -t .   # all backend tests (388 as of 2026-10-07)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -221,6 +226,6 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

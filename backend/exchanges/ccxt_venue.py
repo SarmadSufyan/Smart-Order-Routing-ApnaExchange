@@ -33,6 +33,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from backend.exchanges.base import (
     AssetBalance,
     BalanceSnapshot,
+    Candle,
     ExchangeAdapter,
     ExecutionResult,
     FeedStatus,
@@ -126,6 +127,9 @@ class CcxtVenueAdapter(ExchangeAdapter):
         # Set when the venue rejects our API key; the venue stops being
         # tradable until an authenticated call succeeds again.
         self._auth_error: str | None = None
+        # The public data client loads its markets on first use (Gate's list takes
+        # ~15 s): shared and shielded, so a caller's timeout never restarts it.
+        self._history_markets: asyncio.Task | None = None
 
     # ── credentials health ──────────────────────────────────────────
     # Keys that are present but WRONG (bad secret, wrong environment) must
@@ -564,6 +568,21 @@ class CcxtVenueAdapter(ExchangeAdapter):
         return BalanceSnapshot(assets=tracked, other_nonzero_assets=others)
 
     # ── execution-book probe (for the coherence monitor) ────────────
+    async def fetch_candles(
+        self, symbol: str, timeframe: str = "1m", since_ms: int | None = None, limit: int = 1000,
+    ) -> list[Candle]:
+        """Public OHLCV candles from the market-data client (the real market when MARKET_DATA_MODE=mainnet)."""
+        client = self._data_client
+        if client is None or symbol not in self._requested_symbols:
+            return []
+        if not client.markets:
+            if self._history_markets is None or (self._history_markets.done() and self._history_markets.exception()):
+                self._history_markets = asyncio.create_task(client.load_markets(), name=f"{self.venue_id}-history-markets")
+            await asyncio.shield(self._history_markets)
+        rows = await client.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=limit)
+        return [Candle(ts_ms=int(r[0]), open=float(r[1]), high=float(r[2]), low=float(r[3]), close=float(r[4]),
+                       volume=float(r[5] or 0.0)) for r in rows if r and r[4] is not None]
+
     async def execution_tops(self, symbols: list[str]) -> dict[str, tuple[float | None, float | None]]:
         """Best bid/ask on the EXECUTION venue (testnet/demo) per symbol."""
         wanted = [s for s in symbols if s in self._rules]

@@ -91,6 +91,17 @@ class FeedStatus(BaseModel):
     reconnects: int = 0
 
 
+class Candle(BaseModel):
+    """One OHLCV candle of a venue's REAL market (public data, never a testnet book)."""
+
+    ts_ms: int  # candle start
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float  # base asset
+
+
 class ExchangeAdapter(ABC):
     """Base class for all venue adapters."""
 
@@ -167,6 +178,12 @@ class ExchangeAdapter(ABC):
     @abstractmethod
     async def cancel_all_open_orders(self) -> int:
         """Cancel every open order on the venue (kill-switch sweep)."""
+
+    async def fetch_candles(
+        self, symbol: str, timeframe: str = "1m", since_ms: int | None = None, limit: int = 1000,
+    ) -> list[Candle]:
+        """Historical candles of the venue's real market (public data). Empty where unsupported."""
+        return []
 
     async def execution_tops(self, symbols: list[str]) -> dict[str, tuple[float | None, float | None]]:
         """Best bid/ask on the EXECUTION venue per symbol (for coherence checks).

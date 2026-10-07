@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
@@ -47,3 +48,15 @@ def split_symbol(symbol: str) -> tuple[str, str]:
     """``"BTC/USDT" -> ("BTC", "USDT")``."""
     base, _, quote = symbol.partition("/")
     return base, quote
+
+
+MINUTE_MS = 60_000
+
+
+@dataclass(frozen=True)
+class MinuteBar:
+    """One minute of the real market, summed across the exchanges we watch."""
+
+    ts_ms: int  # minute start
+    volume: float  # base asset traded
+    pv: float  # sum of typical price x volume (for VWAP)

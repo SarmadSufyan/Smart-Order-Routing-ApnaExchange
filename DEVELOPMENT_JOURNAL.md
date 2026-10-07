@@ -1474,3 +1474,41 @@ Design choice: the three strategies share one implementation (`BestPriceStrategy
 ### Files
 
 New: `strategies/sweep.py`, `strategies/smart.py`, `tests/test_routing/test_strategies.py`, `tests/test_routing/test_engine_strategies.py`. Changed: `strategies/best_price.py` (fees, hooks), `strategies/base.py`, `strategies/__init__.py` (`build_strategies`), `routing_engine/engine.py` (strategy per order, fees, fill window, `limit_final`), `shared/models/order.py`, `shared/models/routing.py`, `gateway/config.py` (`SWEEP_BAND_BPS`), `gateway/dependencies.py`, `gateway/routers/routing.py`, `.env.example`; frontend `services/api.ts`, `stores/dataStore.ts`, `components/NewOrderModal.tsx`, `components/RoutingProof.tsx`; ROADMAP *Full product*, PROGRESS.md, CLAUDE.md, CONTRIBUTING.md, ONBOARDING.md.
+
+---
+
+## 2026-10-07 (evening) — Every execution algorithm real: VWAP, implementation shortfall, POV, iceberg, auto
+
+*By Sarmad (relay holder, `feature/crypto-pivot`).*
+
+Phase A's second half. Until today there was one execution algorithm (TWAP). Now one engine runs five, plus a recommender, and every one ran live on testnet. The ideas and maths are written up for the team and the panel in [`project-info/ALGORITHMS_GUIDE.md`](project-info/ALGORITHMS_GUIDE.md); this entry is the *why* and what we found.
+
+### Design
+
+- **One engine, not five bots.** `TwapEngine` became `AlgoEngine` (`algos/engine.py`). TWAP, VWAP and implementation shortfall are the same thing with a different plan — evenly spaced slices with cumulative targets — so they share TWAP's proven loop (catch-up ≤ 2×, pause/cancel between slices, kill switch, restart = paused, 3 rejections = pause). POV and iceberg are event-driven (volume / price), so they get their own loops but the same `_send` (one child through `OrderEntry.submit`) and the same safety. Old names stay importable (`TwapEngine`, `TwapCreate`, `TwapState`, `algos/twap.py`), old stored TWAPs load unchanged (`kind` defaults to TWAP), and `POST /api/algos/twap` still works for the copilot.
+- **All maths pure** (`algos/schedules.py`), tested directly: volume buckets from 1-minute bars (a minute spread over its 60 s; the minute in progress counts what has traded so far), the per-day-normalised VWAP profile, Almgren–Chriss holdings and cost/risk, impact coefficients from a book, POV and iceberg sizing, the auto choice, and merging slices that are too small.
+- **Real-market volume** comes from a new `MarketHistory` (`market_data/history.py`): the exchanges' public 1-minute candles (the ccxt client with no keys — the real market while orders go to testnet), fetched concurrently, summed per minute, each exchange with its own time limit; past windows cached. Gate's market list takes ~15 s to load the first time, so that load is shared and shielded — a caller's timeout never restarts it.
+- **Benchmarks:** every algo now reports its cost vs the arrival mid **and vs the real market's VWAP** over the same minutes — the standard way to judge an execution, measured from the exchanges' own data.
+- **Iceberg without resting orders.** A classic iceberg rests a small visible order; our rule is IOC only, so ours shows nothing — it waits for an exchange we can trade on to reach the limit, then takes one piece of about the display size. (A data-only exchange at the limit doesn't trigger it.)
+- **Auto** recommends one order now when the books absorb it for ≤ 2 bps beyond the spread; otherwise urgency sets a participation rate (5 / 10 / 20 % of recent market volume per minute) and the algorithm (POV / VWAP / IS), within the longest time the trader allows. It sends nothing.
+
+### Found live and fixed
+
+- **The smallest-order check counted an exchange that couldn't pay.** The first IS run planned slices of ~$3: it took Gate's minimum (~$3), but Gate had no USDT, and Binance/Bybit need $5. The last 0.00004 BTC could not be sent anywhere and the IS expired short. Now the minimum comes only from exchanges that can fund the order (`_min_tradable` with balances), and `enforce_min_slice` merges any slice below it into a neighbour (a front-loaded IS's tiny tail joins the last slice that trades). Re-run: completed in 2 orders. The planner can no longer produce a slice no exchange accepts.
+- Wording found on the page: with the exchanges' books overlapping (common — the arbitrage detector sees it most of the time) the consolidated spread is negative, and "half the spread is −0.4 bps" read as nonsense; a VWAP window shorter than a minute per slice can't show a volume shape (1-minute candles) and now says so; tiny POV participations print with enough digits; an exchange without balance is named as such, not as "below its minimum".
+
+### Verified live (testnet, 2026-10-07)
+
+| Algo | Run | Result |
+|---|---|---|
+| VWAP | 0.0003 BTC, 3 slices over 6 min | profile from the last 5 days 38.7 / 30.4 / 31.0 % → slices 0.00011 / 0.00009 / 0.0001; +1.66 bps vs market VWAP |
+| IS | 0.0004 BTC, 4 slices, high urgency, smart routing | 71 % planned in the first fifth; risk ±$0.0022 vs ±$0.0070 for TWAP at the same expected cost; completed in 2 orders after the fix |
+| POV | 0.0003 BTC at 0.01 % of volume | waited while too little had traded; then one order; 8.3 BTC of market volume measured over the run |
+| Iceberg | 0.0003 BTC, display 0.0001, limit just above the ask, sweep routing | three pieces of 0.0001; −0.27 bps vs market VWAP |
+| Auto | 0.0002 BTC / 2 BTC × three urgencies | one order now / IS, VWAP, POV with reasons and the algo-limit warning |
+
+On the page: the five algorithms and their fields, Auto's card and **Use this** (filled the form with VWAP, 5 slices, 1 min), and the detail of each run (IS expected cost ± risk vs TWAP, POV participation, VWAP profile bars, market-VWAP tile). 388 backend tests (41 new), ruff and the type-check pass.
+
+### Files
+
+New: `services/algos/engine.py`, `services/algos/schedules.py`, `services/market_data/history.py`, `tests/test_algos/test_schedules.py`, `tests/test_algos/test_algo_kinds.py`, `project-info/ALGORITHMS_GUIDE.md`. Changed: `services/algos/twap.py` (re-exports), `services/algos/__init__.py`, `shared/models/strategy.py` (`AlgoKind`, `AlgoCreate`, `AlgoState`, recommendation models), `shared/models/market_data.py` (`MinuteBar`), `exchanges/base.py` (`Candle`, `fetch_candles`), `exchanges/ccxt_venue.py`, `gateway/routers/algos.py`, `gateway/dependencies.py` (`algo_engine`, `market_history`), `gateway/main.py`; frontend `services/api.ts`, `stores/dataStore.ts`, `pages/AlgoOrders.tsx`; ROADMAP, PROGRESS, CLAUDE.md.

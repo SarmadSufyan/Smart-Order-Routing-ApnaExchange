@@ -6,8 +6,8 @@ import { OrderProofModal } from '../components/OrderProofModal'
 import { useDataStore } from '../stores/dataStore'
 import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
-import { api, PREFLIGHT_MAX_ORDERS } from '../services/api'
-import type { AlgoStatus, PreflightResponse, TwapState } from '../services/api'
+import { ALGO_KINDS, ROUTING_STRATEGIES, algoKindLabel, api, routingStrategyLabel, PREFLIGHT_MAX_ORDERS } from '../services/api'
+import type { AlgoKind, AlgoParams, AlgoRecommendation, AlgoStatus, PreflightResponse, RoutingStrategyName, TwapState, Urgency } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 
 const MIN_INTERVAL_S = 3        // mirrors the backend (a slice + balance refresh take ~1-2 s)
@@ -171,15 +171,31 @@ function PreflightResult({ result, error, base, side, onClose }: {
   )
 }
 
+// IS urgency -> how front-loaded (kappa*T), mirrors backend URGENCY_KAPPA_T.
+const URGENCY_KAPPA_T: Record<Urgency, number> = { LOW: 0.5, MEDIUM: 2, HIGH: 5 }
+const SCHEDULED: AlgoKind[] = ['TWAP', 'VWAP', 'IS']
+
+/** Almgren–Chriss slice sizes (the same curve the backend plans). */
+function isSliceSizes(q: number, n: number, k: number): number[] {
+  const x = Array.from({ length: n + 1 }, (_, i) => q * Math.sinh(k * (1 - i / n)) / Math.sinh(k))
+  return x.slice(1).map((v, i) => x[i] - v)
+}
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
 export function AlgoOrders() {
   const algos      = useDataStore((s) => s.algos)
   const nbbos      = useDataStore((s) => s.nbbos)
   const orders     = useDataStore((s) => s.orders)
   const riskStatus = useDataStore((s) => s.riskStatus)
-  const startTwap  = useDataStore((s) => s.startTwap)
+  const startAlgo  = useDataStore((s) => s.startTwap)
+  const submitOrder = useDataStore((s) => s.submitOrder)
   const controlAlgo = useDataStore((s) => s.controlAlgo)
   const fetchAlgos = useDataStore((s) => s.fetchAlgos)
 
+  const [kind, setKind]       = useState<AlgoKind>('TWAP')
   const [symbol, setSymbol]   = useState<string>(SYMBOLS[0])
   const [side, setSide]       = useState<'BUY' | 'SELL'>('BUY')
   const [qty, setQty]         = useState('')
@@ -188,6 +204,14 @@ export function AlgoOrders() {
   const [slices, setSlices]   = useState('10')
   const [limit, setLimit]     = useState('')
   const [randomize, setRandomize] = useState(false)
+  const [routing, setRouting] = useState<RoutingStrategyName>('best_price')
+  const [volumeDays, setVolumeDays] = useState('5')
+  const [urgency, setUrgency] = useState<Urgency>('MEDIUM')
+  const [participation, setParticipation] = useState('10')
+  const [checkEvery, setCheckEvery] = useState('10')
+  const [display, setDisplay] = useState('')
+  const [refresh, setRefresh] = useState('5')
+  const [variance, setVariance] = useState('20')
   const [busy, setBusy]       = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -195,14 +219,20 @@ export function AlgoOrders() {
   const [proofOrderId, setProofOrderId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
   const isNarrow = useMediaQuery(MQ.narrow)  // the form goes above the list
-  // Pre-flight: a dry run of every slice through pre-trade risk (nothing is sent).
+  // Pre-flight: a dry run of the planned children through pre-trade risk (nothing is sent).
   const [withStress, setWithStress] = useState(false)
   const [checking, setChecking]     = useState(false)
   const [preflight, setPreflight]   = useState<PreflightResponse | null>(null)
   const [preflightError, setPreflightError] = useState<string | null>(null)
+  // Auto: the engine's recommendation for this order (nothing is sent).
+  const [rec, setRec] = useState<AlgoRecommendation | null>(null)
+  const [recBusy, setRecBusy] = useState(false)
+  const [recError, setRecError] = useState<string | null>(null)
+  const [singleResult, setSingleResult] = useState<string | null>(null)
 
   // A result only describes the order it was run for.
-  useEffect(() => { setPreflight(null); setPreflightError(null) }, [symbol, side, qty, slices])
+  useEffect(() => { setPreflight(null); setPreflightError(null) }, [kind, symbol, side, qty, slices, urgency, display])
+  useEffect(() => { setRec(null); setRecError(null); setSingleResult(null) }, [symbol, side, qty])
 
   useEffect(() => { fetchAlgos() }, [fetchAlgos])
   useEffect(() => {
@@ -213,43 +243,67 @@ export function AlgoOrders() {
   const selected = algos.find((a) => a.id === selectedId) ?? algos[0] ?? null
   const killActive = riskStatus?.kill_switch_active ?? false
   const base = baseAsset(symbol)
+  const scheduled = SCHEDULED.includes(kind)
 
-  // Live preview of the schedule the backend will build.
+  // Live preview of what the backend will do.
   const preview = useMemo(() => {
     const n = nbbos[symbol]
     const mid = n && n.best_bid && n.best_ask ? (n.best_bid + n.best_ask) / 2 : null
     const q = parseFloat(qty)
     const k = parseInt(slices, 10)
     const secs = parseFloat(duration) * (unit === 'min' ? 60 : 1)
-    if (!(q > 0) || !(k >= 2) || !(secs > 0)) return null
-    const slice = q / k
-    const interval = secs / k
+    if (!(q > 0) || !(secs > 0)) return null
+    if (scheduled && !(k >= 2)) return null
+    if (kind === 'POV' && !(parseFloat(participation) > 0)) return null
+    if (kind === 'ICEBERG' && !(parseFloat(display) > 0 && parseFloat(limit) > 0)) return null
     const warnings: string[] = []
-    if (interval < MIN_INTERVAL_S) warnings.push(`One slice every ${interval.toFixed(1)} s — the minimum is ${MIN_INTERVAL_S} s. Use fewer slices or a longer window.`)
-    if (mid && slice * mid < TYPICAL_MIN_ORDER_USD) warnings.push(`Each slice is only ~${fmtUsd(slice * mid)}; most venues need at least ${fmtUsd(TYPICAL_MIN_ORDER_USD)} per order.`)
+    const slice = scheduled ? q / k : kind === 'ICEBERG' ? parseFloat(display) : null
+    const interval = scheduled ? secs / k : kind === 'POV' ? parseFloat(checkEvery) : parseFloat(refresh)
+    if (interval < MIN_INTERVAL_S) warnings.push(`One step every ${interval.toFixed(1)} s — the minimum is ${MIN_INTERVAL_S} s.`)
+    if (mid && slice !== null && slice * mid < TYPICAL_MIN_ORDER_USD) warnings.push(`Each ${kind === 'ICEBERG' ? 'piece' : 'slice'} is only ~${fmtUsd(slice * mid)}; most venues need at least ${fmtUsd(TYPICAL_MIN_ORDER_USD)} per order.`)
     const algoLimit = riskStatus?.limits?.max_algo_notional_usdt
     if (mid && algoLimit && q * mid > algoLimit) warnings.push(`Total ~${fmtUsd(q * mid)} is above the algo limit ${fmtUsd(algoLimit)}.`)
+    if (kind === 'ICEBERG' && parseFloat(display) > q) warnings.push('The display size is larger than the whole quantity.')
     return { mid, slice, interval, secs, total: mid ? q * mid : null, warnings }
-  }, [nbbos, symbol, qty, slices, duration, unit, riskStatus])
+  }, [nbbos, symbol, qty, slices, duration, unit, riskStatus, kind, scheduled, participation, checkEvery, display, refresh, limit])
+
+  function params(): AlgoParams {
+    const p: AlgoParams = {
+      kind, symbol, side, quantity: parseFloat(qty), duration_s: preview!.secs, routing,
+      limit_price: limit ? parseFloat(limit) : null,
+    }
+    if (scheduled) p.slices = parseInt(slices, 10)
+    if (kind === 'TWAP' || kind === 'VWAP') p.jitter_pct = randomize ? 20 : 0
+    if (kind === 'VWAP') p.volume_days = parseInt(volumeDays, 10) || 5
+    if (kind === 'IS') p.urgency = urgency
+    if (kind === 'POV') { p.participation_pct = parseFloat(participation); p.check_interval_s = parseFloat(checkEvery) }
+    if (kind === 'ICEBERG') {
+      p.display_qty = parseFloat(display); p.refresh_s = parseFloat(refresh); p.size_variance_pct = parseFloat(variance) || 0
+    }
+    return p
+  }
 
   async function submit() {
     if (!preview) return
     setBusy(true)
     setFormError(null)
-    const [algo, err] = await startTwap({
-      symbol, side, quantity: parseFloat(qty), duration_s: preview.secs, slices: parseInt(slices, 10),
-      limit_price: limit ? parseFloat(limit) : null, jitter_pct: randomize ? 20 : 0,
-    })
+    const [algo, err] = await startAlgo(params())
     setBusy(false)
     if (err) setFormError(err)
     if (algo) setSelectedId(algo.id)
   }
 
-  // The same slices the TWAP would send: cumulative targets i/k of the total, the
-  // last one exactly the total (the backend also rounds each to the lot size).
+  // The children the algo plans (approximate for VWAP/POV: the exact plan is checked again at Start).
   function sliceSizes(): number[] {
     const q = parseFloat(qty)
     const k = parseInt(slices, 10)
+    if (kind === 'IS') return isSliceSizes(q, k, URGENCY_KAPPA_T[urgency])
+    if (kind === 'POV') return Array.from({ length: 10 }, () => q / 10)
+    if (kind === 'ICEBERG') {
+      const d = parseFloat(display)
+      const n = Math.max(1, Math.ceil(q / d))
+      return Array.from({ length: n }, (_, i) => (i === n - 1 ? q - d * (n - 1) : d))
+    }
     const targets = Array.from({ length: k }, (_, i) => (i === k - 1 ? q : (q * (i + 1)) / k))
     return targets.map((t, i) => t - (i === 0 ? 0 : targets[i - 1]))
   }
@@ -267,8 +321,45 @@ export function AlgoOrders() {
     setChecking(false)
   }
 
+  async function recommend() {
+    const q = parseFloat(qty)
+    if (!(q > 0)) { setRecError('Enter a quantity first'); return }
+    setRecBusy(true)
+    setRecError(null)
+    setSingleResult(null)
+    try {
+      const secs = parseFloat(duration) * (unit === 'min' ? 60 : 1)
+      setRec(await api.recommendAlgo({ symbol, side, quantity: q, urgency, routing,
+                                        max_duration_s: Math.min(86_400, Math.max(60, secs || 3600)) }))
+    } catch (e) {
+      setRec(null)
+      setRecError((e as Error).message)
+    }
+    setRecBusy(false)
+  }
+
+  function applyRecommendation(r: AlgoRecommendation) {
+    const p = r.params
+    if (!p || !p.kind) return
+    setKind(p.kind)
+    const secs = p.duration_s
+    if (secs >= 120 && secs % 60 === 0) { setDuration(String(secs / 60)); setUnit('min') }
+    else { setDuration(String(Math.round(secs))); setUnit('sec') }
+    if (p.slices) setSlices(String(p.slices))
+    if (p.participation_pct) setParticipation(String(p.participation_pct))
+    if (p.urgency) setUrgency(p.urgency)
+    setRec(null)
+  }
+
+  async function placeSingle() {
+    const order = await submitOrder(symbol, side, parseFloat(qty), limit ? 'LIMIT' : 'MARKET',
+                                    limit ? parseFloat(limit) : undefined, routing)
+    setSingleResult(order ? `Order ${order.status}: ${fmtQty(order.filled_quantity)} ${base} filled` +
+                            (order.avg_fill_price ? ` @ ${fmtPrice(order.avg_fill_price)}` : '') : 'Order failed — see the order list')
+  }
+
   async function control(id: string, action: 'pause' | 'resume' | 'cancel') {
-    if (action === 'cancel' && !window.confirm(`Cancel ${id}? Slices already filled stay filled; the rest are not sent.`)) return
+    if (action === 'cancel' && !window.confirm(`Cancel ${id}? Orders already filled stay filled; the rest are not sent.`)) return
     setActionError(await controlAlgo(id, action))
   }
 
@@ -284,23 +375,34 @@ export function AlgoOrders() {
   const td: React.CSSProperties = { padding: '6px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border}40`, whiteSpace: 'nowrap' }
   const right: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const tile: React.CSSProperties = { padding: '10px 12px', borderRadius: 4, background: C.surface, minWidth: 0 }
+  const two: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Algo Orders — TWAP</div>
+      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Algo Orders — execution algorithms</div>
       <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16, maxWidth: 980 }}>
-        A TWAP spreads a large order evenly over time to reduce market impact. Every slice is an ordinary order
-        through the same pre-trade risk checks, balance check and smart router as the order button — the bot has
-        no other way to trade. A slice that fills short rolls into the next one (at most 2× a normal slice); the kill
-        switch pauses every running TWAP, and a restart never resumes one on its own.
+        An execution algorithm works a large order over time to reduce its market impact: TWAP (even slices), VWAP
+        (the market's usual volume), implementation shortfall (front-loaded), POV (a share of live volume) or iceberg
+        (small pieces at a limit) — or let <b>Auto</b> pick one and explain why. Every child is an ordinary order through
+        the same pre-trade risk checks, balance check and smart router as the order button; the algo has no other way
+        to trade. The kill switch pauses every running algo, and a restart never resumes one on its own.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 340px) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
-        {/* New TWAP */}
+      <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 360px) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
+        {/* New algo */}
         <Card>
-          <CardTitle>NEW TWAP</CardTitle>
+          <CardTitle>NEW ALGO ORDER</CardTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <div style={label}>ALGORITHM</div>
+              <select value={kind} onChange={(e) => setKind(e.target.value as AlgoKind)} style={input}>
+                {ALGO_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+              <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4, lineHeight: 1.5 }}>
+                {ALGO_KINDS.find((k) => k.id === kind)?.hint}
+              </div>
+            </div>
+            <div style={two}>
               <div>
                 <div style={label}>SYMBOL</div>
                 <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={input}>
@@ -326,9 +428,9 @@ export function AlgoOrders() {
               <div style={label}>TOTAL QUANTITY ({base})</div>
               <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 0.002" style={input} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={two}>
               <div>
-                <div style={label}>OVER</div>
+                <div style={label}>{scheduled ? 'OVER' : 'AT MOST FOR'}</div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <input value={duration} onChange={(e) => setDuration(e.target.value)} style={{ ...input, width: '55%' }} />
                   <select value={unit} onChange={(e) => setUnit(e.target.value as 'min' | 'sec')} style={{ ...input, width: '45%' }}>
@@ -337,57 +439,166 @@ export function AlgoOrders() {
                   </select>
                 </div>
               </div>
+              {scheduled && (
+                <div>
+                  <div style={label}>SLICES</div>
+                  <input value={slices} onChange={(e) => setSlices(e.target.value)} style={input} />
+                </div>
+              )}
+              {kind === 'POV' && (
+                <div>
+                  <div style={label}>% OF MARKET VOLUME</div>
+                  <input value={participation} onChange={(e) => setParticipation(e.target.value)} style={input} />
+                </div>
+              )}
+              {kind === 'ICEBERG' && (
+                <div>
+                  <div style={label}>SHOW AT MOST ({base})</div>
+                  <input value={display} onChange={(e) => setDisplay(e.target.value)} placeholder="display size" style={input} />
+                </div>
+              )}
+            </div>
+            {kind === 'VWAP' && (
               <div>
-                <div style={label}>SLICES</div>
-                <input value={slices} onChange={(e) => setSlices(e.target.value)} style={input} />
+                <div style={label}>VOLUME HISTORY (DAYS OF THE SAME WINDOW)</div>
+                <input value={volumeDays} onChange={(e) => setVolumeDays(e.target.value)} style={input} />
               </div>
+            )}
+            {(kind === 'IS') && (
+              <div>
+                <div style={label}>URGENCY</div>
+                <select value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={input}>
+                  <option value="LOW">Low — close to even, more price risk</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High — front-loaded, more impact</option>
+                </select>
+              </div>
+            )}
+            {kind === 'POV' && (
+              <div>
+                <div style={label}>CHECK THE VOLUME EVERY (S)</div>
+                <input value={checkEvery} onChange={(e) => setCheckEvery(e.target.value)} style={input} />
+              </div>
+            )}
+            {kind === 'ICEBERG' && (
+              <div style={two}>
+                <div>
+                  <div style={label}>LOOK EVERY (S)</div>
+                  <input value={refresh} onChange={(e) => setRefresh(e.target.value)} style={input} />
+                </div>
+                <div>
+                  <div style={label}>SIZE VARIES ± %</div>
+                  <input value={variance} onChange={(e) => setVariance(e.target.value)} style={input} />
+                </div>
+              </div>
+            )}
+            <div>
+              <div style={label}>{kind === 'ICEBERG' ? 'LIMIT PRICE (REQUIRED — ONLY AT THIS PRICE OR BETTER)' : 'LIMIT PRICE (OPTIONAL — WORST PRICE FOR ANY CHILD)'}</div>
+              <input value={limit} onChange={(e) => setLimit(e.target.value)} placeholder={kind === 'ICEBERG' ? 'e.g. a bit below the ask' : 'none = market, price-protected'} style={input} />
             </div>
             <div>
-              <div style={label}>LIMIT PRICE (OPTIONAL — WORST PRICE FOR ANY SLICE)</div>
-              <input value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="none = market, price-protected" style={input} />
+              <div style={label}>ROUTING OF EACH CHILD</div>
+              <select value={routing} onChange={(e) => setRouting(e.target.value as RoutingStrategyName)} style={input}>
+                {ROUTING_STRATEGIES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.sm, color: C.muted, cursor: 'pointer' }}>
-              <input type="checkbox" checked={randomize} onChange={(e) => setRandomize(e.target.checked)} />
-              Randomise slice times (±20% of the interval) so the pattern is harder to spot
-            </label>
+            {(kind === 'TWAP' || kind === 'VWAP') && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.sm, color: C.muted, cursor: 'pointer' }}>
+                <input type="checkbox" checked={randomize} onChange={(e) => setRandomize(e.target.checked)} />
+                Randomise slice times (±20% of the interval) so the pattern is harder to spot
+              </label>
+            )}
 
             {preview && (
               <div style={{ padding: '8px 10px', borderRadius: 4, background: C.surface, fontSize: F.sm, color: C.muted, lineHeight: 1.6 }}>
-                <div>
-                  <span style={{ color: C.text, fontWeight: 600 }}>{slices}</span> slices of ~
-                  <span style={{ color: C.text, fontWeight: 600 }}>{fmtQty(preview.slice, 8)} {base}</span>, one every{' '}
-                  <span style={{ color: C.text, fontWeight: 600 }}>{preview.interval.toFixed(1)} s</span>
-                </div>
+                {scheduled && (
+                  <div>
+                    <span style={{ color: C.text, fontWeight: 600 }}>{slices}</span> slices{kind === 'TWAP' ? ' of ~' : ', ~'}
+                    <span style={{ color: C.text, fontWeight: 600 }}>{fmtQty(preview.slice ?? 0, 8)} {base}</span>
+                    {kind === 'TWAP' ? '' : ' on average'}, one every{' '}
+                    <span style={{ color: C.text, fontWeight: 600 }}>{preview.interval.toFixed(1)} s</span>
+                    {kind === 'VWAP' && ' — sized by the market\'s volume profile'}
+                    {kind === 'IS' && ` — front-loaded (${urgency.toLowerCase()} urgency)`}
+                  </div>
+                )}
+                {kind === 'POV' && (
+                  <div>Trades <b style={{ color: C.text }}>{participation}%</b> of the real market volume, checking every {checkEvery} s, for at most {(preview.secs / 60).toFixed(1)} min</div>
+                )}
+                {kind === 'ICEBERG' && (
+                  <div>Shows ~<b style={{ color: C.text }}>{display} {base}</b> (±{variance}%) at a time, only at {limit ? fmtPrice(parseFloat(limit)) : '—'} or better, looking every {refresh} s, for at most {(preview.secs / 60).toFixed(1)} min</div>
+                )}
                 {preview.mid && (
-                  <div>≈ {fmtUsd(preview.slice * preview.mid)} per slice · {fmtUsd(preview.total)} total at mid {fmtPrice(preview.mid)}</div>
+                  <div>≈ {preview.slice !== null ? `${fmtUsd(preview.slice * preview.mid)} per ${kind === 'ICEBERG' ? 'piece' : 'slice'} · ` : ''}{fmtUsd(preview.total)} total at mid {fmtPrice(preview.mid)}</div>
                 )}
                 {preview.warnings.map((w) => <div key={w} style={{ color: C.orange }}>⚠ {w}</div>)}
               </div>
             )}
+
+            {/* Auto */}
+            <div style={{ padding: '8px 10px', borderRadius: 4, border: `1px dashed ${C.border}` }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button onClick={recommend} disabled={recBusy} style={{
+                  padding: '6px 12px', borderRadius: 4, border: `1px solid ${C.purple}`, background: tint(C.purple, 12),
+                  color: C.purple, fontFamily: 'inherit', fontSize: F.sm, fontWeight: 700, cursor: recBusy ? 'wait' : 'pointer',
+                }}>{recBusy ? 'Thinking…' : '✦ Auto — recommend'}</button>
+                <select value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={{ ...input, width: 'auto', padding: '5px 7px', fontSize: F.sm }}>
+                  <option value="LOW">low urgency</option>
+                  <option value="MEDIUM">medium urgency</option>
+                  <option value="HIGH">high urgency</option>
+                </select>
+                <span style={{ fontSize: F.xs, color: C.dim }}>within the time above · sends nothing</span>
+              </div>
+              {recError && <div style={{ fontSize: F.sm, color: C.red, marginTop: 6 }}>{recError}</div>}
+              {rec && (
+                <div style={{ marginTop: 8, fontSize: F.sm, color: C.muted, lineHeight: 1.55 }}>
+                  <div style={{ color: C.text, fontWeight: 700 }}>
+                    {rec.choice === 'SINGLE' ? 'One order now' : rec.choice === 'NONE' ? 'Can\'t be done as asked' : algoKindLabel(rec.choice)}
+                    {rec.params && ` · ${rec.params.slices ? `${rec.params.slices} slices over ` : ''}${(rec.params.duration_s / 60).toFixed(1)} min`}
+                    {rec.params?.participation_pct ? ` at ${rec.params.participation_pct}% of volume` : ''}
+                  </div>
+                  {rec.reasons.map((r) => <div key={r}>✓ {r}</div>)}
+                  {rec.warnings.map((w) => <div key={w} style={{ color: C.orange }}>⚠ {w}</div>)}
+                  {rec.alternatives.length > 0 && (
+                    <div style={{ color: C.dim, fontSize: F.xs, marginTop: 2 }}>Others: {rec.alternatives.join(' · ')}</div>
+                  )}
+                  <div style={{ color: C.dim, fontSize: F.xs, marginTop: 2 }}>
+                    spread {num(rec.metrics.spread_bps)?.toFixed(2) ?? '—'} bps · all at once {num(rec.metrics.impact_now_bps)?.toFixed(1) ?? 'not fillable'} {num(rec.metrics.impact_now_bps) !== null ? 'bps' : ''}
+                    {num(rec.metrics.volume_per_min) !== null && ` · market ${fmtQty(rec.metrics.volume_per_min as number, 4)} ${base}/min (${(rec.metrics.volume_venues ?? []).join(', ')})`}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    {rec.params && <CtlButton onClick={() => applyRecommendation(rec)} color={C.purple}>Use this</CtlButton>}
+                    {rec.choice === 'SINGLE' && !killActive && <CtlButton onClick={placeSingle} color={side === 'BUY' ? C.green : C.red}>Place as one order</CtlButton>}
+                  </div>
+                  {singleResult && <div style={{ marginTop: 6, color: C.text }}>{singleResult}</div>}
+                </div>
+              )}
+            </div>
+
             {formError && (
               <div style={{ padding: '6px 10px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>{formError}</div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
                 onClick={runPreflight}
-                disabled={!preview || checking || parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS}
-                title="Runs every slice through the pre-trade risk checks without sending anything"
+                disabled={!preview || checking || sliceSizes().length > PREFLIGHT_MAX_ORDERS}
+                title="Runs the planned children through the pre-trade risk checks without sending anything"
                 style={{
                   padding: '8px 0', borderRadius: 4, fontFamily: 'inherit', fontSize: F.sm, fontWeight: 600,
                   border: `1px solid ${C.blue}`, background: tint(C.blue, 10), color: C.blue,
                   cursor: checking ? 'wait' : 'pointer',
-                  opacity: !preview || checking || parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS ? 0.45 : 1,
+                  opacity: !preview || checking ? 0.45 : 1,
                 }}
               >
-                {checking ? 'Checking every slice…' : 'Pre-flight check — sends nothing'}
+                {checking ? 'Checking every child…' : 'Pre-flight check — sends nothing'}
               </button>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.xs, color: C.muted, cursor: 'pointer' }}>
                 <input type="checkbox" checked={withStress} onChange={(e) => setWithStress(e.target.checked)} />
                 With stress test (Monte Carlo price paths, on worker processes when worth it)
               </label>
-              {parseInt(slices, 10) > PREFLIGHT_MAX_ORDERS && (
+              {(kind === 'VWAP' || kind === 'POV') && (
                 <div style={{ fontSize: F.xs, color: C.dim }}>
-                  Pre-flight checks up to {PREFLIGHT_MAX_ORDERS} slices; Start still checks every slice.
+                  {kind === 'VWAP' ? 'VWAP slice sizes come from the volume profile at Start; the pre-flight uses even slices.'
+                    : 'POV sizes follow live volume; the pre-flight checks ten equal pieces.'} Start checks the real plan again.
                 </div>
               )}
             </div>
@@ -401,7 +612,7 @@ export function AlgoOrders() {
                 cursor: busy ? 'wait' : 'pointer', opacity: busy || !preview || killActive ? 0.45 : 1,
               }}
             >
-              {killActive ? 'Kill switch active' : busy ? 'Starting…' : `Start TWAP — ${side} ${qty || '…'} ${base}`}
+              {killActive ? 'Kill switch active' : busy ? 'Starting…' : `Start ${algoKindLabel(kind)} — ${side} ${qty || '…'} ${base}`}
             </button>
           </div>
         </Card>
@@ -410,13 +621,14 @@ export function AlgoOrders() {
         <Card>
           <CardTitle>ALGO ORDERS</CardTitle>
           {algos.length === 0 ? (
-            <div style={{ padding: 30, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No TWAPs yet — start one {isNarrow ? 'above' : 'on the left'}.</div>
+            <div style={{ padding: 30, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No algo orders yet — start one {isNarrow ? 'above' : 'on the left'}.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 520, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 620, overflowY: 'auto' }}>
               {algos.map((a) => {
                 const pct = a.params.quantity > 0 ? (a.filled_quantity / a.params.quantity) * 100 : 0
-                const tgt = a.status === 'RUNNING' ? targetNow(a, now) : null
+                const tgt = a.status === 'RUNNING' && SCHEDULED.includes((a.params.kind ?? 'TWAP') as AlgoKind) ? targetNow(a, now) : null
                 const isSel = selected?.id === a.id
+                const k = (a.params.kind ?? 'TWAP') as AlgoKind
                 return (
                   <div key={a.id} onClick={() => setSelectedId(a.id)} style={{
                     padding: '9px 11px', borderRadius: 4, cursor: 'pointer', background: C.surface,
@@ -426,7 +638,11 @@ export function AlgoOrders() {
                       <span style={{ fontWeight: 700 }}>{a.id}</span>
                       <span style={{ color: a.params.side === 'BUY' ? C.green : C.red, fontWeight: 700 }}>{a.params.side}</span>
                       <span>{fmtQty(a.params.quantity)} {a.params.symbol}</span>
-                      <span style={{ color: C.dim }}>· {a.params.slices} × {a.interval_s.toFixed(0)} s · by {a.created_by}</span>
+                      <span style={{ color: C.dim }}>
+                        · {SCHEDULED.includes(k) ? `${a.params.slices} × ${a.interval_s.toFixed(0)} s`
+                          : k === 'POV' ? `${a.params.participation_pct}% of volume` : `≤ ${fmtQty(a.nominal_slice)} at ${fmtPrice(a.params.limit_price)}`}
+                        {' '}· by {a.created_by}
+                      </span>
                       <span style={{ marginLeft: 'auto' }}><StatusChip status={a.status} /></span>
                     </div>
                     <div style={{ position: 'relative', height: 6, background: C.border, borderRadius: 3, overflow: 'hidden', marginTop: 7 }}>
@@ -464,17 +680,28 @@ export function AlgoOrders() {
       {selected && (() => {
         const a = selected
         const b = baseAsset(a.params.symbol)
-        const next = a.status === 'RUNNING' ? a.slices.find((s) => s.status === 'PENDING') : undefined
+        const k = (a.params.kind ?? 'TWAP') as AlgoKind
+        const isSched = SCHEDULED.includes(k)
+        const next = a.status === 'RUNNING' && isSched ? a.slices.find((s) => s.status === 'PENDING') : undefined
         const nextIn = next ? Math.max(0, Math.round((new Date(next.scheduled_at).getTime() - now) / 1000)) : null
+        const deadlineIn = a.deadline_at && a.status === 'RUNNING' ? Math.max(0, Math.round((new Date(a.deadline_at).getTime() - now) / 1000)) : null
         const done = a.slices.filter((s) => s.sent_at).length
+        const plan = a.plan ?? {}
+        const profile = Array.isArray(plan.profile) ? (plan.profile as number[]) : null
         return (
           <Card>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: F.lg, fontWeight: 700 }}>{a.id}</span>
+              <span style={{ fontSize: F.xs, padding: '1px 7px', borderRadius: 3, background: tint(C.purple, 14), color: C.purple, fontWeight: 700 }}>{algoKindLabel(k)}</span>
               <StatusChip status={a.status} />
               <span style={{ fontSize: F.sm, color: C.muted }}>
-                {a.params.side} {fmtQty(a.params.quantity)} {a.params.symbol} · {a.params.slices} slices of ~{fmtQty(a.nominal_slice)} every {a.interval_s.toFixed(1)} s
+                {a.params.side} {fmtQty(a.params.quantity)} {a.params.symbol}
+                {isSched && ` · ${a.params.slices} slices, ~${fmtQty(a.nominal_slice)} each, every ${a.interval_s.toFixed(1)} s`}
+                {k === 'IS' && a.params.urgency && ` · ${a.params.urgency.toLowerCase()} urgency`}
+                {k === 'POV' && ` · ${a.params.participation_pct}% of market volume, checked every ${a.params.check_interval_s ?? 10} s`}
+                {k === 'ICEBERG' && ` · shows ~${fmtQty(a.nominal_slice)} at a time`}
                 {a.params.limit_price ? ` · limit ${fmtPrice(a.params.limit_price)}` : ' · market (price-protected)'}
+                {a.params.routing && a.params.routing !== 'best_price' ? ` · children: ${routingStrategyLabel(a.params.routing).toLowerCase()}` : ''}
                 {a.params.jitter_pct ? ` · ±${a.params.jitter_pct}% timing` : ''} · started by {a.created_by}
               </span>
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -488,6 +715,9 @@ export function AlgoOrders() {
                 {a.status_reason}
               </div>
             )}
+            {a.status === 'RUNNING' && a.waiting_reason && (
+              <div style={{ fontSize: F.sm, color: C.blue, marginBottom: 8 }}>⏳ {a.waiting_reason}</div>
+            )}
             {actionError && <div style={{ fontSize: F.sm, color: C.red, marginBottom: 8 }}>{actionError}</div>}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: 8, marginBottom: 12 }}>
@@ -499,27 +729,65 @@ export function AlgoOrders() {
                 <div style={label}>AVG FILL PRICE</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{a.filled_quantity > 0 ? fmtPrice(a.avg_fill_price) : '—'}</div>
               </div>
-              <div style={tile} title="Implementation shortfall: average fill vs the market mid when the TWAP started. + = cost.">
+              <div style={tile} title="Implementation shortfall: average fill vs the market mid when the algo started. + = cost.">
                 <div style={label}>VS ARRIVAL PRICE</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.arrival_slippage_bps} /></div>
                 <div style={{ fontSize: F.xs, color: C.dim }}>mid at start {fmtPrice(a.arrival_mid)}</div>
               </div>
-              <div style={tile} title="Average fill vs the average market mid at the slice times — the TWAP benchmark. + = cost.">
-                <div style={label}>VS INTERVAL TWAP</div>
-                <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.vs_interval_twap_bps} /></div>
-                <div style={{ fontSize: F.xs, color: C.dim }}>benchmark {fmtPrice(a.interval_twap)}</div>
-              </div>
+              {a.market_vwap ? (
+                <div style={tile} title="Average fill vs the real market's VWAP over the same time (all exchanges we watch). + = cost.">
+                  <div style={label}>VS MARKET VWAP</div>
+                  <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.vs_market_vwap_bps ?? null} /></div>
+                  <div style={{ fontSize: F.xs, color: C.dim }}>market {fmtPrice(a.market_vwap)}</div>
+                </div>
+              ) : (
+                <div style={tile} title="Average fill vs the average market mid at the slice times — the TWAP benchmark. + = cost.">
+                  <div style={label}>VS INTERVAL TWAP</div>
+                  <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.vs_interval_twap_bps} /></div>
+                  <div style={{ fontSize: F.xs, color: C.dim }}>benchmark {fmtPrice(a.interval_twap)}</div>
+                </div>
+              )}
+              {k === 'POV' && (
+                <div style={tile} title="Our fills as a share of the real market volume since the start">
+                  <div style={label}>PARTICIPATION</div>
+                  <div style={{ fontSize: F.lg, fontWeight: 700 }}>{a.participation_actual_pct != null ? `${a.participation_actual_pct < 0.1 ? a.participation_actual_pct.toPrecision(2) : a.participation_actual_pct.toFixed(2)}%` : '—'}</div>
+                  <div style={{ fontSize: F.xs, color: C.dim }}>target {a.params.participation_pct}% · market {a.market_volume != null ? fmtQty(a.market_volume, 4) : '—'} {b}</div>
+                </div>
+              )}
+              {k === 'IS' && num(plan.expected_cost_usdt) !== null && (
+                <div style={tile} title="Almgren–Chriss: expected impact cost ± 1 σ price risk, measured on the live book and volatility">
+                  <div style={label}>EXPECTED COST ± RISK</div>
+                  <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(num(plan.expected_cost_usdt) ?? 0, 4)}{num(plan.risk_usdt) !== null && <span style={{ fontSize: F.sm, color: C.muted }}> ±{fmtUsd(num(plan.risk_usdt) ?? 0, 4)}</span>}</div>
+                  <div style={{ fontSize: F.xs, color: C.dim }}>even TWAP {fmtUsd(num(plan.twap_cost_usdt) ?? 0, 4)}{num(plan.twap_risk_usdt) !== null ? ` ±${fmtUsd(num(plan.twap_risk_usdt) ?? 0, 4)}` : ''}</div>
+                </div>
+              )}
               <div style={tile}>
                 <div style={label}>FEES</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(a.fees_usdt, a.fees_usdt < 1 ? 4 : 2)}</div>
               </div>
               <div style={tile}>
-                <div style={label}>{a.status === 'RUNNING' ? 'NEXT SLICE' : 'SLICES SENT'}</div>
+                <div style={label}>{a.status === 'RUNNING' ? (isSched ? 'NEXT SLICE' : 'ENDS IN') : 'CHILDREN SENT'}</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>
-                  {a.status === 'RUNNING' && nextIn !== null ? `in ${nextIn} s` : `${done} / ${a.params.slices}`}
+                  {a.status === 'RUNNING' && nextIn !== null ? `in ${nextIn} s`
+                    : a.status === 'RUNNING' && deadlineIn !== null ? `${Math.floor(deadlineIn / 60)}:${String(deadlineIn % 60).padStart(2, '0')}`
+                    : isSched ? `${done} / ${a.params.slices}` : `${done}`}
                 </div>
               </div>
             </div>
+
+            {profile && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={label}>VOLUME PROFILE — SHARE OF THE WINDOW'S VOLUME PER SLICE {plan.profile_fallback ? '(NO HISTORY: EVEN)' : `(LAST ${String(plan.profile_days ?? '?')} DAYS)`}</div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 46 }}>
+                  {profile.map((w, i) => (
+                    <div key={i} title={`slice ${i + 1}: ${(w * 100).toFixed(1)}%`} style={{
+                      flex: 1, minWidth: 2, height: `${Math.max(4, (w / Math.max(...profile)) * 100)}%`,
+                      background: tint(C.purple, 60), borderRadius: 2,
+                    }} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             <TwapChart algo={a} now={now} />
 
@@ -553,7 +821,7 @@ export function AlgoOrders() {
                     return (
                       <tr key={s.index} onClick={() => clickable && setProofOrderId(s.order_id)}
                           style={{ cursor: clickable ? 'pointer' : 'default' }}
-                          title={clickable ? 'Open this slice\'s routing proof and audit trail' : undefined}>
+                          title={clickable ? 'Open this child\'s routing proof and audit trail' : undefined}>
                         <td style={td}>{s.index}</td>
                         <td style={{ ...td, color: C.muted }}>{new Date(s.scheduled_at).toLocaleTimeString(undefined, { hour12: false })}</td>
                         <td style={{ ...td, color: C.muted }}>{s.sent_at ? new Date(s.sent_at).toLocaleTimeString(undefined, { hour12: false }) : '—'}</td>

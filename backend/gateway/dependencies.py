@@ -4,13 +4,14 @@ from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.agents import Copilot, build_llm_client
-from backend.services.algos import TwapEngine
+from backend.services.algos import AlgoEngine
 from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
 from backend.services.consensus.client import ConsensusClient, parse_cluster
 from backend.services.consensus.wire import MessageSigner
 from backend.services.market_data.aggregator import MarketDataAggregator
 from backend.services.market_data.collector import MarketDataCollector
+from backend.services.market_data.history import MarketHistory
 from backend.services.order_state.entry import OrderEntry
 from backend.services.order_state.order_manager import OrderManager
 from backend.services.risk_engine.batch import RiskBatchRunner
@@ -40,7 +41,8 @@ class Services:
     order_entry: OrderEntry
     risk_engine: PreTradeRiskEngine
     routing_engine: RoutingEngine
-    twap_engine: TwapEngine
+    algo_engine: AlgoEngine
+    market_history: MarketHistory
     wallet_service: WalletService
     pnl_service: PnLService
     risk_monitor: RiskMonitor
@@ -149,20 +151,23 @@ def init_services() -> Services:
     )
     # The one way orders enter: the REST endpoint and every algo use it.
     order_entry = OrderEntry(order_manager, routing_engine)
-    twap_engine = TwapEngine(
+    # Real-market candles (public data) for VWAP profiles, POV volume and the market-VWAP benchmark.
+    market_history = MarketHistory(registry)
+    volatility = VolatilityTracker(aggregator, settings.symbol_list, settings.volatility_sample_interval_s)
+    # Every execution algorithm (TWAP, VWAP, IS, POV, ICEBERG): each child goes through order_entry.
+    algo_engine = AlgoEngine(
         order_entry, order_manager, aggregator, collector, routing_engine, registry,
-        risk_engine, wallet_service, store=store,
+        risk_engine, wallet_service, store=store, history=market_history, volatility=volatility,
     )
     # The copilot only proposes; a confirmed proposal goes through order_entry
     # (or the TWAP engine, which uses order_entry for every slice).
     llm, llm_unavailable = build_llm_client(settings)
     copilot = Copilot(
-        llm, order_entry, twap_engine, aggregator, collector, routing_engine, registry, risk_engine,
+        llm, order_entry, algo_engine, aggregator, collector, routing_engine, registry, risk_engine,
         unavailable_reason=llm_unavailable, ttl_s=settings.copilot_proposal_ttl_s,
         max_price_move_bps=settings.copilot_max_price_move_bps,
     )
 
-    volatility = VolatilityTracker(aggregator, settings.symbol_list, settings.volatility_sample_interval_s)
     # Detection only: it gets read-only lookups (books, balances, which venues can
     # execute) — no adapter, router or order entry, so it can't trade.
     arbitrage = ArbitrageDetector(
@@ -184,7 +189,8 @@ def init_services() -> Services:
         order_entry=order_entry,
         risk_engine=risk_engine,
         routing_engine=routing_engine,
-        twap_engine=twap_engine,
+        algo_engine=algo_engine,
+        market_history=market_history,
         wallet_service=wallet_service,
         pnl_service=pnl_service,
         risk_monitor=risk_monitor,
