@@ -17,7 +17,11 @@ class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private shouldReconnect = false
 
+  // Called from several places on page load (store init, App's effect — twice
+  // under StrictMode): the same token while a socket is open or opening is a no-op.
   connect(token: string) {
+    const live = this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    if (live && token === this.token) return
     this.token = token
     this.shouldReconnect = true
     this._open()
@@ -31,21 +35,31 @@ class WebSocketClient {
 
   private _open() {
     if (!this.token) return
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    // Only one socket at a time: a replaced one is closed, and its late events are
+    // ignored below — otherwise its onclose would null out (orphan) the new socket.
+    if (this.ws) {
+      const old = this.ws
+      this.ws = null
+      old.close()
+    }
     try {
-      this.ws = new WebSocket(`${WS_BASE}/ws`)
+      const ws = new WebSocket(`${WS_BASE}/ws`)
+      this.ws = ws
 
-      this.ws.onopen = () => {
-        if (this.reconnectTimer) {
-          clearTimeout(this.reconnectTimer)
-          this.reconnectTimer = null
-        }
+      ws.onopen = () => {
+        if (this.ws !== ws) return
         // Log in first; the server reads messages in order, so subscribing right after is safe.
-        this.ws?.send(JSON.stringify({ type: 'auth', token: this.token }))
+        ws.send(JSON.stringify({ type: 'auth', token: this.token }))
         // (Re)subscribe to every channel we have handlers for — also after reconnects.
         this._sendSubscribe([...this.handlers.keys()])
       }
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (this.ws !== ws) return
         try {
           const msg = JSON.parse(event.data)
           const handlers = this.handlers.get(msg.type)
@@ -55,7 +69,8 @@ class WebSocketClient {
         }
       }
 
-      this.ws.onclose = (event) => {
+      ws.onclose = (event) => {
+        if (this.ws !== ws) return
         this.ws = null
         // A refused or expired login won't get better by retrying with the same
         // token; the next REST call gets a 401 and the app logs out (authStore).
@@ -65,7 +80,7 @@ class WebSocketClient {
         }
       }
 
-      this.ws.onerror = () => {
+      ws.onerror = () => {
         // onclose will fire next; reconnect is handled there
       }
     } catch (e) {
