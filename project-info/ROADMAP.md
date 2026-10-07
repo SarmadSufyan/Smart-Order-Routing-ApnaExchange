@@ -43,12 +43,21 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 | Phase | What | Status |
 |---|---|---|
 | **A** | **All algorithms.** Routing (the "where"): best price **with fees**, liquidity sweep, smart (fill reliability). Execution (the "when"): TWAP, VWAP, POV, implementation shortfall (Almgren–Chriss), iceberg (IOC version), **auto** (picks one and says why) | ✅ 2026-10-07 — every one live on testnet; [`ALGORITHMS_GUIDE.md`](ALGORITHMS_GUIDE.md) |
-| **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (MA/EMA, RSI, MACD, Bollinger, ATR, VWAP), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ⏭ |
+| **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (SMA/EMA, RSI, MACD, Bollinger, ATR, OBV; the market VWAP lives with the algos), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ✅ 2026-10-08 — 5 coins × next minute / hour / day; [`RESEARCH_GUIDE.md`](RESEARCH_GUIDE.md) |
 | **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch | ⏭ |
 | **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | ⏭ |
 | **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | decide later |
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
+
+### B — Research and prediction: "done" means — ✅ 2026-10-08
+
+- [x] Reference-market candle history (Binance mainnet; Bybit, Gate fallback) for 5 coins × 1m / 1h / 1d, kept current, closed candles only (`research/candles.py`, `data/market-history.db`).
+- [x] Indicators (SMA, EMA, RSI, MACD, Bollinger, ATR, OBV, EWMA volatility) as tested pure functions; plain-English signals; live order-book imbalance and microprice.
+- [x] Forecast for the next minute / hour / day of every coin: P(up) from a ridge logistic model (penalty chosen inside each training window), walk-forward tested against the baseline with Brier, log loss and a significance test; an 80 % / 50 % range from empirical move quantiles. "Edge" only when all three agree.
+- [x] Live track record: each closed candle → a forecast written down → scored when the next candle closes.
+- [x] Backtester (next-open execution, fees, slippage, long only; 6 rules incl. the model, out-of-sample only) and a trade planner (ATR stop/target, fixed-fractional size, half-Kelly cap, the exact bracket replayed on history vs its break-even win rate).
+- [x] Research & Forecasts page; live on real data (journal 2026-10-08).
 
 ### A — All algorithms: "done" means
 

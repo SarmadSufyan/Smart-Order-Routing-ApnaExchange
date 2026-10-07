@@ -1512,3 +1512,45 @@ On the page: the five algorithms and their fields, Auto's card and **Use this** 
 ### Files
 
 New: `services/algos/engine.py`, `services/algos/schedules.py`, `services/market_data/history.py`, `tests/test_algos/test_schedules.py`, `tests/test_algos/test_algo_kinds.py`, `project-info/ALGORITHMS_GUIDE.md`. Changed: `services/algos/twap.py` (re-exports), `services/algos/__init__.py`, `shared/models/strategy.py` (`AlgoKind`, `AlgoCreate`, `AlgoState`, recommendation models), `shared/models/market_data.py` (`MinuteBar`), `exchanges/base.py` (`Candle`, `fetch_candles`), `exchanges/ccxt_venue.py`, `gateway/routers/algos.py`, `gateway/dependencies.py` (`algo_engine`, `market_history`), `gateway/main.py`; frontend `services/api.ts`, `stores/dataStore.ts`, `pages/AlgoOrders.tsx`; ROADMAP, PROGRESS, CLAUDE.md.
+
+---
+
+## 2026-10-08 — Phase B: research and prediction tools, and an honest answer about prediction
+
+*By Sarmad (relay holder, `feature/crypto-pivot`).*
+
+Sarmad asked for a tool that predicts prices and suggests the next trade "using the principles of big traders and books, with proper mathematics", for **all five coins** and **three horizons** (next minute, hour, day). Built as one read-only service (`backend/services/research/`) and one page (**Research & Forecasts**). The plain-English explanation, every formula and the panel Q&A are in [`project-info/RESEARCH_GUIDE.md`](project-info/RESEARCH_GUIDE.md); this entry is the why and what we found.
+
+### Design choices
+
+- **One reference market** (Binance mainnet; Bybit, then Gate, as fallbacks) so a chart, a backtest and a forecast read the same series; stored per machine in `data/market-history.db` (closed candles only), separate from the audit log. ~85,000 candles download in seconds at the first start.
+- **No deep learning.** ~5,000 candles per horizon; a transparent ridge logistic regression in numpy (`fit_logistic`, Newton/IRLS) whose behaviour can be explained and tested. numpy became a runtime dependency (pinned, already installed for everyone with the requirements).
+- **Honesty is built in, not added after:** features from past candles only (a test proves appending future candles never changes past features); walk-forward testing; the penalty **chosen inside each training window** (`select_l2`); scoring against the right baseline (always guessing the commoner side, not 50 %), with Brier, log loss and a **one-sided binomial significance test**; "edge" only if all agree. Every forecast is also **logged and scored live** when its candle closes — a record that can't be tuned afterwards.
+- **Ranges separate from direction:** EWMA volatility × empirical quantiles of past standardised moves (fat tails kept), validated by how often the 80 % band held.
+- **Trade planner measured, not assumed:** the exact ATR bracket is replayed at every past candle (stop and target in the same candle = a loss) and compared with its break-even win rate after fees; size = fixed fractional, capped by half-Kelly and the cash.
+
+### What the data said (real market, 2026-10-08)
+
+- **First version (penalty fixed at 1):** no edge anywhere; probabilities overconfident (Brier skill −0.2 % to −2.5 %).
+- **Penalty chosen inside each training window:** probabilities well calibrated (Brier skill ≈ 0); two of 15 beat the baseline on accuracy and log loss — SOL next-hour and ETH next-day.
+- **With the luck test:** only **SOL next-hour** holds (52.5 % vs 50.0 %, p = 0.015). ETH next-day (p = 0.14) is reported as "could easily be luck". With 15 models one false edge is expected, so the page says so and the live record decides.
+- **Ranges:** the 80 % band held 79–81 % (minute, hour) and 76–83 % (day) out of sample — reliable.
+- **Backtests** (7 months of BTC hours, $1,000): buy & hold +15 %; MA cross −0.8 % (55 trades, $126 fees); RSI reversion +6.3 %; Bollinger reversion −24 %; MACD cross −18 % ($368 fees). Fees decide.
+- **Trade plan** (BTC hourly, stop 1.5 ATR, 2 : 1): won 31.6 % of 4,894 replays vs 44.6 % needed after fees → "skip".
+
+### Found live and fixed
+
+- The first sync stored nothing: it picked exchanges by `adapter.symbols`, which stays empty until an exchange's markets have loaded — after the first sync. Now every preferred exchange is tried (one without the coin returns nothing and the next is tried), and an empty or failing series is retried every 20 s instead of on its normal schedule (10 min for daily).
+- The start of a fresh download wasn't on a candle boundary, so the first candle was skipped.
+- A short chart demanded the forecast's 300-candle minimum.
+- Sharpe ignored fees (MACD cross showed 1.6 while losing 18 %); it now uses the return after each step's costs.
+- An up-to-date series reported no status after a restart; the scoreboard said "not trained yet" until a candle closed — now all 15 models train in the background at start.
+- Wording: the next-minute card said it "did not beat the baseline" while showing 53.1 % vs 52.8% (accuracy was higher; its probabilities scored worse — now said exactly so); "sellers have 62 % more size" for an imbalance of −0.62 (it means 4.3 ×; now the ratio is shown); the two clock features showed as two drivers (merged).
+
+### Verified
+
+420 backend tests (32 new), ruff, the frontend type-check. Live: all 15 series downloaded from Binance; all 15 models trained at start; forecasts, scoreboard, chart, signals, order book, a backtest and a trade plan through the page.
+
+### Files
+
+New: `backend/services/research/` (`candles.py`, `indicators.py`, `model.py`, `signals.py`, `backtest.py`, `sizing.py`, `service.py`), `backend/gateway/routers/research.py`, `backend/tests/test_research/`, `frontend/src/pages/Research.tsx`, `frontend/src/components/ResearchChart.tsx`, `project-info/RESEARCH_GUIDE.md`. Changed: `backend/requirements.txt` (numpy), `gateway/config.py` (`MARKET_HISTORY_DB_PATH`), `gateway/dependencies.py`, `gateway/main.py`, `.env.example`; frontend `services/api.ts`, `App.tsx`, `components/AppShell.tsx`; ROADMAP, PROGRESS, CLAUDE.md.

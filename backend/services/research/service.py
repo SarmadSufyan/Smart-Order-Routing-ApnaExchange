@@ -99,9 +99,25 @@ class ResearchService:
     async def start(self) -> None:
         self._sync.on_new_candles(self._on_new_candles)
         await self._sync.start()
+        self._warmup = asyncio.create_task(self._train_all(), name="research-warmup")
 
     async def stop(self) -> None:
+        if getattr(self, "_warmup", None):
+            self._warmup.cancel()
+            await asyncio.gather(self._warmup, return_exceptions=True)
         await self._sync.stop()
+
+    async def _train_all(self) -> None:
+        """Once the history is in, train every (coin, horizon) so the scoreboard is complete from the start."""
+        await self._sync.ready.wait()
+        for symbol in self._symbols:
+            for tf in TIMEFRAME_MS:
+                try:
+                    await self.model_for(symbol, tf)
+                except ResearchUnavailableError:
+                    continue
+                except Exception as exc:  # noqa: BLE001 — one failed model never stops the others
+                    logger.error("research_warmup_failed", symbol=symbol, timeframe=tf, error=str(exc)[:160])
 
     def _check_symbol(self, symbol: str) -> str:
         symbol = symbol.upper()
@@ -160,8 +176,14 @@ class ResearchService:
         def band(lo: float, hi: float) -> list[float] | None:
             return [price * math.exp(q[lo] * sigma), price * math.exp(q[hi] * sigma)] if q else None
 
-        drivers = [{"feature": name, "text": FEATURE_TEXT[name].format(bar=BAR_WORD[tf]),
-                    "push": round(push, 4)} for name, push in contributions(state.model, x)[:5]]
+        # The clock is two features (sin, cos): show it as one driver.
+        pushes: dict[str, float] = {}
+        for name, push in contributions(state.model, x):
+            key = "clock_sin" if name in ("clock_sin", "clock_cos") else name
+            pushes[key] = pushes.get(key, 0.0) + push
+        ranked = sorted(pushes.items(), key=lambda kv: abs(kv[1]), reverse=True)[:5]
+        drivers = [{"feature": name, "text": FEATURE_TEXT[name].format(bar=BAR_WORD[tf]), "push": round(push, 4)}
+                   for name, push in ranked]
         return {"price": price, "p_up": round(p, 4), "sigma": sigma, "range80": band(0.10, 0.90),
                 "range50": band(0.25, 0.75), "drivers": drivers}
 
@@ -193,12 +215,16 @@ class ResearchService:
         if oos is None:
             call = "Not enough history yet to test the model — treat this as about 50/50"
         elif not edge:
-            beat = oos.accuracy > oos.baseline_accuracy and oos.log_loss < oos.log_loss_baseline
-            call = ((f"No proven edge: it beat the baseline out of sample ({oos.accuracy * 100:.1f}% vs "
-                     f"{oos.baseline_accuracy * 100:.1f}%) but that could easily be luck (p = {oos.p_value:.2f})")
-                    if beat else
-                    (f"No measurable edge: out of sample it did not beat always guessing "
-                     f"'{'up' if oos.up_rate >= 0.5 else 'down'}'")) + " — treat this as about 50/50"
+            side = "up" if oos.up_rate >= 0.5 else "down"
+            acc, base = f"{oos.accuracy * 100:.1f}%", f"{oos.baseline_accuracy * 100:.1f}%"
+            if oos.accuracy <= oos.baseline_accuracy:
+                why = f"out of sample it was right no more often than always guessing '{side}' ({acc} vs {base})"
+            elif oos.log_loss >= oos.log_loss_baseline:
+                why = (f"right a little more often than always guessing '{side}' ({acc} vs {base}), but its "
+                       "probabilities scored worse than simply quoting how often the price rises")
+            else:
+                why = f"it beat the baseline ({acc} vs {base}) but that could easily be luck (p = {oos.p_value:.2f})"
+            call = f"No proven edge: {why} — treat this as about 50/50"
         else:
             call = (f"Leans {lean}: {max(p, 1 - p) * 100:.1f}% — out of sample it was right "
                     f"{oos.accuracy * 100:.1f}% of the time vs {oos.baseline_accuracy * 100:.1f}% for the baseline "

@@ -96,8 +96,10 @@ def book_signal_text(imbalance: float | None, micro_vs_mid_bps: float | None) ->
     if imbalance is None:
         return 0, "No order-book data right now"
     d = 1 if imbalance > 0.2 else -1 if imbalance < -0.2 else 0
-    side = "buyers" if imbalance > 0 else "sellers"
-    text = (f"Near the price, {side} have {abs(imbalance) * 100:.0f}% more size"
+    side, other = ("buyers", "sellers") if imbalance > 0 else ("sellers", "buyers")
+    # imbalance = (b - a) / (b + a)  ->  the bigger side holds (1 + |i|) / (1 - |i|) times the other's size
+    ratio = (1 + abs(imbalance)) / (1 - abs(imbalance)) if abs(imbalance) < 1 else float("inf")
+    text = (f"Near the price, {side} have {ratio:.1f}× the {other}' size (imbalance {imbalance:+.2f})"
             if abs(imbalance) > 0.05 else "Buyers and sellers about balanced near the price")
     if micro_vs_mid_bps is not None and not math.isnan(micro_vs_mid_bps):
         text += f"; microprice {micro_vs_mid_bps:+.2f} bps from the mid"

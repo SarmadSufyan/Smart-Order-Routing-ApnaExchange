@@ -235,6 +235,124 @@ export interface AuditEventList {
   store: string
 }
 
+// ── Research and prediction tools (Phase B) ──────────────────────────
+export type ResearchTf = '1m' | '1h' | '1d'
+
+export interface OosScores {
+  n: number
+  accuracy: number
+  baseline_accuracy: number
+  up_rate: number
+  brier: number
+  brier_baseline: number
+  brier_skill: number
+  log_loss: number
+  log_loss_baseline: number
+  p_value: number
+  edge: boolean
+  calibration: { bucket: string; said: number; happened: number; n: number }[]
+}
+
+export interface LiveScores {
+  n: number
+  hit_rate?: number
+  up_rate?: number
+  brier?: number
+  range_coverage80?: number | null
+  n_with_edge?: number
+  hit_rate_with_edge?: number | null
+  since_ts?: number
+}
+
+export interface IndicatorSignal { name: string; value: number; direction: number; text: string }
+
+export interface HorizonForecast {
+  horizon: ResearchTf
+  label: string
+  unavailable?: string
+  as_of_ts?: number
+  price?: number
+  p_up?: number
+  lean?: 'up' | 'down'
+  edge?: boolean
+  call?: string
+  range80?: [number, number] | null
+  range50?: [number, number] | null
+  typical_move_pct?: number
+  drivers?: { feature: string; text: string; push: number }[]
+  signals?: IndicatorSignal[]
+  model?: { out_of_sample: OosScores | null; range_coverage80: number | null; trained_bars: number;
+            trained_last_ts: number; source: string | null }
+  live?: LiveScores
+}
+
+export interface ForecastResponse { symbol: string; horizons: HorizonForecast[]; disclaimer: string }
+
+export interface ScoreboardRow {
+  symbol: string
+  horizon: ResearchTf
+  label: string
+  out_of_sample: OosScores | null
+  range_coverage80: number | null
+  live: LiveScores
+}
+
+export interface ResearchChart {
+  symbol: string
+  timeframe: ResearchTf
+  ts: number[]
+  open: (number | null)[]; high: (number | null)[]; low: (number | null)[]; close: (number | null)[]
+  volume: (number | null)[]
+  sma20: (number | null)[]; sma50: (number | null)[]
+  bb_upper: (number | null)[]; bb_mid: (number | null)[]; bb_lower: (number | null)[]
+  rsi: (number | null)[]; macd: (number | null)[]; macd_signal: (number | null)[]; macd_hist: (number | null)[]
+  atr: (number | null)[]
+}
+
+export interface BookSignals {
+  symbol: string
+  available: boolean
+  text: string
+  mid?: number
+  spread_bps?: number
+  imbalance_10bps?: number | null
+  imbalance_25bps?: number | null
+  microprice?: number | null
+  microprice_vs_mid_bps?: number | null
+  bid_depth_10bps_usdt?: number
+  ask_depth_10bps_usdt?: number
+  venues?: string[]
+  direction?: number
+  note?: string
+}
+
+export type BacktestRule = 'buy_hold' | 'sma_cross' | 'rsi_reversion' | 'bollinger' | 'macd_cross' | 'model'
+
+export interface BacktestResponse {
+  symbol: string; timeframe: ResearchTf; strategy: BacktestRule; params: Record<string, unknown>
+  fee_bps: number; slippage_bps: number; capital: number
+  bars: number; start_ts: number; end_ts: number
+  total_return: number; buy_hold_return: number; cagr: number | null
+  max_drawdown: number; buy_hold_max_drawdown: number; sharpe: number | null
+  exposure: number; trades: number; win_rate: number | null; avg_trade_return: number | null
+  fees_paid: number; final_equity: number
+  equity_curve: { ts: number; equity: number; buy_hold: number | null }[]
+  trade_list: { entry_ts: number; exit_ts: number; entry: number; exit: number; return: number; open?: boolean }[]
+  note: string
+}
+
+export interface TradePlanResponse {
+  symbol: string; timeframe: ResearchTf; side: string; equity: number; risk_pct: number
+  k_atr: number; rr: number; max_bars: number; atr: number; cost_bps_round_trip: number
+  plan: { entry: number; stop: number; target: number; quantity: number; notional: number
+          risk_amount: number; reward_amount: number; fees_round_trip: number; verdict: 'positive' | 'skip'
+          reasons: string[] }
+  history: { samples: number; wins: number; losses: number; timeouts: number; win_rate: number | null
+             expectancy_r: number | null; break_even_win_rate: number; kelly_fraction: number | null }
+  forecast: { p_up: number; edge: boolean; call: string } | null
+  disclaimer: string
+}
+
 // ── Algo (parent) orders — TWAP, VWAP, IS, POV, ICEBERG ─────────────
 export type AlgoStatus = 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED'
 export type AlgoKind = 'TWAP' | 'VWAP' | 'IS' | 'POV' | 'ICEBERG'
@@ -819,6 +937,25 @@ export const api = {
 
   startTwap: (p: TwapParams) =>
     request<TwapState>('/api/algos/twap', { method: 'POST', body: JSON.stringify(p) }),
+
+  getResearchForecast: (symbol: string) =>
+    request<ForecastResponse>(`/api/research/forecast?symbol=${encodeURIComponent(symbol)}`),
+
+  getResearchScoreboard: () => request<ScoreboardRow[]>('/api/research/scoreboard'),
+
+  getResearchChart: (symbol: string, timeframe: ResearchTf, bars = 200) =>
+    request<ResearchChart>(`/api/research/chart?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&bars=${bars}`),
+
+  getResearchOrderbook: (symbol: string) =>
+    request<BookSignals>(`/api/research/orderbook?symbol=${encodeURIComponent(symbol)}`),
+
+  runBacktest: (req: { symbol: string; timeframe: ResearchTf; strategy: BacktestRule; params: Record<string, unknown>;
+                       bars?: number; capital?: number; fee_bps?: number | null; slippage_bps?: number | null }) =>
+    request<BacktestResponse>('/api/research/backtest', { method: 'POST', body: JSON.stringify(req) }),
+
+  makeTradePlan: (req: { symbol: string; timeframe: ResearchTf; equity: number; risk_pct: number; k_atr: number;
+                         rr: number; max_bars: number }) =>
+    request<TradePlanResponse>('/api/research/trade-plan', { method: 'POST', body: JSON.stringify(req) }),
 
   startAlgo: (p: AlgoParams) =>
     request<AlgoState>('/api/algos/', { method: 'POST', body: JSON.stringify(p) }),

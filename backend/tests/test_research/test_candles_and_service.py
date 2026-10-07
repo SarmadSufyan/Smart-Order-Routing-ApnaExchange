@@ -157,6 +157,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(chart["close"]), 100)
         book = await self.svc.orderbook("BTC/USDT")
         self.assertGreater(book["imbalance_10bps"], 0)  # more size on the bid
+        self.assertIn("buyers have 2.0× the sellers' size", book["text"])  # bids 4 vs asks 2 within 10 bps
         self.assertGreater(book["microprice_vs_mid_bps"], 0)
 
     async def test_unknown_coin_and_missing_history_say_why(self) -> None:
