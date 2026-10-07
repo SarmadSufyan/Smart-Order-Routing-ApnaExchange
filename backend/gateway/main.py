@@ -19,6 +19,7 @@ from backend.gateway.routers import (
     execution_reports,
     market_data,
     orders,
+    research,
     risk,
     routing,
     venues,
@@ -112,6 +113,7 @@ async def lifespan(app: FastAPI):
                 origins=settings.cors_origin_list or "this machine's frontend (localhost / 127.0.0.1, any port)")
     svc = init_services()
     await svc.audit_store.open()
+    await svc.research.open_store()
     await restore_state(svc)
     svc.audit_recorder.start()
     svc.pnl_service.start()
@@ -152,7 +154,8 @@ async def lifespan(app: FastAPI):
     # RAFT on: agree with the cluster before anything can trade (no-op when off).
     await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
-                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.arbitrage)
+                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.arbitrage,
+                  svc.research)
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
@@ -173,6 +176,7 @@ async def lifespan(app: FastAPI):
     await asyncio.gather(*_background_tasks, return_exceptions=True)
     _background_tasks.clear()
     await svc.exchange_registry.stop_all()
+    svc.research.close_store()
     svc.pnl_service.stop()
     svc.audit_recorder.stop()
     await svc.audit_store.close()
@@ -224,7 +228,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos, copilot, consensus, arbitrage):
+                      algos, copilot, consensus, arbitrage, research):
     app.include_router(router_module.router)
 
 

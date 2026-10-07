@@ -14,6 +14,8 @@ from backend.services.market_data.collector import MarketDataCollector
 from backend.services.market_data.history import MarketHistory
 from backend.services.order_state.entry import OrderEntry
 from backend.services.order_state.order_manager import OrderManager
+from backend.services.research.candles import CandleStore, CandleSync
+from backend.services.research.service import ResearchService
 from backend.services.risk_engine.batch import RiskBatchRunner
 from backend.services.risk_engine.controls import RiskControls
 from backend.services.risk_engine.kill_switch import KillSwitch
@@ -43,6 +45,7 @@ class Services:
     routing_engine: RoutingEngine
     algo_engine: AlgoEngine
     market_history: MarketHistory
+    research: ResearchService
     wallet_service: WalletService
     pnl_service: PnLService
     risk_monitor: RiskMonitor
@@ -179,6 +182,15 @@ def init_services() -> Services:
         enabled=settings.arb_enabled,
     )
 
+    # Research (Phase B): reference-market candle history, forecasts with a live track record,
+    # backtests, trade plans. Read-only: it has no order entry.
+    fees = parse_fee_schedule(settings.arb_taker_fees_bps)
+    candle_store = CandleStore(settings.resolved_market_history_path)
+    research = ResearchService(
+        candle_store, CandleSync(registry, candle_store, settings.symbol_list), collector, aggregator,
+        settings.symbol_list, reference_fee_bps=fees.get("V1", 10.0), risk_engine=risk_engine,
+    )
+
     _services = Services(
         exchange_registry=registry,
         venue_monitor=venue_monitor,
@@ -191,6 +203,7 @@ def init_services() -> Services:
         routing_engine=routing_engine,
         algo_engine=algo_engine,
         market_history=market_history,
+        research=research,
         wallet_service=wallet_service,
         pnl_service=pnl_service,
         risk_monitor=risk_monitor,

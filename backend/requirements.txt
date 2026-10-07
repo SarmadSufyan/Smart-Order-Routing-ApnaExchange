@@ -22,7 +22,9 @@ python-jose[cryptography]==3.5.0
 # provider stays swappable)
 httpx==0.28.1
 
+# Research and prediction tools (Phase B): indicators, the forecast model, backtests
+numpy==2.4.4
+
 # === Planned — not imported yet, kept so install stays one-shot ===
-# numpy==2.4.4              # risk analytics / anomaly detection (Phase 6)
 # redis[hiredis]            # cross-process state + pub/sub (Phase 2+)
 # asyncpg / sqlalchemy      # TimescaleDB audit log (Phase 4)

@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     # Empty = data/apnasor-<exchange_mode>.db, so testnet and mainnet records
     # never mix. ":memory:" keeps nothing (tests).
     database_path: str = ""
+    # Research candle history + the live forecast log. Empty = data/market-history.db (real-market
+    # data, the same whichever environment orders go to).
+    market_history_db_path: str = ""
 
     # ─── RAFT cluster (Phase 6) ───────────────────────────────────
     # Three node processes replicate the kill switch, risk limits and venue
@@ -271,6 +274,13 @@ class Settings(BaseSettings):
             path = Path(self.database_path)
             return str(path if path.is_absolute() else PROJECT_ROOT / path)
         return str(PROJECT_ROOT / "data" / f"apnasor-{self.exchange_mode}.db")
+
+    @property
+    def resolved_market_history_path(self) -> str:
+        if self.market_history_db_path:
+            path = Path(self.market_history_db_path)
+            return str(path if path.is_absolute() or self.market_history_db_path == ":memory:" else PROJECT_ROOT / path)
+        return str(PROJECT_ROOT / "data" / "market-history.db")
 
     @property
     def resolved_raft_data_dir(self) -> str:
