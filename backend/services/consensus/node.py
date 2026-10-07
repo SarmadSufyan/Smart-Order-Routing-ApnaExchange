@@ -24,6 +24,7 @@ import signal
 from pathlib import Path
 from typing import Any
 
+from backend.shared.utils.asyncio_fixes import fix_windows_connection_reset
 from backend.shared.utils.logger import get_logger, setup_logging
 
 from .client import LINE_LIMIT, parse_cluster
@@ -256,6 +257,9 @@ def main() -> None:
         # the main task — raising KeyboardInterrupt straight from the handler could hit the
         # event loop mid-callback, and a node hung on its way out (seen live, 1 of 3 nodes).
         signal.signal(signal.SIGBREAK, lambda *_: signal.raise_signal(signal.SIGINT))
+    # stop() awaits the server's wait_closed(): a peer connection reset at the wrong
+    # moment must not keep it waiting forever on Windows (asyncio_fixes.py).
+    fix_windows_connection_reset()
     storage = SqliteStorage(Path(args.data_dir) / f"node-{args.id}.db")
     node = RaftNode(
         args.id, nodes, storage,

@@ -110,7 +110,7 @@ backend/
                         wire.py (every message signed: HMAC-SHA256 + time stamp + one-time nonce)
     execution/ policy/ risk/ routing/ venue_health/   empty legacy placeholders (unused)
   shared/               models/ (Pydantic v2), database/store.py (AuditStore), events/event_bus.py,
-                        exceptions.py, utils/logger.py (structlog)
+                        exceptions.py, utils/logger.py (structlog), utils/asyncio_fixes.py (Windows connection-reset fix)
   tests/                unittest suites: test_exchanges, test_routing, test_portfolio, test_algos, test_arbitrage, ...
 frontend/src/
   pages/                Dashboard, MarketData, AlgoOrders, Wallet, HowItWorks, VenueHealth, RiskManager,
@@ -143,7 +143,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (314 as of 2026-10-06)
+python -m unittest discover -s backend/tests -t .   # all backend tests (322 as of 2026-10-06)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -207,7 +207,7 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 - **Process pools on Windows** start workers by re-importing Python (~1 s cold start): keep the pool warm, and scripts that use one need `if __name__ == "__main__":`.
 - **`IsolatedAsyncioTestCase` runs asyncio in debug mode** (a stack trace per callback): fine for most tests, but timer-heavy ones (RAFT over TCP) must `set_debug(False)` or elections never settle.
 - **A VPN breaks the exchanges**: Binance answers 451 "restricted location", Bybit 403 (seen 2026-10-06). Turn it off for live tests and the demo.
-- **Ctrl+C can hang 60 s after the browser was used** (Windows): a reset browser connection can make asyncio's `_call_connection_lost` raise WinError 10054 before it detaches from the server, so `Server.wait_closed()` (awaited by uvicorn before our shutdown) never returns; `start_all.py` kills the gateway at 60 s. Press Ctrl+C twice meanwhile. Details + fix options: PROGRESS.md → *Open questions*.
+- **Windows asyncio and reset connections:** a connection reset at the wrong moment made asyncio's `_call_connection_lost` raise WinError 10054 before it detached from the server, so `Server.wait_closed()` (awaited by uvicorn before our shutdown, and by a RAFT node's `stop()`) never returned — Ctrl+C hung 60 s. Fixed by `backend/shared/utils/asyncio_fixes.py`, installed first thing by the gateway and each node: any new process that runs an asyncio server on Windows should call `fix_windows_connection_reset()` too.
 - **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 - **The gateway's event loop is frozen ~2 s right after start** (ccxt loading the exchanges' markets). A network call with a sub-second timeout made at start-up fails although the other side answered — that was the "RAFT cluster unreachable at start-up" warning. Retry until a deadline instead of trusting one answer.
