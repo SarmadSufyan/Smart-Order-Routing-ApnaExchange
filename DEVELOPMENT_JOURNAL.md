@@ -1387,6 +1387,21 @@ Files: new `backend/shared/utils/asyncio_fixes.py`, `backend/tests/test_asyncio_
 
 ---
 
+## 2026-10-07 — Audit Log: a "Logins" filter
+
+*By Maham (`feature/frontend-v2`).*
+
+Fizza's security hardening (2026-10-06) audits every login (`login`) and failed login (`login_failed`), but the Audit Log had no filter for them — they only showed under *Everything*, mixed in with thousands of order and routing lines. Open question from 2026-10-06, assigned to Maham.
+
+- **`pages/AuditLog.tsx`:** new **Logins** filter = `login,login_failed` (the only two events `gateway/routers/auth.py` writes), placed before *System*.
+- **`components/AuditTimeline.tsx: auditColor`:** `login` → `C.blue`, `login_failed` → `C.red`. Before, both fell through to the grey default; a failed login is a security signal and should stand out (the same red as rejections and BREAKs). The colour reaches every place that uses `AuditRow`.
+
+**Verified live** (gateway + frontend from this branch, after merging `feature/crypto-pivot`): one wrong-password attempt as `trader1` ("Invalid username or password" on the Login page), then the demo login as `admin`; Audit Log → *Logins* showed exactly those two rows ("Failed login for 'trader1'", actor `unknown`; "admin logged in (demo login)", actor `admin`), nothing else. Colours checked in the page: with Mahnoor's new liquid-glass theme `--c-blue` is graphite, so a login reads graphite and a failed login the theme's muted red. Type-check passes.
+
+Files: `frontend/src/pages/AuditLog.tsx`, `frontend/src/components/AuditTimeline.tsx`, PROGRESS.md, this journal.
+
+---
+
 ## 2026-10-07 (later) — `npm audit`: 9 → 4, and a WebSocket bug found on the way
 
 *By Maham (`feature/frontend-v2`).* The frontend item of PROGRESS.md's *Security hardening before the final demo*.
@@ -1424,3 +1439,38 @@ Why fix it in `websocket.ts` rather than remove the extra `connect()` calls in `
 Files: `frontend/src/services/websocket.ts`, PROGRESS.md, this journal.
 
 ---
+
+---
+
+## 2026-10-07 — New direction (full product), one branch for everyone, and three real routing strategies
+
+*By Sarmad (relay holder, `feature/crypto-pivot`).*
+
+### The direction
+
+The 12 October deadline is no longer the goal; a complete, correct product is. Sarmad set four goals: **every algorithm real** (nothing listed that doesn't work), **live trading with real money** (exchange accounts first, a Web3 wallet later), **research and prediction tools** built on proper maths, and **bots / agents** that propose trades with their reasons and can trade for the owner within limits — including a profit-cycle bot (buy small, sell only above buy price + both fees + a threshold, repeat). Order agreed: A algorithms → B research → C bots proven on testnet → D real money (D may start while B continues) → E 24/7 hosting (decided later). The plan and its honest limits are in ROADMAP *Full product*.
+
+### One branch, one person at a time
+
+From today everyone works on `feature/crypto-pivot`, backend and screens together, as a relay (Sarmad decides who holds it). `feature/backend-v2` / `feature/frontend-v2` are retired. Before retiring them: the Ctrl+C fix (`feature/backend-v2`) was merged, and Mahnoor + Maham's redesign was saved as **`theme/liquid-glass`** — a visual theme to borrow from, not the product. Maham's three bug fixes from that branch were taken into the product as they are (one WebSocket per tab, `npm audit` 9 → 4, the Audit Log *Logins* filter); her journal entries came with them. CLAUDE.md, CONTRIBUTING.md, ONBOARDING.md and PROGRESS.md describe the new loop.
+
+### Routing strategies: what was fake
+
+`RoutingStrategy` listed `best_price`, `liquidity_sweep` and `vwap`, and the order API accepted all three — but `RoutingEngine` always created `BestPriceStrategy()` and ignored the field. An order sent "vwap" was silently routed by best price. And best price compared raw prices only, although the exchanges charge different taker fees (Gate's base tier is double Binance's).
+
+### What each one does now
+
+- **Best price, fee-aware.** Every book level is ranked by its all-in price — `price × (1 ± fee)` — using the same fee table as the arbitrage detector (`ARB_TAKER_FEES_BPS`; an exchange missing from it gets the highest listed fee, so an unknown fee never flatters a venue). With no table it is exactly the old best price, so every older test still passes unchanged. The proof shows each venue's fee and all-in price, the expected fees, and says so when a raw-cheaper venue lost on fees.
+- **Liquidity sweep.** Trades a little price for certainty: a cap at the best all-in price + `SWEEP_BAND_BPS` (20); every venue gets a share in proportion to its liquidity inside the cap (lots lost to rounding go to the best venue first — `proportional_shares`, pure); every child is an IOC whose limit **is** the cap. A new `ChildOrder.limit_final` tells the engine to send that cap as is (rounded to the tick toward the safe side, and never beyond the venue's own price-limit rule) instead of widening it by the 50 bps protection band.
+- **Smart.** Best price plus what a venue's unreliability is expected to cost: `(1 − fill ratio) × max(gap to the next venue's all-in price, one spread)`. The fill ratio is measured, not assumed — the engine keeps the last 50 IOC answers per venue (filled or expired at the limit, or a venue fault; refusals for our own reasons, like balance, don't count) and seeds it from restored history after a restart. A venue with fewer than 5 answers is ranked on price and fee only, and the proof says so.
+- **"vwap" as a routing choice is refused** with a message saying it is a time-based execution algorithm (it comes back as a real algo in the next step). A stored order that says "vwap" restores as best price — what actually ran.
+
+Design choice: the three strategies share one implementation (`BestPriceStrategy`, with two hooks — `extra_costs` for smart, `allocate` for the sweep), so the minimum-order pass, the balance caps and the proof text are identical for all three.
+
+### Verified live (testnet, 2026-10-07)
+
+0.0002 BTC buys with each strategy all filled on Bybit (the best all-in; smart reported 100 % fill on both Binance and Bybit, so no penalty). A 0.0006 BTC **sweep sell** split Binance 53 % / Bybit 47 % — their shares of the liquidity inside the cap — and both children carried the cap as their IOC limit. Through the order ticket: the strategy picker, its explanation and the proof (strategy, fee, measured fill %, all-in, price cap) render; no console errors. An order with `"strategy": "vwap"` gets a 422 with the explanation. 347 backend tests (25 new), ruff and the type-check pass.
+
+### Files
+
+New: `strategies/sweep.py`, `strategies/smart.py`, `tests/test_routing/test_strategies.py`, `tests/test_routing/test_engine_strategies.py`. Changed: `strategies/best_price.py` (fees, hooks), `strategies/base.py`, `strategies/__init__.py` (`build_strategies`), `routing_engine/engine.py` (strategy per order, fees, fill window, `limit_final`), `shared/models/order.py`, `shared/models/routing.py`, `gateway/config.py` (`SWEEP_BAND_BPS`), `gateway/dependencies.py`, `gateway/routers/routing.py`, `.env.example`; frontend `services/api.ts`, `stores/dataStore.ts`, `components/NewOrderModal.tsx`, `components/RoutingProof.tsx`; ROADMAP *Full product*, PROGRESS.md, CLAUDE.md, CONTRIBUTING.md, ONBOARDING.md.

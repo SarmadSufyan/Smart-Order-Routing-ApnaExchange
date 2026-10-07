@@ -15,7 +15,7 @@
 | Group | CS14 — Usman Institute of Technology (UITU), Final Year Project, 4 members |
 | Supervisors | Sir Usman Javed, Miss Shiza |
 | Domain | Crypto trading infrastructure: smart order routing, pre-trade risk, execution algos |
-| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**). Default branch `feature/crypto-pivot` (Sarmad merges into it at milestones). Working branches: `feature/backend-v2` (Fizza ⇄ Sarmad **relay**, one at a time) and `feature/frontend-v2` (Mahnoor + Maham, split by page) |
+| Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**). **Since 2026-10-07 `feature/crypto-pivot` (the default branch) is the ONE working branch for everyone** — backend and frontend, **one person at a time** (a relay; Sarmad decides who). `feature/backend-v2` / `feature/frontend-v2` are retired; `theme/liquid-glass` keeps Mahnoor + Maham's redesign as a theme, not the product |
 
 Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070-CS) · Mahnoor Nadeem (23SP-065-CS) · Maham Ikram (23SP-101-CS).
 
@@ -92,7 +92,8 @@ backend/
                         middleware/passwords.py (scrypt hashes), routers/*, websocket/ws_manager.py
   services/
     order_state/        order_manager.py (state machine, in-flight tracking, restore), entry.py (OrderEntry)
-    routing_engine/     engine.py (pipeline + child execution), strategies/best_price.py (depth walk)
+    routing_engine/     engine.py (pipeline + child execution, per-venue fill ratios), strategies/: best_price.py
+                        (fee-aware depth walk), sweep.py (proportional, one price cap), smart.py (fill reliability)
     risk_engine/        pre_trade.py (gate), checks.py (the 7 checks, pure), batch.py (pre-flight, stress test,
                         process pool), preflight.py (basket API), volatility.py (live realized vol),
                         controls.py (RiskControls: local or through RAFT), kill_switch.py, position_tracker.py,
@@ -143,7 +144,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (322 as of 2026-10-06)
+python -m unittest discover -s backend/tests -t .   # all backend tests (347 as of 2026-10-07)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -185,14 +186,14 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 **TypeScript**: strict mode; functional components; named exports; no `any`; styling is **inline styles with the theme tokens** `C` / `F` from `theme.ts` (no Tailwind, no CSS files); numbers through `format.ts`; server state in `dataStore.ts`, REST in `services/api.ts`.
 
-**Git**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`); work only on your team's branch (`feature/backend-v2` or `feature/frontend-v2`, see CONTRIBUTING.md); only Sarmad merges into `feature/crypto-pivot`, with merge commits (never squash the long-lived branches); no pushes to `main`. **No AI/tool attribution anywhere** — no co-author trailers, no "generated with …" lines in commits, PRs, code or docs.
+**Git**: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`); work on `feature/crypto-pivot` and only while you hold the relay (CONTRIBUTING.md); push each finished piece so the next person can continue; never squash or rewrite pushed history; no pushes to `main`. **No AI/tool attribution anywhere** — no co-author trailers, no "generated with …" lines in commits, PRs, code or docs.
 
 ## Session protocol (every working session, human or assistant)
 
-1. **Start:** `git pull` your branch (and `git merge origin/feature/crypto-pivot`); read this file, `PROGRESS.md` (*Who is working on what* — frontend: stay in your own pages; backend relay: read the **newest handoff note** first and continue from it), and the relevant `ROADMAP.md` section.
+1. **Start:** `git checkout feature/crypto-pivot` + `git pull`; read this file, `PROGRESS.md` (the **newest handoff note** first — continue from its "next step"), and the relevant `ROADMAP.md` section.
 2. **Plan before building:** read the real code (docs can lag), list contradictions/risks, then build.
 3. **Verify:** run the tests + type-check; exercise the feature live on testnet with a small order.
-4. **End:** update your row in `PROGRESS.md` (backend relay: add a handoff note — done, half-done with file/function, exact next step) and append a dated entry to `DEVELOPMENT_JOURNAL.md` (what, why, design choices, files). Commit with a conventional message; push your branch. Never leave uncommitted work behind.
+4. **End:** add a handoff note at the top of the relay table in `PROGRESS.md` (done, half-done with file/function, exact next step) and append a dated entry to `DEVELOPMENT_JOURNAL.md` (what, why, design choices, files). Commit with a conventional message; push `feature/crypto-pivot`; CI must be ✅. Never leave uncommitted work behind.
 
 ## Gotchas (each one cost us time)
 

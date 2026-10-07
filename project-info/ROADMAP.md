@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-06 (§7 security hardening and CI on GitHub Actions; before that, 2026-10-05: 5c Arbitrage page, narrow-screen layouts, §6 RAFT cluster panel + TWAP pre-flight button).
+> Last updated: 2026-10-07 (**Full product** plan — phases A–E; Phase A routing strategies done). Before that, 2026-10-06: §7 security hardening and CI on GitHub Actions.
 
 ---
 
@@ -33,6 +33,38 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
 
 **Priority if time runs short:** 5b and 6 matter most for the panel. 5c and the Phase 7 items are reach goals. DEX/Web3 (MetaMask, Uniswap) is a future-work slide only.
+
+---
+
+## Full product (decided 2026-10-07 — no deadline: complete and correct over fast)
+
+Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that doesn't work), **live trading with real money**, **research and prediction tools** built on proper maths, and **bots / agents** that suggest trades with reasons and can trade for the owner within limits. Built in this order, backend and screens together, one person at a time on `feature/crypto-pivot`:
+
+| Phase | What | Status |
+|---|---|---|
+| **A** | **All algorithms.** Routing (the "where"): best price **with fees**, liquidity sweep, smart (fill reliability). Execution (the "when"): TWAP, VWAP, POV, implementation shortfall (Almgren–Chriss), iceberg (IOC version), **auto** (picks one and says why) | routing ✅ 2026-10-07 (live on testnet); execution algos ⏭ |
+| **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (MA/EMA, RSI, MACD, Bollinger, ATR, VWAP), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ⏭ |
+| **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch | ⏭ |
+| **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | ⏭ |
+| **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | decide later |
+
+Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
+
+### A — All algorithms: "done" means
+
+**Routing strategies** (one order, split across exchanges now) — ✅ 2026-10-07:
+- [x] **Best price, fee-aware:** levels ranked by price + taker fee (`ARB_TAKER_FEES_BPS`, the same table as the arbitrage detector); the proof shows fee, all-in price and expected fees.
+- [x] **Liquidity sweep:** every exchange at once, in proportion to its depth within `SWEEP_BAND_BPS` (20) of the best all-in price; every child is an IOC capped at that price (sent as is, never widened).
+- [x] **Smart:** best price + (1 − measured fill ratio) × the cost of a miss (the gap to the next venue, at least one spread); fill ratio = what each venue filled of our last 50 children.
+- [x] The order ticket offers all three; the proof says which ran. The old "vwap" routing option (never implemented) is refused with where to find VWAP. Unit + engine tests; live on testnet (journal 2026-10-07).
+
+**Execution algorithms** (one parent order spread over time; every slice through `OrderEntry.submit`, each slice routed with the strategy the user picks):
+- [ ] **VWAP:** slice sizes follow the market's real volume profile (1-minute candles of the same time window over the last few days, from the exchanges' public data); benchmark = the market's VWAP over the run.
+- [ ] **POV:** trade a set percentage of the real market volume as it happens.
+- [ ] **Implementation shortfall:** Almgren–Chriss schedule (front-loaded by urgency) using live volatility and book depth; shows expected cost and risk vs TWAP.
+- [ ] **Iceberg (IOC):** never shows more than a display size; takes liquidity only at or better than the limit, in pieces, until done.
+- [ ] **Auto:** looks at order size vs live liquidity, volatility and urgency; recommends single order / IS / VWAP / TWAP / POV with its reasons and can start it.
+- [ ] Algo Orders page: every kind, its parameters and results; live on testnet for each.
 
 ---
 

@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # planned price. Decisions use mainnet books but fills happen on the
     # testnet book, so a drifted book must make a child expire, not overpay.
     child_price_protection_bps: float = 50.0
+    # Liquidity-sweep routing: every child is capped this far past the best
+    # all-in price (price + taker fee). Wider = more certain fill, worse price.
+    sweep_band_bps: float = 20.0
     # A venue that refuses our key's right to trade gets no new orders for
     # this long (then one retry); a restart clears it. Refused quantity is
     # re-routed to the other venues either way.
@@ -113,7 +116,9 @@ class Settings(BaseSettings):
     arb_scan_interval_ms: int = 250  # = the book sampling rate; faster sees nothing new
     # Base-tier spot TAKER fee per exchange in bps (both legs would be IOC =
     # taker). Defaults: each exchange's public base tier as listed in ccxt's
-    # market data (2026-10-04) — no VIP level, no BNB discount.
+    # market data (2026-10-04) — no VIP level, no BNB discount. Since
+    # 2026-10-07 the ROUTER uses the same table: every routing strategy ranks
+    # venues by price + this fee (our children are IOC, so always taker).
     arb_taker_fees_bps: str = "binance:10,bybit:10,okx:15,gate:20,coinbase:120"
     arb_min_net_bps: float = 0.0  # "profitable" = net edge after fees above this
     arb_audit_cooldown_s: float = 60.0  # at most one audit per direction per this

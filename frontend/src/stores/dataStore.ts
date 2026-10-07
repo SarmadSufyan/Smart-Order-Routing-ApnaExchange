@@ -15,6 +15,7 @@ import {
   type ArbStatus,
   type ArbWindowList,
   type ConsensusStatus,
+  type RoutingStrategyName,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
 
@@ -63,7 +64,8 @@ interface DataState {
   fetchExecutionReports: () => Promise<void>
   fetchRoutingStats: () => Promise<void>
   fetchAll: () => Promise<void>
-  submitOrder: (symbol: string, side: string, qty: number, orderType?: string, limitPrice?: number) => Promise<Order | null>
+  submitOrder: (symbol: string, side: string, qty: number, orderType?: string, limitPrice?: number,
+                strategy?: RoutingStrategyName) => Promise<Order | null>
   cancelOrder: (orderId: string) => Promise<void>
   blacklistVenue: (venueId: string, reason?: string) => Promise<string | null>
   unblacklistVenue: (venueId: string) => Promise<string | null>
@@ -259,9 +261,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ loading: false })
   },
 
-  submitOrder: async (symbol, side, qty, orderType = 'MARKET', limitPrice) => {
+  submitOrder: async (symbol, side, qty, orderType = 'MARKET', limitPrice, strategy = 'best_price') => {
     try {
-      const order = await api.submitOrder(symbol, side, qty, orderType, limitPrice)
+      const order = await api.submitOrder(symbol, side, qty, orderType, limitPrice, strategy)
       await get().fetchOrders()
       await get().fetchExecutionReports()
       await get().fetchRiskStatus()

@@ -126,6 +126,9 @@ def init_services() -> Services:
         coherence=coherence,
         wallet=wallet_service,  # per-venue balances cap each venue's slice
         trading_block_s=settings.trading_block_cooldown_s,
+        # Venues are ranked by price + taker fee (the same table the arbitrage detector uses).
+        taker_fees_bps=parse_fee_schedule(settings.arb_taker_fees_bps),
+        sweep_band_bps=settings.sweep_band_bps,
     )
     # The one way to change the kill switch, limits and venue blacklist —
     # through the RAFT cluster's leader when RAFT_ENABLED=true.

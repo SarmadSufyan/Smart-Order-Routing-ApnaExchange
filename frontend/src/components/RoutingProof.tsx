@@ -1,6 +1,7 @@
 import React from 'react'
 import { C, F, tint } from '../theme'
 import { baseAsset, fmtPrice, fmtQty, fmtSize, fmtUsd } from '../format'
+import { routingStrategyLabel } from '../services/api'
 import type { RoutingDecision } from '../services/api'
 
 /**
@@ -40,6 +41,9 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
     borderBottom: `1px solid ${C.border}`, textAlign: 'left', letterSpacing: '.05em',
   }
   const td: React.CSSProperties = { padding: '8px 10px', fontSize: F.base }
+  // Decisions made before 2026-10-07 have no fee data: show the old columns only.
+  const hasFees = decision.candidates.some((c) => (c.fee_bps ?? 0) > 0 || (c.extra_cost_bps ?? 0) > 0)
+  const hasSmart = decision.candidates.some((c) => c.fill_ratio !== undefined && c.fill_ratio !== null)
 
   return (
     <div style={{ fontFamily: "'Consolas','IBM Plex Mono',monospace" }}>
@@ -53,7 +57,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 3 }}>
-              SOR DECISION · {symbol}
+              SOR DECISION · {symbol} · {routingStrategyLabel(decision.strategy).toUpperCase()}
             </div>
             <div style={{ fontSize: F.md, color: C.text, fontWeight: 600 }}>
               Routed {isBuy ? 'buy' : 'sell'} of {fmtQty(decision.total_allocated)} {unit}
@@ -65,6 +69,19 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
               {decision.expected_slippage_bps !== undefined && ` · ${decision.expected_slippage_bps.toFixed(2)} bps vs best price`}
               {' '}· pre-trade estimate from the live order book
             </div>
+            {!!decision.all_in_avg_price && hasFees && (
+              <div style={{ fontSize: F.xs, color: C.muted, marginTop: 3 }}>
+                All-in {isBuy ? 'cost' : 'proceeds'} incl. fees{' '}
+                <span style={{ color: C.text, fontWeight: 600 }}>{fmtPrice(decision.all_in_avg_price)}</span>
+                {!!decision.expected_fees_quote && <> · expected fees {fmtUsd(decision.expected_fees_quote)}</>}
+              </div>
+            )}
+            {decision.price_cap != null && (
+              <div style={{ fontSize: F.xs, color: C.muted, marginTop: 3 }}>
+                Price cap: no child may trade beyond{' '}
+                <span style={{ color: C.orange, fontWeight: 600 }}>{fmtPrice(decision.price_cap)}</span> all-in
+              </div>
+            )}
             {shortfallBps !== null && (
               <div style={{ fontSize: F.xs, color: C.muted, marginTop: 3 }}>
                 Actual fill <span style={{ color: C.text, fontWeight: 600 }}>{fmtPrice(fillPrice)}</span>
@@ -133,7 +150,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
         borderRadius: 6, overflow: 'hidden', marginBottom: 12,
       }}>
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>
-          VENUE COMPARISON · executable venues ranked by {isBuy ? 'lowest ask' : 'highest bid'}, then excluded venues
+          VENUE COMPARISON · executable venues ranked by {hasFees ? `all-in ${isBuy ? 'cost (ask + fee)' : 'proceeds (bid − fee)'}` : isBuy ? 'lowest ask' : 'highest bid'}, then excluded venues
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -141,6 +158,9 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
               <th style={{ ...th, width: 32 }}>#</th>
               <th style={th}>Venue</th>
               <th style={{ ...th, textAlign: 'right' }}>{isBuy ? 'Ask' : 'Bid'}</th>
+              {hasFees && <th style={{ ...th, textAlign: 'right' }}>Fee</th>}
+              {hasSmart && <th style={{ ...th, textAlign: 'right' }} title="Share of what we sent this venue that it filled (recent orders)">Filled</th>}
+              {hasFees && <th style={{ ...th, textAlign: 'right' }}>All-in</th>}
               <th style={{ ...th, textAlign: 'right' }}>Avail</th>
               <th style={{ ...th, textAlign: 'right' }}>Allocated</th>
               <th style={th}>Note</th>
@@ -168,6 +188,22 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                   <td style={{ ...td, textAlign: 'right', color: c.eligible ? (isBuy ? C.red : C.green) : C.dim }}>
                     {fmtPrice(c.price)}
                   </td>
+                  {hasFees && (
+                    <td style={{ ...td, textAlign: 'right', color: C.muted }}
+                        title={c.extra_cost_bps ? `${c.fee_bps ?? 0} bps fee + ${c.extra_cost_bps.toFixed(2)} bps expected cost of missing` : undefined}>
+                      {(c.fee_bps ?? 0).toFixed(0)} bps{c.extra_cost_bps ? ` +${c.extra_cost_bps.toFixed(1)}` : ''}
+                    </td>
+                  )}
+                  {hasSmart && (
+                    <td style={{ ...td, textAlign: 'right', color: c.fill_ratio != null && c.fill_ratio < 0.9 ? C.orange : C.muted }}>
+                      {c.fill_ratio != null ? `${(c.fill_ratio * 100).toFixed(0)}%` : '—'}
+                    </td>
+                  )}
+                  {hasFees && (
+                    <td style={{ ...td, textAlign: 'right', color: c.eligible ? C.text : C.dim }}>
+                      {c.effective_price ? fmtPrice(c.effective_price) : '—'}
+                    </td>
+                  )}
                   <td style={{ ...td, textAlign: 'right', color: c.eligible ? C.muted : C.dim }}>
                     {fmtSize(c.size)}
                   </td>
@@ -178,9 +214,11 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                     {inelig
                       ? c.excluded_reason
                       : c.rank === 1
-                        ? `Best ${isBuy ? 'ask' : 'bid'}`
+                        ? hasFees ? 'Best all-in' : `Best ${isBuy ? 'ask' : 'bid'}`
                         : winner
-                          ? `Topped up after rank ${c.rank - 1} exhausted`
+                          ? decision.strategy === 'liquidity_sweep'
+                            ? 'Share of the in-cap liquidity'
+                            : `Topped up after rank ${c.rank - 1} exhausted`
                           : 'Not needed'}
                   </td>
                 </tr>

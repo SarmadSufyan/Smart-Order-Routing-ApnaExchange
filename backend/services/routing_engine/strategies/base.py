@@ -26,6 +26,8 @@ class RoutingStrategy(ABC):
         exclusion_reasons: dict[str, str] | None = None,
         capacity: dict[str, float] | None = None,
         min_sizes: dict[str, tuple[float, float]] | None = None,
+        fees_bps: dict[str, float] | None = None,
+        fill_ratios: dict[str, tuple[float, int]] | None = None,
     ) -> RoutingResult:
         """Decide how to split ``order`` across venues.
 
@@ -44,4 +46,8 @@ class RoutingStrategy(ABC):
                 balance (coins to sell, or USDT/price to buy). Missing = no cap.
             min_sizes: Per venue, its (minimum lot, minimum order value in
                 quote). A venue's share must meet both or go elsewhere.
+            fees_bps: Per venue, its taker fee in bps. Levels are ranked by
+                price plus fee. Missing table = no fees (plain price).
+            fill_ratios: Per venue, (share of our recent IOC quantity it
+                filled, number of orders measured) - used by smart routing.
         """

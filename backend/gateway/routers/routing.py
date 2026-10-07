@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from backend.gateway.middleware.auth import User, get_current_user
+from backend.shared.models.order import RoutingStrategy
 from backend.shared.models.routing import RoutingStatusResponse
 
 router = APIRouter(prefix="/api/routing", tags=["routing"])
@@ -18,8 +19,8 @@ def _get_routing_engine():
 async def get_routing_status(user: Annotated[User, Depends(get_current_user)]):
     engine = _get_routing_engine()
     return RoutingStatusResponse(
-        active_strategy="best_price",
-        available_strategies=["best_price"],
+        active_strategy=RoutingStrategy.BEST_PRICE.value,
+        available_strategies=[s.value for s in RoutingStrategy],
         routable_venues=engine.executable_venues(),
         excluded_venues=engine.excluded_venues(),
         stats=engine.stats,

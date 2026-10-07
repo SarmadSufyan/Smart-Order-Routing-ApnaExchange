@@ -485,6 +485,26 @@ export interface VenueCandidate {
   excluded_reason?: string | null
   allocated_qty: number
   is_winner: boolean
+  fee_bps?: number                // taker fee charged by this venue
+  extra_cost_bps?: number         // smart routing: expected cost of this venue missing
+  effective_price?: number        // price incl. fee (+ extra): what the ranking compares
+  fill_ratio?: number | null      // smart routing: share of our recent IOC quantity it filled
+}
+
+/** How one order is split across exchanges (backend: shared/models/order.py RoutingStrategy). */
+export type RoutingStrategyName = 'best_price' | 'liquidity_sweep' | 'smart'
+
+export const ROUTING_STRATEGIES: { id: RoutingStrategyName; label: string; hint: string }[] = [
+  { id: 'best_price', label: 'Best price',
+    hint: 'Cheapest levels first across every exchange, ranked by price + exchange fee.' },
+  { id: 'liquidity_sweep', label: 'Liquidity sweep',
+    hint: 'Every exchange at once, in proportion to its depth, under one hard price cap: most likely to fill now, slightly worse price.' },
+  { id: 'smart', label: 'Smart',
+    hint: 'Best price, plus what each exchange\'s measured fill rate is expected to cost when it misses.' },
+]
+
+export function routingStrategyLabel(id?: string | null): string {
+  return ROUTING_STRATEGIES.find((s) => s.id === id)?.label ?? 'Best price'
 }
 
 export interface RoutingDecision {
@@ -506,6 +526,10 @@ export interface RoutingDecision {
   expected_slippage_bps?: number
   levels_used?: number
   quantity_rounded_from?: number | null
+  strategy?: string               // best_price | liquidity_sweep | smart
+  expected_fees_quote?: number    // taker fees the plan expects to pay (quote asset)
+  all_in_avg_price?: number       // blended price incl. fees
+  price_cap?: number | null       // liquidity sweep: no child trades beyond this (all-in)
 }
 
 export interface Order {
@@ -524,6 +548,7 @@ export interface Order {
   routing_decision?: RoutingDecision | null
   submitted_by?: string | null
   parent_id?: string | null   // the algo order (e.g. TWAP) this is a slice of
+  strategy?: string           // routing strategy: best_price | liquidity_sweep | smart
 }
 
 export interface RiskLimits {
@@ -762,6 +787,7 @@ export const api = {
     quantity: number,
     orderType: string = 'MARKET',
     limitPrice?: number,
+    strategy: RoutingStrategyName = 'best_price',
   ) =>
     request<Order>('/api/orders/', {
       method: 'POST',
@@ -770,6 +796,7 @@ export const api = {
         side,
         quantity,
         order_type: orderType,
+        strategy,
         ...(limitPrice !== undefined ? { limit_price: limitPrice } : {}),
       }),
     }),

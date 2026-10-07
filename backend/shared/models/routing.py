@@ -21,6 +21,10 @@ class VenueCandidate(BaseModel):
     excluded_reason: str | None = None  # populated when eligible=False
     allocated_qty: float = 0.0    # how many shares the SOR sent here
     is_winner: bool = False       # True if this venue got any allocation
+    fee_bps: float = 0.0          # taker fee charged by this venue
+    extra_cost_bps: float = 0.0   # smart routing: expected cost of this venue missing (see fill_ratio)
+    effective_price: float = 0.0  # price incl. fee (+ extra cost): what the ranking compares
+    fill_ratio: float | None = None  # smart routing: share of our recent IOC quantity this venue filled
 
 
 class RoutingDecision(BaseModel):
@@ -46,6 +50,11 @@ class RoutingDecision(BaseModel):
     expected_slippage_bps: float = 0.0            # expected VWAP vs best touch, in basis points
     levels_used: int = 0                          # price levels consumed across all venues
     quantity_rounded_from: float | None = None    # original qty if lot-size rounding changed it
+    # Strategy + all-in cost (added 2026-10-07 with fee-aware routing)
+    strategy: str = "best_price"                  # best_price | liquidity_sweep | smart
+    expected_fees_quote: float = 0.0              # taker fees the plan expects to pay, in the quote asset
+    all_in_avg_price: float = 0.0                 # blended price incl. fees (buy: paid, sell: received)
+    price_cap: float | None = None                # liquidity sweep: no child may trade beyond this price
 
 
 class RoutingResult(BaseModel):
@@ -58,8 +67,8 @@ class RoutingResult(BaseModel):
 
 
 class RoutingStatusResponse(BaseModel):
-    active_strategy: str = "best_price"
-    available_strategies: list[str] = ["best_price"]
+    active_strategy: str = "best_price"  # the default for a new order
+    available_strategies: list[str] = ["best_price", "liquidity_sweep", "smart"]
     routable_venues: list[str] = []
     excluded_venues: dict[str, str] = {}
     stats: dict = {}

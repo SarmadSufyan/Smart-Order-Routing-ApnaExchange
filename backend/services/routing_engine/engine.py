@@ -25,6 +25,7 @@ read balances but not trade failed every order whose best price was on OKX.
 
 import asyncio
 import time
+from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -39,11 +40,14 @@ from backend.shared.models.risk import RiskCheckResult
 from backend.shared.models.routing import RoutingResult, RoutingStatus
 from backend.shared.utils.logger import get_logger
 
-from .strategies.best_price import BestPriceStrategy, fmt_price, fmt_qty
+from .strategies import build_strategies
+from .strategies.best_price import fmt_price, fmt_qty
+from .strategies.sweep import DEFAULT_BAND_BPS
 
 logger = get_logger("routing_engine")
 
 MAX_REROUTES = 2  # extra rounds after the first; each round drops the venues that refused
+FILL_WINDOW = 50  # recent IOC children per venue behind smart routing's fill ratio
 
 
 def net_base_change(order: Order, ex: ExecutionResult) -> float:
@@ -96,6 +100,8 @@ class RoutingEngine:
         wallet=None,
         trading_block_s: float = 600.0,
         clock: Callable[[], float] = time.monotonic,
+        taker_fees_bps: dict[str, float] | None = None,
+        sweep_band_bps: float = DEFAULT_BAND_BPS,
     ) -> None:
         self._aggregator = market_data_aggregator
         self._collector = market_data_collector
@@ -111,7 +117,10 @@ class RoutingEngine:
         self._block_s = trading_block_s
         self._clock = clock
         self._trade_blocks: dict[str, tuple[str, float]] = {}  # venue -> (reason, resume at clock time)
-        self._strategy = BestPriceStrategy()
+        self._strategies = build_strategies(sweep_band_bps)
+        self._fees = dict(taker_fees_bps or {})
+        # (requested, filled) of our recent IOC children per venue: smart routing's reliability measure
+        self._fill_window: dict[str, deque[tuple[float, float]]] = {}
         self._orders_routed_today = 0
         self._timed_orders = 0  # routed by this process (restored ones have no timing)
         self._total_routing_time_ms = 0.0
@@ -124,13 +133,38 @@ class RoutingEngine:
         return None
 
     def restore_stats(self, orders: list[Order]) -> None:
-        """Recount today's routed orders from the history restored after a restart."""
+        """Recount today's routed orders, and each venue's recent fill ratio, from the restored history."""
         today = datetime.now(UTC).date()
-        for o in orders:
+        for o in sorted(orders, key=lambda x: x.created_at):
+            for child in o.child_orders:
+                # Children that reached the venue and got an IOC answer (filled or expired at the limit).
+                if child.filled_quantity > 0 or (child.reject_reason or "").startswith("price protection"):
+                    self._record_fill(child.venue_id, child.quantity, child.filled_quantity)
             if o.child_orders and o.created_at.date() == today:
                 self._orders_routed_today += 1
                 for child in o.child_orders:
                     self._venue_allocation[child.venue_id] = self._venue_allocation.get(child.venue_id, 0) + 1
+
+    # -- strategies --------------------------------------------------
+    def strategy_for(self, order: Order):
+        return self._strategies[order.strategy]
+
+    @property
+    def taker_fees_bps(self) -> dict[str, float]:
+        return dict(self._fees)
+
+    def _record_fill(self, venue_id: str, requested: float, filled: float) -> None:
+        if requested > 0:
+            self._fill_window.setdefault(venue_id, deque(maxlen=FILL_WINDOW)).append((requested, max(filled, 0.0)))
+
+    def fill_ratios(self) -> dict[str, tuple[float, int]]:
+        """Per venue: share of the quantity we sent that it filled (last ``FILL_WINDOW`` children), and how many."""
+        out = {}
+        for vid, window in self._fill_window.items():
+            requested = sum(r for r, _ in window)
+            if requested > 0:
+                out[vid] = (min(sum(f for _, f in window) / requested, 1.0), len(window))
+        return out
 
     @property
     def stats(self) -> dict:
@@ -141,6 +175,8 @@ class RoutingEngine:
             "venue_allocation": {
                 vid: round(count / total, 2) for vid, count in self._venue_allocation.items()
             },
+            "fill_ratios": {vid: {"ratio": round(r, 4), "orders": n} for vid, (r, n) in self.fill_ratios().items()},
+            "taker_fees_bps": self.taker_fees_bps,
         }
 
     def executable_venues(self, symbol: str | None = None) -> list[str]:
@@ -284,9 +320,10 @@ class RoutingEngine:
             if (d := self._collector.get_depth(vid, order.symbol, self._depth_levels)) is not None
         }
         names = {a.venue_id: a.name for a in self._registry.all()}
-        result = await self._strategy.route(
+        result = await self.strategy_for(order).route(
             order, nbbo, routable, depth=depth, lot_steps=steps, venue_names=names,
             exclusion_reasons=self.excluded_venues(order.symbol), capacity=capacity, min_sizes=minimums,
+            fees_bps=self._fees, fill_ratios=self.fill_ratios(),
         )
         result.routing_time_ms = round((time.monotonic() - start) * 1000, 2)
 
@@ -392,11 +429,12 @@ class RoutingEngine:
             for vid in venues
             if (d := self._collector.get_depth(vid, order.symbol, self._depth_levels)) is not None
         }
-        result = await self._strategy.route(
+        result = await self.strategy_for(order).route(
             plan, nbbo, venues, depth=depth, lot_steps=steps,
             venue_names={a.venue_id: a.name for a in self._registry.all()},
             exclusion_reasons={**self.excluded_venues(order.symbol), **{v: "refused this order" for v in refused}},
             capacity=await self.venue_capacity(plan, venues, nbbo), min_sizes=minimums,
+            fees_bps=self._fees, fill_ratios=self.fill_ratios(),
         )
         if result.status == RoutingStatus.REJECTED or not result.child_orders:
             return give_up(result.rejection_reason or "no liquidity on the other venues")
@@ -489,15 +527,24 @@ class RoutingEngine:
                 exec_type=ExecType.REJECT, requested_qty=child.quantity,
                 reason=f"venue {child.venue_id} is not connected", venue_fault=True, retry_elsewhere=True,
             )
-        if order.order_type == OrderType.MARKET:
+        rules = adapter.rules(order.symbol)
+        tick = rules.price_tick if rules else 0.0
+        if child.limit_final and child.limit_price:
+            # The strategy's own cap (a sweep): send it as is - rounded to the tick
+            # toward the safe side - but never beyond the venue's own price-limit rule.
+            cap = child.limit_price
+            if rules and rules.max_limit_deviation_bps:
+                venue_rule = protected_limit_price(order.side, child.price, rules.max_limit_deviation_bps)
+                cap = min(cap, venue_rule) if order.side == OrderSide.BUY else max(cap, venue_rule)
+            child.limit_price = protected_limit_price(order.side, cap, 0.0, tick)
+            ref = child.price or cap
+            self._child_band_bps[str(child.id)] = abs(child.limit_price - ref) / ref * 1e4 if ref else 0.0
+        elif order.order_type == OrderType.MARKET:
             planned = child.limit_price or child.price
-            rules = adapter.rules(order.symbol)
             band = self._protection_bps
             if rules and rules.max_limit_deviation_bps:
                 band = min(band, rules.max_limit_deviation_bps)  # venue's own price-limit rule
-            child.limit_price = protected_limit_price(
-                order.side, planned, band, rules.price_tick if rules else 0.0
-            )
+            child.limit_price = protected_limit_price(order.side, planned, band, tick)
             self._child_band_bps[str(child.id)] = band
         # Every child is an IOC LIMIT: user's limit, or the protected market price.
         return await adapter.place_order(
@@ -520,7 +567,13 @@ class RoutingEngine:
         # An IOC that didn't (fully) fill on a MARKET parent means the venue's
         # book had moved beyond our protection band — say so plainly.
         band = self._child_band_bps.pop(str(child.id), self._protection_bps)
-        if order.order_type == OrderType.MARKET and ex.exchange_status == "expired" and child.limit_price:
+        if ex.exec_type in (ExecType.FILL, ExecType.PARTIAL) or ex.exchange_status == "expired" or ex.venue_fault:
+            self._record_fill(child.venue_id, ex.requested_qty or child.quantity, ex.filled_qty)
+        if child.limit_final and ex.exchange_status == "expired" and child.limit_price:
+            unfilled = ex.requested_qty - ex.filled_qty
+            ex.reason = (f"price protection: {fmt_qty(unfilled)} had no liquidity up to the sweep's price cap "
+                         f"{fmt_price(child.limit_price)}")
+        elif order.order_type == OrderType.MARKET and ex.exchange_status == "expired" and child.limit_price:
             unfilled = ex.requested_qty - ex.filled_qty
             ex.reason = (
                 f"price protection: {fmt_qty(unfilled)} had no liquidity within "

@@ -5,7 +5,8 @@ import { backendVenueToUi } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { RoutingProof } from './RoutingProof'
-import type { Order as BackendOrder } from '../services/api'
+import { ROUTING_STRATEGIES, routingStrategyLabel } from '../services/api'
+import type { Order as BackendOrder, RoutingStrategyName } from '../services/api'
 import type { OrderSide } from '../types'
 
 interface NewOrderForm {
@@ -14,6 +15,7 @@ interface NewOrderForm {
   orderType: 'Market' | 'Limit'
   qty:       string
   price:     string
+  strategy:  RoutingStrategyName
 }
 
 interface ValidationErrors {
@@ -68,6 +70,7 @@ export function NewOrderModal({
     orderType: 'Market',
     qty:       initialQty,
     price:     '',
+    strategy:  'best_price',
   })
 
   const [errors, setErrors] = useState<ValidationErrors>({})
@@ -84,7 +87,7 @@ export function NewOrderModal({
     if (open) {
       setForm({
         symbol: initialSymbol, side: initialSide, orderType: 'Market',
-        qty: initialQty, price: '',
+        qty: initialQty, price: '', strategy: 'best_price',
       })
       setErrors({})
       setStage('form')
@@ -182,6 +185,7 @@ export function NewOrderModal({
         parseFloat(form.qty),
         form.orderType === 'Market' ? 'MARKET' : 'LIMIT',
         form.orderType === 'Limit' ? parseFloat(form.price) : undefined,
+        form.strategy,
       )
       if (order) {
         responseRef.current = order
@@ -362,27 +366,33 @@ export function NewOrderModal({
             </div>
           </div>
 
-          {/* Routing (informational — the SOR always decides the venues) */}
+          {/* Routing strategy: how this order is split across the exchanges */}
           <div style={row2}>
             <div>
-              <span style={label}>Venue routing</span>
-              <div
-                style={{ ...input, color: C.blue }}
+              <span style={label}>Routing strategy</span>
+              <select
+                value={form.strategy}
+                onChange={(e) => update('strategy', e.target.value as RoutingStrategyName)}
+                style={{ ...select, color: C.blue }}
                 title="Data-only venues count in the NBBO but can't receive orders"
               >
-                ⚡ Best price · {venues.filter((v) => v.canTrade && !v.blacklisted).length} executable
-                {venues.some((v) => v.dataOnly) && ` + ${venues.filter((v) => v.dataOnly).length} data-only`}
-              </div>
+                {ROUTING_STRATEGIES.map((s) => <option key={s.id} value={s.id}>⚡ {s.label}</option>)}
+              </select>
             </div>
             <div>
               <span style={label}>Child orders</span>
               <div
                 style={{ ...input, color: C.muted }}
-                title="Never rests on a venue. Market orders are capped at the planned price plus a small protection band, so a moved book makes the child expire instead of overpaying."
+                title="Never rests on a venue. Market orders are capped at the planned price plus a small protection band (a sweep: at its price cap), so a moved book makes the child expire instead of overpaying."
               >
-                IOC {form.orderType === 'Market' ? '· price-protected' : '· at your limit'}
+                IOC {form.strategy === 'liquidity_sweep' ? '· one price cap' : form.orderType === 'Market' ? '· price-protected' : '· at your limit'}
               </div>
             </div>
+          </div>
+          <div style={{ fontSize: F.xs, color: C.dim, marginTop: -6, marginBottom: 12, lineHeight: 1.5 }}>
+            {ROUTING_STRATEGIES.find((s) => s.id === form.strategy)?.hint}
+            {' '}· {venues.filter((v) => v.canTrade && !v.blacklisted).length} executable
+            {venues.some((v) => v.dataOnly) && ` + ${venues.filter((v) => v.dataOnly).length} data-only`} exchanges
           </div>
 
           {/* Indicative pricing from live NBBO */}
@@ -509,8 +519,8 @@ export function NewOrderModal({
           </div>
           <div style={{ fontSize: F.base, color: C.dim }}>
             {resultOrder
-              ? <>Sending to <span style={{ color: C.blue }}>{resolvedVenue}</span> via best-price strategy…</>
-              : <>Routing via best-price strategy…</>}
+              ? <>Sending to <span style={{ color: C.blue }}>{resolvedVenue}</span> via {routingStrategyLabel(form.strategy).toLowerCase()}…</>
+              : <>Routing via {routingStrategyLabel(form.strategy).toLowerCase()}…</>}
           </div>
           <div style={{ marginTop: 16, height: 3, background: C.surface2, borderRadius: 2, overflow: 'hidden' }}>
             <div style={{

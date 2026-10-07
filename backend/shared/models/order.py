@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class OrderSide(str, Enum):
@@ -50,9 +50,25 @@ VALID_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
 
 
 class RoutingStrategy(str, Enum):
-    BEST_PRICE = "best_price"
-    LIQUIDITY_SWEEP = "liquidity_sweep"
-    VWAP = "vwap"
+    """How ONE order is split across venues right now (the "where").
+
+    Time-based execution (TWAP, VWAP, POV, ...) is the algo layer's job:
+    ``backend/services/algos``, ``POST /api/algos``.
+    """
+
+    BEST_PRICE = "best_price"  # cheapest all-in (price + taker fee) levels first
+    LIQUIDITY_SWEEP = "liquidity_sweep"  # every venue at once, in proportion to its depth within a price cap
+    SMART = "smart"  # best price + each venue's measured fill reliability
+
+
+def _routing_strategy(value: object) -> object:
+    # "vwap" was listed here before 2026-10-07 but never implemented (the
+    # router always used best price). VWAP is a schedule over time, so it now
+    # lives with the other execution algorithms.
+    if isinstance(value, str) and value.strip().lower() == "vwap":
+        raise ValueError("VWAP is a time-based execution algorithm, not a routing strategy: "
+                         "start it as an algo order (POST /api/algos/ with kind VWAP)")
+    return value
 
 
 class OrderCreate(BaseModel):
@@ -63,6 +79,8 @@ class OrderCreate(BaseModel):
     limit_price: float | None = Field(None, gt=0)
     strategy: RoutingStrategy = RoutingStrategy.BEST_PRICE
 
+    _strategy_check = field_validator("strategy", mode="before")(_routing_strategy)
+
 
 class ChildOrder(BaseModel):
     id: UUID = Field(default_factory=uuid4)
@@ -71,6 +89,9 @@ class ChildOrder(BaseModel):
     quantity: float
     price: float  # expected VWAP at this venue (from the routing decision)
     limit_price: float | None = None  # IOC limit actually sent (price protection)
+    # True when the strategy already set the worst acceptable price (a sweep's
+    # price cap): the engine sends it as is instead of widening it.
+    limit_final: bool = False
     client_order_id: str | None = None  # id sent to the venue (idempotency / reconciliation)
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
@@ -101,6 +122,13 @@ class Order(BaseModel):
     routing_decision: dict | None = None  # RoutingDecision snapshot — stored as dict to avoid circular import
     submitted_by: str | None = None  # the user whose authority placed it — for the audit trail
     parent_id: str | None = None  # algo order (e.g. a TWAP) this is a slice of
+
+    @field_validator("strategy", mode="before")
+    @classmethod
+    def _stored_strategy(cls, value: object) -> object:
+        # A stored order from before 2026-10-07 may say "vwap" (accepted then,
+        # routed as best price): restore it as what actually happened.
+        return RoutingStrategy.BEST_PRICE if isinstance(value, str) and value.lower() == "vwap" else value
 
     def can_transition_to(self, new_status: OrderStatus) -> bool:
         return new_status in VALID_TRANSITIONS.get(self.status, set())
