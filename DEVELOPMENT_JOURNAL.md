@@ -1348,3 +1348,18 @@ Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binanc
 Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), CLAUDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
 
 ---
+
+## 2026-10-07 — Audit Log: a "Logins" filter
+
+*By Maham (`feature/frontend-v2`).*
+
+Fizza's security hardening (2026-10-06) audits every login (`login`) and failed login (`login_failed`), but the Audit Log had no filter for them — they only showed under *Everything*, mixed in with thousands of order and routing lines. Open question from 2026-10-06, assigned to Maham.
+
+- **`pages/AuditLog.tsx`:** new **Logins** filter = `login,login_failed` (the only two events `gateway/routers/auth.py` writes), placed before *System*.
+- **`components/AuditTimeline.tsx: auditColor`:** `login` → `C.blue`, `login_failed` → `C.red`. Before, both fell through to the grey default; a failed login is a security signal and should stand out (the same red as rejections and BREAKs). The colour reaches every place that uses `AuditRow`.
+
+**Verified live** (gateway + frontend from this branch, after merging `feature/crypto-pivot`): one wrong-password attempt as `trader1` ("Invalid username or password" on the Login page), then the demo login as `admin`; Audit Log → *Logins* showed exactly those two rows ("Failed login for 'trader1'", actor `unknown`; "admin logged in (demo login)", actor `admin`), nothing else. Colours checked in the page: with Mahnoor's new liquid-glass theme `--c-blue` is graphite, so a login reads graphite and a failed login the theme's muted red. Type-check passes.
+
+Files: `frontend/src/pages/AuditLog.tsx`, `frontend/src/components/AuditTimeline.tsx`, PROGRESS.md, this journal.
+
+---

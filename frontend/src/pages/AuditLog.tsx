@@ -14,6 +14,7 @@ const FILTERS: { label: string; types: string }[] = [
   { label: 'Copilot', types: 'copilot_proposed,copilot_clarify,copilot_refused,copilot_confirmed,copilot_cancelled,copilot_confirm_failed,copilot_unreadable_answer' },
   { label: 'RAFT', types: 'consensus_committed,consensus_pending,consensus_refused,consensus_adopted,consensus_synced,consensus_unreachable' },
   { label: 'Arbitrage', types: 'arb_opportunity' },
+  { label: 'Logins', types: 'login,login_failed' },
   { label: 'System', types: 'gateway_started,gateway_stopped,baseline_set' },
 ]
 const PAGE = 100
