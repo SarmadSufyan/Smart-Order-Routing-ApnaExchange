@@ -1386,3 +1386,22 @@ Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Ope
 Files: new `backend/shared/utils/asyncio_fixes.py`, `backend/tests/test_asyncio_fixes.py`; changed `backend/gateway/main.py` (`lifespan`), `backend/services/consensus/node.py` (`main`); docs: CLAUDE.md (repo map, test count, gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), PROGRESS.md, this journal.
 
 ---
+
+## 2026-10-07 (later) — `npm audit`: 9 → 4, and a WebSocket bug found on the way
+
+*By Maham (`feature/frontend-v2`).* The frontend item of PROGRESS.md's *Security hardening before the final demo*.
+
+**What was done.** `npm audit` reported 9 (4 moderate, 5 high; PROGRESS.md said 8 — one more advisory since). Ran plain `npm audit fix`, **not** `--force`: only `package-lock.json` changed (`package.json` untouched), 12 packages moved within their allowed ranges — react-router / react-router-dom 6.30.4 → 6.30.6, @remix-run/router 1.23.4, postcss 8.5.15 → 8.5.29, nanoid 3.3.20, browserslist 4.29.3, source-map-js 1.2.2, baseline-browser-mapping, caniuse-lite, electron-to-chromium, node-releases, update-browserslist-db. All 5 high ones are gone.
+
+**Why not the other 4.** Each needs a major upgrade that `--force` would install: `vite` 5 → 8 (for `esbuild`) and react-router-dom 6 → 7. Five days before the 12 Oct deadline that is a rewrite risk for no real gain:
+- `esbuild` / `vite`: the advisory is about the **dev server** answering other websites' requests; the shipped app is a static build that contains neither. `npm audit --omit=dev` doesn't list them.
+- react-router (2 moderate): one is in **server-side rendering** hydration — we don't render on a server. The other is an open redirect when a `<Link>` / `navigate()` target **comes from user input** with a backslash — every target in `src/` is a fixed path (`/login`, `/killswitch`, `/`, the sidebar's constant list).
+Revisit after the panel.
+
+**Verified.** Type-check and `npm run build` pass. Live (gateway + Vite from this branch): logged in, opened every page through the sidebar (Wallet, How It Works, Market Data, Venues, Risk, Kill Switch, Audit Log, Algo Orders, Dashboard) and Arbitrage by URL — all render with data; `/order` still redirects to the dashboard, an unknown URL to `/login`, a hard reload on `/risk` lands on Risk.
+
+**Found while testing (pre-existing; not fixed — reported).** The browser console showed `InvalidStateError: … Still in CONNECTING state` from `websocket.ts`, and the gateway log `ws_refused … no login within 5 s`. Cause: `authStore.ts` calls `wsClient.connect()` twice on page load; `connect()` opens a second socket without closing the first, and the first socket's handlers use `this.ws` — by then the second socket. The first one never logs in (refused at 5 s), and its `onclose` sets `this.ws = null` and schedules a reconnect, orphaning the working connection. Live data still arrives, so it went unnoticed. Neither file is touched by the package update (it reproduces on every load). Fix described in PROGRESS.md → *Open questions*. Also noticed: the sidebar no longer has an *Arbitrage* link since the `AppShell.tsx` rewrite (`b4ebf21`).
+
+Files: `frontend/package-lock.json`, PROGRESS.md, this journal.
+
+---
