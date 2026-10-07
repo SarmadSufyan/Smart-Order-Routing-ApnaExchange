@@ -50,7 +50,16 @@ cd frontend; npm install; cd ..
 Copy-Item .env.example .env
 ```
 
-**Exchange keys — your own, never shared.** Create your **own** testnet/demo accounts and keys by following [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md), and put them in **your** `.env`. Two people trading the same testnet account break each other's reconciliation (each machine's ledger only knows its own fills). Never commit `.env`, and never paste keys into chat, WhatsApp or screenshots.
+**Exchange keys — one shared team set on testnet (team decision 2026-10-06).** The team uses one set of testnet / demo keys, one exchange per owner: **Gate — Fizza's account, OKX — Maham's, Binance + Bybit — Sarmad's**. It is the exchanges' fake money, and four people making three extra accounts each costs more than it saves. (Your own keys still work too: [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md).)
+
+What sharing costs: each laptop's ledger only knows **its own** fills, so a teammate's trades show up on your Wallet as reconciliation **BREAK**s, and your P&L counts only your own trades. That is expected — don't chase it. Trading, routing, risk checks, TWAPs and the automatic loss limit are not affected (the loss limit uses your own fills only). Rules:
+1. **Testnet / demo keys only.** Real-money keys (Phase 8) belong to one person on one laptop and are never shared.
+2. **Pass a key privately** — a direct message to the one person who needs it, deleted once it is in their `.env`. Never the group chat, a screenshot or git. Every key: Read + Spot Trade only, never Withdraw.
+3. **Before the demo or a recording:** from the night before, only the demo laptop trades. On it, Wallet → **Accept exchange balances** once per exchange → MATCHED. Tell the group when the freeze starts and ends.
+4. **A BREAK nobody can explain** (no teammate traded, nobody traded on the exchange website) means the key may have leaked: its owner deletes it on the exchange, makes a new one and sends it privately again.
+5. **The kill switch on any laptop cancels open orders on the shared accounts.** ApnaSOR's own orders never stay open (IOC), so normally nothing happens — but a resting order placed by hand on the exchange website would be cancelled.
+
+Never commit `.env`.
 
 Then:
 
@@ -73,12 +82,15 @@ git merge origin/feature/crypto-pivot       # what Sarmad merged at the last mil
 # ...work...
 python -m unittest discover -s backend/tests -t .
 npx --prefix frontend tsc --noEmit -p frontend
+python -m ruff check backend scripts start_all.py   # backend only (pip install -r backend/requirements-dev.txt)
 git add <files>
 git commit -m "feat(copilot): parse notional orders"
 git push
 ```
 
 **Before you push:** tests pass, type-check passes, your `PROGRESS.md` row updated (backend: handoff note added), journal entry appended for anything non-trivial.
+
+**After you push — CI:** GitHub re-runs the checks on a clean machine for every push and pull request on the three team branches ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): backend tests on Linux and Windows, ruff lint, frontend type-check, about 2 minutes. The result is the ✅ / ❌ next to your commit on GitHub (details: the repo's **Actions** tab → your commit → the red job → the failing step). A ❌ on your branch is yours to fix before anything is merged. A newer push cancels the run for the older one.
 
 **Milestone done?** Tell Sarmad; he merges your branch into `feature/crypto-pivot`.
 
@@ -98,7 +110,7 @@ git push
 
 **Milestone merge** (backend or frontend chunk done):
 1. Open a PR: base `feature/crypto-pivot` ← `feature/backend-v2` (or `feature/frontend-v2`) → **Files changed** → scan the diff.
-2. Check: any `.env`, keys, `data/`, logs or build output committed? Frontend touching `backend/` (or the reverse) without agreement? Tests and type-check pass?
+2. Check: any `.env`, keys, `data/`, logs or build output committed? Frontend touching `backend/` (or the reverse) without agreement? CI ✅ on the PR (tests, lint, type-check)?
 3. Merge with **"Create a merge commit"** — **not** squash, and **don't delete the branch**. These are long-lived shared branches: a squash merge makes the next merge from the same branch replay old work and conflict.
 4. Tell the team to run `git fetch origin` + `git merge origin/feature/crypto-pivot`.
 

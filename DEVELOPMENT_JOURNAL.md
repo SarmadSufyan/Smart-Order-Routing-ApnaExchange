@@ -1029,6 +1029,65 @@ Logins expire after `JWT_EXPIRY_MINUTES` (60). After that every request got 401,
 
 Changed: `services/api.ts`, `stores/authStore.ts`, `stores/dataStore.ts` (shared, small), `pages/RiskManager.tsx`, `pages/Wallet.tsx`, `pages/VenueHealth.tsx`, `pages/KillSwitch.tsx`, `pages/AuditLog.tsx`; PROGRESS.md. Type-check passes; 254 backend tests pass (no backend change); the changed pages fit a 375 px phone.
 
+---
+
+## 2026-10-05 — Frontend milestone merged, and the live-events WebSocket locked to logged-in users
+
+*By Sarmad (integration + backend relay, `feature/backend-v2`).*
+
+### The milestone merge
+
+Before merging `feature/frontend-v2` into `feature/crypto-pivot`, Maham's pages were opened against the running gateway: all render with real data and the browser console stays clean, the pre-flight API answers, and after a reload at phone width every page fits (the wide tables scroll inside their own box). It was merged with a merge commit (`e5e1661`) — never a squash, because both working branches live on. Her branch already contained the latest backend, so the merged result is identical to it.
+
+One thing looked wrong and wasn't: at phone width the TWAP chart stayed 600 px wide. The chart measures itself with a `ResizeObserver`, and those only run while a page is actually drawn — the browser pane used for the check was hidden, so it never measured. On a real phone it does. The small genuine leftover (the chart never goes below 320 px) is logged for Maham.
+
+### The hole Fizza found, and two more behind it
+
+**1. No login, still connected.** `/ws` checked a token only *if one was sent*. Anyone who could reach the gateway could subscribe and receive every order, fill, balance change and kill-switch event.
+
+**2. The login token was printed in the server log.** The browser put the token in the URL (`/ws?token=…`), and the web server prints every URL it serves. The gateway's console showed a valid 60-minute admin login on every connection — on a projector during the demo, anyone could copy it.
+
+**3. A connection outlived its login.** The token was checked once, at connect time. An open connection kept streaming after the login expired, after a logout elsewhere, forever.
+
+### The fix
+
+A browser cannot put a login header on a WebSocket, so the login travels in the **first message**, which is the standard approach:
+
+```
+client → {"type": "auth", "token": "<login token>"}       (within 5 s)
+server → {"type": "authenticated", "username": "admin", "expires_at": "…"}
+client → {"type": "subscribe", "channels": [...]}
+```
+
+- **Anything else first** — no message, a subscribe, a wrong, expired or refresh token, a token in the URL — the connection is closed with code **4401** (an application code that mirrors HTTP 401) and nothing is ever sent to it.
+- **At the token's expiry** the server stops broadcasting to that connection and closes it with 4401.
+- **One token check for everything.** `decode_access_token` in `middleware/auth.py` is now used by both the REST endpoints and the WebSocket. It also refuses a *refresh* token used as a login, and a well-signed token with missing fields — that used to crash with an HTTP 500 (`KeyError`).
+- **The browser side** (`services/websocket.ts`): sends the auth message first, then subscribes (the server reads messages in order). On a 4401 it stops reconnecting: retrying the same token every 3 s would never work, and the next REST call gets a 401, which already logs out (Maham's session-expiry change).
+
+**Why not keep accepting the URL token for a while?** That would keep the token in the logs, and the new browser code ships in the same change, so there is no window where a matching client is missing. An old client is refused, which is the point.
+
+### Verified live (gateway restarted with the fix)
+
+| Who connects | Result |
+|---|---|
+| Anonymous program, no message | refused, 4401 "the first message must be a login" |
+| Token in the URL (the old way) | refused, 4401 |
+| Wrong token | refused, 4401 "invalid login token" |
+| Real login as the first message | `authenticated` → `subscribed` → live `market_data` |
+| The dashboard after reloading | connects as `"WebSocket /ws"` (no token in the log), `ws_connected username=admin` |
+
+Before the reload, the dashboard was still running the old code and was refused, which is the expected behaviour for an old client.
+
+8 new tests (`backend/tests/test_api/test_websocket_auth.py`): valid login subscribes; no login; token in the URL; wrong / expired / refresh / empty tokens; silence past the timeout; an open connection closed at expiry; `decode_access_token` on a token with missing fields. 262 tests in total.
+
+### Also found
+
+- **Someone else is trading on Sarmad's test accounts.** His Wallet shows reconciliation BREAKs: about $360 of USDT on Binance and Bybit turned into BTC and ETH through trades his gateway never made. The most likely cause is another teammate's gateway using his keys, which is exactly the "own keys per person" rule in ONBOARDING. Logged under *Open questions*. The reconciliation did its job: it caught money moving outside our records.
+
+### Files
+
+New: `backend/tests/test_api/test_websocket_auth.py`. Changed: `backend/gateway/middleware/auth.py` (`decode_access_token`, `TokenError`), `backend/gateway/websocket/ws_manager.py` (`serve`, login handshake, expiry close), `backend/gateway/main.py` (`/ws` endpoint), `frontend/src/services/websocket.ts` (auth message, stop on 4401); PROGRESS.md, ROADMAP §7, CLAUDE.md.
+
 ## 2026-10-06 — The TWAP chart on small phones
 
 *By Maham (frontend, `feature/frontend-v2`).*
@@ -1074,3 +1133,218 @@ Checked before deleting: neither name is referenced anywhere in `frontend/` (out
 ### Files
 
 Changed: `components/shared.tsx` (shared — Mahnoor: pull before editing it); PROGRESS.md. 254 backend tests pass (no backend change).
+
+---
+
+## 2026-10-06 — Everything back on the default branch
+
+*By Sarmad (integration, `feature/crypto-pivot`).*
+
+Both working branches had moved on since the 2026-10-05 milestone merge: `feature/backend-v2` carried the `/ws` login fix, `feature/frontend-v2` carried Maham's TWAP chart fix and the `shared.tsx` clean-up. Anyone cloning the default branch would have missed both, and a frontend teammate would have kept running the old `websocket.ts`. So, before handing the backend relay on:
+
+- **`feature/backend-v2` → `feature/crypto-pivot`** (merge commit `65cc573`): no conflicts. The backend change and its matching `websocket.ts` change are in the same commit, so they arrive together — an old browser client is refused by the new gateway (close 4401), by design.
+- **`feature/frontend-v2` → `feature/crypto-pivot`** (merge commit `97466aa`): only PROGRESS.md and this journal conflicted, because both branches had added entries in the same places. Resolved by keeping both sides; Maham's "not merged yet" lines now say merged, and the open questions she closed (TWAP chart on a phone, `shared.tsx` leftovers) are struck through.
+- **Reviewed before merging:** Maham's three commits stay in the frontend (`TwapChart.tsx`, `shared.tsx`) plus docs; no keys, no attribution lines. Her check of the *someone is trading on Sarmad's accounts* question is folded into that open question: not her machine (no fills ever, her accounts reconcile since 2026-10-04 19:42 UTC); Fizza and Mahnoor still to check.
+- **`feature/backend-v2` brought level with `feature/crypto-pivot`**, so the next backend person (relay) starts from everything.
+
+Checked after merging: 262 backend tests pass, frontend type-check and production build pass.
+
+### Files
+
+PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, CLAUDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
+
+---
+
+## 2026-10-06 — CI on every push, and who was trading on Sarmad's accounts
+
+*By Fizza (backend relay, `feature/backend-v2`).*
+
+ROADMAP §7 starts with CI: until now "the tests pass" meant "they passed on the laptop of whoever pushed". Now GitHub re-runs the checks on clean machines for every push and pull request on `feature/backend-v2`, `feature/frontend-v2` and `feature/crypto-pivot`, and puts a ✅ / ❌ next to the commit.
+
+### What runs (`.github/workflows/ci.yml`)
+
+- **Backend tests on Linux and Windows** (Python 3.14, the version the team runs): `pip install -r backend/requirements.txt`, then the same `unittest discover` as on our laptops. Linux because it is a machine nobody developed on; Windows because that is where we develop and demo — RAFT over TCP and the process pool behave differently on each (Linux starts worker processes another way).
+- **Python lint (ruff)** at the version pinned in `requirements-dev.txt`, with `--output-format github`, so a finding appears as a red mark on the exact line in a PR's "Files changed".
+- **Frontend type-check** (Node 24): `npm ci` (exactly the locked versions), `tsc --noEmit`.
+- No `.env` and no secrets on the runner: every setting is at its default (RAFT off, no exchange keys) and no test talks to a network or an exchange. A newer push to the same branch cancels the run still going for the older one (only the latest result matters; it saves the repo's free Actions minutes). A manual *Run workflow* button is on the Actions tab.
+
+### Ruff clean first
+
+CI would have been red from day one: ruff found 19 small things in older gateway files. Fixed without changing behaviour — unused imports, over-long import lines wrapped, `raise HTTPException(...) from None` inside `except` blocks (same HTTP answers, no misleading "during handling of the above exception" trace), one f-string without placeholders. FastAPI's `= Depends(...)` / `= Query(...)` argument defaults are allowed in `backend/pyproject.toml` (that is how FastAPI is meant to be used) instead of being rewritten. Gotcha: ruff 0.4's cache kept the old result after the config change — `--no-cache` (CI has no cache anyway).
+
+### Checked before pushing
+
+- **Linux, before GitHub ever saw it:** the repo's files in fresh Docker containers — `python:3.14-slim` pinned to 2 CPUs (GitHub's machines for a private repo have 2), CI's exact commands, the whole suite repeated to catch timing flukes (5 × 254 tests on 2026-10-04; 3 × 262 after Sarmad's `/ws` tests arrived — about 13–18 s per run, never flaky), plus `node:24-slim` for `npm ci` + type-check. Tests also pass with no `.env` at all.
+- **A red run on purpose:** in a throwaway container copy, one wrong test and one unused import — both steps exit 1 and name the file and line.
+- **Rebased onto Sarmad's work:** his `/ws` fix had rewritten two files my ruff commit also touched (`middleware/auth.py`, `websocket/ws_manager.py`); his versions kept as they are (already ruff-clean).
+- **Live, in Maham's new pages** (RAFT on, all four venues): login, Dashboard, the live connection with Sarmad's new first-message login (`ws_connected username=admin`, no token in any URL or log line), Arbitrage page, Kill Switch with the RAFT panel (3/3 nodes, signed), Algo Orders pre-flight ("nothing was sent", 10/10 slices pass), Risk Manager, Wallet, Audit Log filters, Venue Connectivity; the "order not found" (404) and "bad refresh token" (401) answers the ruff commit touched are unchanged. **No order was placed** — see the keys finding.
+
+### Finding 1: who was trading on Sarmad's accounts
+
+Sarmad's open question asked Fizza and Mahnoor to check. Fizza's `.env` holds **Sarmad's** exchange keys (Binance and Bybit; probably Gate). Read-only, from her own `data/apnasor-testnet.db` and her Wallet page:
+
+| Account | Fizza's gateway's fills | + trades **neither** gateway made (BREAK on Fizza's Wallet) | = Sarmad's "unexplained" |
+|---|---|---|---|
+| Binance BTC | +0.00221 | −0.00084 | +0.00137 ✓ |
+| Binance ETH | −0.0019 | −0.0028 | −0.0047 ✓ |
+| Binance USDT | −182 | +78 | −104 ✓ |
+| Bybit BTC | +0.00127 | +0.00154 | +0.0028 ✓ |
+| Bybit ETH | +0.0074 | 0 | +0.0074 ✓ |
+| Bybit USDT | −127 | −130 | −257 ✓ |
+
+All six match. So Sarmad's mystery is two things: Fizza's own test trades, **and a third source** — another gateway with his keys, or someone trading by hand on the exchange websites — which both of their ledgers see as foreign. Maham was already ruled out; Mahnoor is still to check. Until Fizza has her own keys she places no live orders. This is the CLAUDE.md gotcha "each person needs their own exchange accounts/keys", seen from both sides.
+
+### Finding 2: the first "profitable" arbitrage windows were an OKX glitch
+
+With OKX's feed up, the detector audited its first 10 profitable windows (09:25–09:27 UTC). All of them **sold on OKX**, across ETH, SOL and XRP at once, with gaps of 26–84 bps (crossings are normally < 2 bps), and they opened and closed in the same scans (09:25:51–09:25:58, 09:27:12–09:27:28). A real gap doesn't hit three coins on one exchange in the same instant: OKX's book was wrong for a few seconds (its feed reconnected 13 times that morning; a health ping failed at 09:21). The honest line for the panel stays "no real profitable window". A detector follow-up is logged under Open questions (skip a venue while its feed reconnects / just after a resync; flag one-venue-against-all crossings on several coins).
+
+### Files
+
+New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), CLAUDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
+
+## 2026-10-06 — Security hardening: no secrets in the code, only our frontend, real passwords
+
+*By Fizza (backend relay, `feature/backend-v2`). ROADMAP §7. Plain-English guide with every option, the panel Q&A and a checklist for the demo laptop: [`project-info/SECURITY_GUIDE.md`](project-info/SECURITY_GUIDE.md).*
+
+Three holes from *Open questions → security hardening* (logged 2026-10-02), closed in one session: the login-signing secret was written in `config.py`; CORS allowed every website; the three POC logins were password = user name in the code. A fourth turned up on the way: the Login page says "All sessions are audited", but logins weren't audited.
+
+### Decisions (options and reasons: SECURITY_GUIDE.md)
+
+- **`JWT_SECRET`: created automatically per machine** (`data/jwt-secret-<mode>.key`), not "required in `.env`" (Sarmad's first note) — equally safe, and nobody has to touch their `.env` in the last week. Fizza's choice.
+- **CORS: this machine's frontend on any port**, an exact list in `CORS_ORIGINS` otherwise, `*` refused; plus an origin check on `/ws`.
+- **Logins: option A** — real passwords as scrypt hashes in `.env`, the demo login as a testnet-only fallback, none on mainnet (B = required everywhere; C = keep and say so). Fizza delegated the choice ("whatever won't embarrass us in front of the panel"), Sarmad fine with it.
+
+### Design notes (what a reader wouldn't guess)
+
+- **`*` was worse than it looks.** With `allow_credentials=True`, Starlette 1.7 answers a `*` CORS rule by echoing the caller's own origin — every website is told "yes". Combined with `admin` / `admin`, a page on any website could log in from the trader's browser and read the ticket. Credentials are off now: we use a bearer token, never cookies.
+- **CORS doesn't cover WebSockets.** A browser opens a WebSocket from any page and only *says* where the page is from (`Origin`). `ws_manager.serve` checks it with the same rule as REST (`Settings.origin_allowed`) and refuses before accepting (HTTP 403). No `Origin` (our scripts) is allowed — they still need a ticket as the first message.
+- **Refuse, don't replace.** A `JWT_SECRET` that is a known public placeholder is ignored (logged); one set on purpose but shorter than 32 characters stops the start. A plain password pasted where a hash belongs stops the start too. Silent fallbacks hide mistakes; a refusal with the fix in the message doesn't.
+- **One key file per mode**, like the database: a testnet ticket never opens a mainnet gateway.
+- **Password checks on their own one-thread pool.** scrypt with OWASP's N=2^14, r=8, p=5 measured **0.5–1.1 s per check** on this laptop (median ~1 s; the code comment said 0.1–0.2 s until measured). `asyncio.to_thread` would use the default pool — the one `AuditStore` writes through — so a flood of logins could delay audit writes; a dedicated single thread can't, never blocks the event loop (book feeds), and caps guessing at ~1/s. An unknown user name is checked against a throw-away hash, so it costs the same as a wrong password.
+- **Tests never read the developer's `.env` passwords:** they use `USERS[...]` directly and patch the settings they need — once Fizza or the demo laptop sets real passwords, the suite still passes.
+- **Failed logins are audited with actor `unknown`** (a failed login proves nothing about who typed it), the typed name cleaned of control characters and cut to 40, never the password.
+- **The Login page** (Mahnoor's) changed minimally: `GET /api/auth/demo-logins` decides which demo buttons show and whether `admin` / `admin` is pre-filled. Without it the demo laptop would show working-looking buttons that fail. It asks again every 2 s until the gateway answers: `start_all.py` opens the page before the gateway is up, and the first version (ask once) showed no buttons on a developer machine until a reload - caught in the live check.
+
+### Verified
+
+- **Before / after with `scripts/security_check.py`** (read-only). Old code (the commit before, a separate copy on port 8001 with no `.env`, so no exchange keys): forged admin ticket → HTTP 200; `https://evil.example` preflight allowed, login ticket readable; `/ws` opened. New code, Fizza's normal `.env`: forged ticket 401; preflight 400, no allowed origin; `/ws` 403; `admin` / `admin` still works (expected on a developer machine). New code with three real passwords (throw-away test passwords passed as environment variables; `.env` untouched): **all five refused, exit code 0**.
+- **UI, no orders placed** (RAFT on, 3 of 3 signed): developer mode unchanged (three demo buttons, `admin` pre-filled, login, live prices, Kill Switch page, reloads keep the login). Real-password mode: no "DEMO ACCOUNTS", empty fields, `admin` / `admin` → "Invalid username or password", the real password logs in, the Audit Log shows `login_failed … unknown` and `admin logged in`. A browser holding a ticket signed with the old public secret → "Your session expired — please log in again" (what teammates see once after pulling).
+- `start_all.py` refuses before starting anything: a short `JWT_SECRET`, `CORS_ORIGINS=*`, a plain password in `AUTH_PASSWORD_HASH_ADMIN` — each with the fix in the message. It prints `Logins  DEMO for …` or `Logins  real passwords only`.
+- 295 backend tests (33 new) on Windows and in Linux (`python:3.14-slim`, 2 CPUs); ruff clean; frontend type-check passes (Windows and `node:24-slim`). `hash_password.py` checked in Linux with typed input (a short password refused; the printed line verifies).
+
+### Found on the way (not fixed here)
+
+- **"RAFT cluster unreachable at start-up" at almost every start since 2026-10-02** (audit log: every `gateway_started` with RAFT on but one is followed by `consensus_unreachable`). `start_all.py` waits a fixed 1.5 s after starting the nodes; on Windows they usually haven't elected a leader yet. The gateway catches up moments later (Kill Switch page: 3 of 3), but a panel member reading the Audit Log sees the warning. Fix in the `start_all.py` item: wait until the cluster reports a leader.
+- **The Login page's left panel is hard-coded** (`mockData.ts: MOCK_VENUES`, one entry): it always shows "Binance DISCONNECTED", even while Binance is connected — simulated data on the first screen the panel sees. Mahnoor's page.
+- The Audit Log page has no filter for the new `login` / `login_failed` events (they show under *Everything*). Maham's page.
+
+### Files
+
+New: `backend/gateway/middleware/passwords.py`, `scripts/hash_password.py`, `scripts/security_check.py`, `backend/tests/test_api/test_security_settings.py`, `test_logins.py`, `project-info/SECURITY_GUIDE.md`. Changed: `backend/gateway/config.py`, `main.py`, `middleware/auth.py`, `routers/auth.py`, `websocket/ws_manager.py`, `start_all.py`, `scripts/arb_watch.py`, `scripts/raft_demo.py`, `backend/tests/test_api/test_websocket_auth.py`, `frontend/src/pages/Login.tsx`, `frontend/src/services/api.ts`, `.env.example`; docs: CLAUDE.md, PROGRESS.md, ROADMAP §7, ONBOARDING.md, CONTRIBUTING.md (CI "about 2 minutes").
+
+## 2026-10-06 — Team decision: one shared set of testnet keys
+
+*Decided by Fizza (backend relay); documented on `feature/backend-v2`.*
+
+The rule so far was "each person makes their own exchange accounts and keys" (CLAUDE.md gotcha, CONTRIBUTING, ONBOARDING, EXCHANGE_API_KEY_SECURITY.md). In practice the team already shared: each exchange was set up by one person — **Gate: Fizza's account, OKX: Maham's, Binance + Bybit: Sarmad's** — and the keys were passed on. Following the rule would mean three extra accounts per person for fake money, so the team now uses **one shared set of testnet keys** on purpose.
+
+**What sharing costs (and what it doesn't).** Each laptop's ledger (`data/apnasor-testnet.db`) only knows its own fills, so a teammate's trades appear on everyone else's Wallet as reconciliation BREAKs, and each laptop's P&L counts only its own trades. That is exactly what the "someone is trading on Sarmad's accounts" question (2026-10-05) turned out to be. Checked in the code before deciding: the **automatic loss limit** uses only the laptop's own fills (`PnLService.trading_pnl` values the ledger, not the balances), so a teammate's trades can't trip it; **the kill-switch sweep** (`CcxtVenueAdapter.cancel_all_open_orders`) cancels every open order on the account — but ApnaSOR's children are IOC and never rest, so it only matters for a resting order placed by hand on an exchange website. Trading, routing, risk checks, TWAPs and market data don't care who else uses the key.
+
+**Rules** (CONTRIBUTING.md *Exchange keys*): testnet / demo only, never real-money keys; keys passed privately to the one person who needs them (never group chats, screenshots or git), Read + Trade only; before the demo or a recording only the demo laptop trades, from the night before, and it accepts the exchange balances once (MATCHED); a BREAK nobody can explain means the owner replaces the key. Panel line: "our test keys are shared inside the team — they hold the exchanges' fake money; real-money keys belong to one person and one laptop."
+
+**Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. **Settled the same day:** the third set of trades on Sarmad's accounts was Mahnoor's gateway on his Binance + Bybit keys (Fizza confirmed with her). So all of Sarmad's "unexplained" trades were teammates' — no leak, no key to replace.
+
+Changed: CONTRIBUTING.md, CLAUDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
+
+---
+
+## 2026-10-06 (evening) — Fizza's CI and security hardening merged
+
+*By Sarmad (integration, `feature/crypto-pivot`).*
+
+Fizza's handoff asked for a merge once CI was green. Twelve commits on `feature/backend-v2` (CI, a ruff clean-up, the per-machine login-signing key, CORS limited to our frontend + a `/ws` website check, scrypt password hashes with the demo login as a testnet-only fallback, logins audited, `SECURITY_GUIDE.md`, the shared-keys team decision). Merged with a merge commit after these checks:
+
+- **CI** on her last commit: backend tests on Linux and Windows, ruff, frontend type-check — all ✅.
+- **Code review** of the security changes. The signing key is never in the code; a short `JWT_SECRET` stops the start instead of being replaced; password checks run one at a time on their own thread; an unknown user name costs as much as a wrong password; `/ws` refuses a foreign `Origin` before the connection opens. Two things checked because they could break silently: the CORS rule now allows only GET / POST / PUT, and no endpoint or frontend call uses DELETE or PATCH; nothing in the backend, scripts or `start_all.py` still uses the removed `HARDCODED_USERS` or `settings.jwt_secret`.
+- **Locally:** 295 tests, ruff and type-check pass.
+- **Live**, with my `.env` unchanged (no `JWT_SECRET`, no password hashes): the gateway created this machine's key file and started; `scripts/security_check.py` → forged admin ticket 401, a foreign website's preflight 400, `/ws` from a foreign website 403, only the demo login works (expected on a developer machine). The Login page showed the demo buttons; logging in through it worked and its live connection opened (`ws_connected username=admin`); no browser or gateway errors.
+
+Fizza keeps the backend relay (next: `start_all.py`, then the docs). Not changed by this merge: the Login page's hard-coded venue panel (Mahnoor) and the demo laptop's real passwords (before the panel).
+
+Files: PROGRESS.md (top entry, rows, handoff, branch state), this journal.
+
+---
+
+## 2026-10-06 (night) — `start_all.py`: wait for RAFT, refuse a second start, stop everything in order
+
+*By Fizza (backend relay, `feature/backend-v2`). ROADMAP §7. Plain-English guide with every option, the decisions, a verify-yourself list and the panel Q&A: [`project-info/START_STOP_GUIDE.md`](project-info/START_STOP_GUIDE.md).*
+
+The four `start_all.py` items from the handoff note *2026-10-06 (3)*: (a) wait for a RAFT leader before starting the gateway ("RAFT cluster unreachable at start-up" at almost every start), (b) refuse a second start, (c) Ctrl+C closes everything including the frontend's process tree, (d) stop the gateway cleanly so "Gateway stopped" and the arbitrage statistics are saved. Nothing new from teammates since Sarmad's merge (`6b995e7`); CI green on it.
+
+### Measured first (the cause was not the one in the note)
+
+- **Audit log, 2026-10-02 → 06:** 20 of 21 RAFT start-ups `consensus_unreachable`; **2 `gateway_stopped` in 29 starts**.
+- **The fixed 1.5 s wait was not the problem.** Live: the nodes elected a leader at 14:50:02.9; the gateway logged "unreachable" at 14:50:08.4. A diagnostic run of the gateway's real `lifespan` with a watchdog thread (prints the main thread's stack whenever the event loop stops beating for > 0.3 s) showed the loop **frozen 1.8–2.1 s** exactly while `RiskControls.startup()` waited for the nodes. ccxt's `load_markets` was running on the event loop: `ssl.create_default_context()` (the Windows certificate store) and parsing Gate's market list (`fetch_markets`, `fetch_option_markets`). The nodes answered in milliseconds, but the answers were read after the 0.3 s / 0.5 s time-outs, so they counted as missing. Starting the risk worker pool alone freezes the loop only ~0.1 s, so that wasn't it.
+- **A second start is worse than "port in use".** uvicorn runs `lifespan` startup *before* it binds the port (`Server.startup`: `lifespan.startup()` then `create_server`). Live: the second gateway wrote `gateway_started`, `consensus_unreachable` and `gateway_stopped` into the running gateway's audit database; its Vite moved to 5174 and **survived** (`npm` → `cmd` → `node`, only the first killed). While starting, a gateway also marks unfinished orders and running TWAPs as stopped, which would touch the running gateway's records.
+- **Ctrl+C before:** everything exited in 0.7 s; the gateway never logged `shutting_down` (hard-killed by `start_all.py` in the same second), so no `gateway_stopped` and the arbitrage statistics since the last 60 s save were lost; four `KeyboardInterrupt` tracebacks from the risk workers.
+
+### Decisions (options and reasons: START_STOP_GUIDE.md)
+
+- **(a) Two parts:** `start_all.py` waits for a leader (`wait_for_leader`, poll 0.2 s, `--raft-wait` 20 s), **and** the gateway's `RiskControls.startup()` keeps asking until a leader answers, for up to 5 s (`_first_contact`). The second part is the actual fix (Fizza agreed to touch the gateway). No leader after 20 s → **start anyway with a warning** (Fizza): the gateway is fail-safe without a majority. Rejected: a longer sleep, moving the RAFT sync before the exchanges start (an adopted kill switch sweeps exchange orders), un-freezing ccxt (root cause, exchange layer — logged under *Open questions*).
+- **(b) Bind test of only the ports this start uses** (Fizza): 8000; 5173 on `127.0.0.1` and `::1` unless `--no-frontend` (Vite is on IPv6 `::1` here); 9001-9003 with RAFT on. Same socket options as asyncio (no `SO_REUSEADDR` on Windows). Owner from `netstat -ano`, recognised by the empty remote end (the word LISTENING is translated on non-English Windows). Rejected: a lock file (stale after a crash), connect tests (2 s per closed port on Windows).
+- **(c + d) Own process group per child + an ordered stop.** `CREATE_NEW_PROCESS_GROUP` (Windows) / `start_new_session` (elsewhere), so Ctrl+C reaches only `start_all.py`. Gateway: Ctrl+Break / SIGINT (uvicorn 0.49 handles SIGBREAK), wait ≤ 60 s (a clean stop lets an order already at an exchange finish — rule 6); frontend: `taskkill /T /F` / `killpg`; nodes: Ctrl+Break ≤ 5 s each, then killed. A second Ctrl+C kills everything at once; SIGINT is then ignored so a third can't interrupt the kill. Rejected: a Job Object (Windows-only ctypes, no clean stop), starting Vite with `node` directly (bypasses `package.json`), a stdin-pipe watcher in the gateway, uvicorn's `--timeout-graceful-shutdown` (cancels a request mid-order).
+
+### Design notes (what a reader wouldn't guess)
+
+- **Every Python child is two processes on Windows** (the venv launcher + the real Python). The launcher ignores console control events and waits; Ctrl+Break sent to the group reaches the real Python, and `taskkill /T` on the launcher takes both.
+- **`Popen.wait()` can't be interrupted by Ctrl+C on Windows** (`WaitForSingleObject`), so the waits poll every 0.1 s: the second Ctrl+C must work.
+- **On Windows a long `time.sleep()` wakes early for Ctrl+C only, not Ctrl+Break.** An asyncio loop wakes for any signal (`set_wakeup_fd`), so the gateway and the nodes are fine; a test child must sleep in short steps (found when the first version of the test waited 60 s).
+- **The RAFT node:** the first version mapped SIGBREAK to `signal.default_int_handler` (KeyboardInterrupt raised wherever the code is). In the first live run 1 of 3 nodes didn't stop in 5 s and was killed (harmless). Now Ctrl+Break re-raises itself as SIGINT, which `asyncio.run` handles by cancelling the main task, the same path as a real Ctrl+C. After the change, 42 of 42 node stops in a loop (with and without a client polling every 0.5 s like the gateway) took ~0.2 s each. With the old line in the same loop: one 4.6 s stop and one hung run. That is suggestive, but the hang wasn't reproducible on demand, so we don't claim the exact cause.
+- **Testing a real Ctrl+C from a script:** this tool's shell starts processes with Ctrl+C *ignored*, an attribute Windows passes to children, so the first harness run "pressed" Ctrl+C and nothing happened. The harness (not in the repo) opens `start_all.py` in its own hidden console through a stand-in shell that switches Ctrl+C back on (`SetConsoleCtrlHandler(NULL, FALSE)`), then a helper attaches to that console and calls `GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0)`, exactly what a person pressing Ctrl+C does.
+
+### Verified (live on Fizza's machine, no orders)
+
+- **Start:** `RAFT leader: node N … after 1.9-2.2 s`; **4 of 4 RAFT starts `consensus_synced`** (before: 20 of 21 unreachable).
+- **Ctrl+C with a logged-in browser** (live `/ws` open): gateway stopped cleanly in **2.8-2.9 s** (`ws_disconnected` → `shutting_down` → `shutdown_complete`), `gateway_stopped` audited, arbitrage statistics saved at that moment, frontend tree and the 3 nodes stopped (`raft_node_stopped` × 3), whole stop **3.7 s**, no ports or processes left, no tracebacks after Ctrl+C.
+- **Second start while running:** refused in 2.8 s, naming `node.exe` / `python.exe` and the pid on each of the 5 ports, with a `taskkill` line; the running instance's audit log untouched.
+- **Ctrl+C twice:** "Second Ctrl+C - stopping everything at once", nothing left.
+- **Gateway crash** (`taskkill /F` on the gateway's Python only): "Gateway exited with code 1 - stopping the rest", frontend tree and nodes stopped, nothing left (before: Vite survived this path).
+- **RAFT off + `--no-frontend`** (teammates' usual setup): gateway stopped in 2.8 s, `gateway_stopped` audited, statistics saved.
+- **Tests:** 314 (19 new: 15 in `test_start_all.py` with real child and grandchild processes and a real listening socket; 4 `test_startup_*` in `test_risk_controls.py`) on Windows, and in Linux (`python:3.14-slim`, `--cpus 2` three times, plus once on exactly 2 visible cores); ruff clean (a stale local ruff cache first reported 5 B008 in an untouched file, gone with `ruff clean`); frontend type-check (Windows + `node:24-slim`). Not exercised live: pausing a running TWAP at stop (it would need orders); existing code with its own tests.
+
+### Files
+
+New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: CLAUDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
+
+**Handover (same night):** Fizza is done for now; the backend relay goes to Sarmad. His to-do list (CI check, try it, merge, team message, docs rewrite, demo-laptop prep, the RAFT-on-for-the-demo decision) and a one-line summary of everything done so far: PROGRESS.md → *Handoff 2026-10-06 (night) — Fizza → Sarmad*.
+
+## 2026-10-06 (night, later) — `start_all.py` fixes merged; Ctrl+C can hang after the browser was used
+
+*By Sarmad (took the backend relay; integration on `feature/crypto-pivot`).*
+
+Fizza's handover asked for: CI check → try it → merge. Done in that order.
+
+- **Before merging:** CI ✅ on her last commit (`9f56fd6`); locally 314 tests, ruff (0.4.10, the pinned version) and the frontend type-check pass. Merged with a merge commit (`8f019db`); its tree is identical to the tested one.
+- **Live, RAFT on.** My `.env` has RAFT off, so the run set `RAFT_ENABLED=true` and a throwaway `RAFT_SHARED_SECRET` as environment variables (they override `.env`; nothing written to it). Ctrl+C was pressed for real in `start_all.py`'s own console, with the same helper Fizza described (stand-in shell that switches Ctrl+C back on + `GenerateConsoleCtrlEvent`), because the tool's shell starts processes with Ctrl+C ignored.
+  - **Start:** `RAFT leader: node 1 (term 1), 3 of 3 nodes up - after 1.5 s`, then the gateway; audit log `consensus_synced` on both starts of the evening (2 of 2).
+  - **Second start** while running: refused, exit code 1, all 5 ports named with their programs and pids plus a `taskkill` line; the audit log shows no extra `gateway_started` (the first instance's records untouched).
+  - **Ctrl+C, no browser:** gateway stopped cleanly in **2.8 s** (`shutting_down` → adapters stopped → audit store closed → `shutdown_complete`), `gateway_stopped` audited, frontend tree and the 3 nodes stopped (`raft_node_stopped` × 3), whole stop 3.6 s, nothing left on 8000 / 5173 / 9001-9003.
+  - **Ctrl+C after logging in through the browser:** the gateway printed `Shutting down`, closed the live `/ws` connection, then **nothing for 60 s**; `start_all.py` said "did not stop in time - killed", then stopped the frontend and the nodes cleanly. No `gateway_stopped` in the audit log for that run.
+
+### Why the stop hung (measured, not guessed)
+
+- uvicorn 0.49's shutdown waits for open connections, then for running requests, then `await server.wait_closed()` — and only then runs our `lifespan` shutdown. The log showed neither "Waiting for connections to close" nor "Waiting for background tasks", so it was stuck in `wait_closed()`.
+- Earlier in that run the gateway log had two tracebacks from asyncio itself: `_ProactorBasePipeTransport._call_connection_lost` → `self._sock.shutdown(SHUT_RDWR)` → `ConnectionResetError: [WinError 10054]`, while the browser was loading the dashboard. In Python 3.14.3's `asyncio/proactor_events.py` that `shutdown()` call comes **before** `server._detach(self)`; when it raises, the server never learns that the connection is gone, and since Python 3.12 `Server.wait_closed()` waits for every connection it still counts.
+- **Reproduced in isolation** (a 40-line asyncio script, no gateway): forcing that one `shutdown()` to raise 10054 makes `wait_closed()` time out every time; without it, it returns at once. A plain client reset (RST) did not trigger the error by itself in 3 tries, which matches it being intermittent.
+- **Not OKX:** this machine can't reach okx.com (DNS), but the no-browser run had the same OKX failures and stopped in 2.8 s.
+- Fizza's live runs (also with a logged-in browser) stopped cleanly — the reset has to happen at the wrong moment during the run. A demo laptop with a browser open for an hour will very likely hit it.
+
+**Impact:** fail-safe, not unsafe — after 60 s everything is killed and the next start marks interrupted orders; reconciliation shows what the exchanges did. What is lost: the `gateway_stopped` audit line and the arbitrage statistics since the last periodic save; and a 60 s wait. Workaround until fixed: Ctrl+C twice.
+
+**Options (not decided; PROGRESS.md → *Open questions*):** (a) a guarded Windows-only fix at gateway start so a failing `shutdown()` still closes the socket and detaches (cures the cause; touches a private asyncio method); (b) run uvicorn from our own script with a time limit on `wait_closed()` only, after connections and requests are done (cancels nothing in flight); (c) uvicorn's `--timeout-graceful-shutdown` (simplest, but cancels running requests at its limit — rule 6; Fizza rejected it for that reason).
+
+Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binance had 5/5 books (the known `MOCK_VENUES` item); OKX unreachable on this machine (ISP DNS — CLAUDE.md gotcha); Bybit's WebSocket timed out a few times at start and then synced 5/5. A test RAFT log now exists on this machine (`data/raft-testnet/`, gitignored).
+
+Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), CLAUDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
+
+---

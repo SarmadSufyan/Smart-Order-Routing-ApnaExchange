@@ -5,7 +5,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from backend.gateway.middleware.auth import User, get_current_user
-from backend.shared.models.execution_report import ExecType, ExecutionReport, ExecutionReportResponse
+from backend.shared.models.execution_report import (
+    ExecType,
+    ExecutionReport,
+    ExecutionReportResponse,
+)
 from backend.shared.models.order import OrderSide
 
 router = APIRouter(prefix="/api/execution-reports", tags=["execution-reports"])

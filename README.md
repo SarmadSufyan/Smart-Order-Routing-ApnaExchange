@@ -33,7 +33,7 @@ python start_all.py
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:5173 (login `admin` / `admin`) |
+| Frontend | http://localhost:5173 (login `admin` / `admin` on a developer machine; real passwords: `project-info/SECURITY_GUIDE.md`) |
 | Gateway API + Swagger | http://127.0.0.1:8000/docs |
 
 Without exchange keys you still get live market data; trading needs testnet/demo keys. Tests: `python -m unittest discover -s backend/tests -t .`

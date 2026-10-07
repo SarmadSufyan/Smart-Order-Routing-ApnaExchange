@@ -676,6 +676,10 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
 
+  // Users that still accept the demo login (password = user name); empty once
+  // every user has a real password, always empty on mainnet. No login needed.
+  getDemoLogins: () => request<{ demo_logins: string[]; note: string }>('/api/auth/demo-logins'),
+
   health: () => request<Record<string, unknown>>('/api/health'),
 
   getVenues: () => request<{ venues: VenueHealth[] }>('/api/venues/'),

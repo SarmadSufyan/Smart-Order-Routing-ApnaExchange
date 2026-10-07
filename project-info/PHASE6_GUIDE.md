@@ -79,7 +79,7 @@ Run from the project root with the venv's Python (a plain `python` may lack the 
 
 | # | Do | ✅ Working if |
 |---|---|---|
-| 1 | `./.venv/Scripts/python.exe -m unittest discover -s backend/tests -t .` | `Ran 226 tests` … `OK` |
+| 1 | `./.venv/Scripts/python.exe -m unittest discover -s backend/tests -t .` | `Ran 262 tests` … `OK` (226 when Phase 6 landed; the count only grows) |
 | 2 | `./.venv/Scripts/python.exe scripts/raft_demo.py` (standalone, ~10 s) | `Leader elected` · `An INTRUDER … REFUSED by every node` · `New leader … nothing lost` · `All 3 nodes hold the same state: YES` · `write refused, as it must be` |
 | 3 | Make your own secret: `./.venv/Scripts/python.exe -c "import secrets; print(secrets.token_hex(32))"` → in `.env`: `RAFT_ENABLED=true` and `RAFT_SHARED_SECRET=<that code>` (never share it) | — |
 | 4 | `./.venv/Scripts/python.exe start_all.py` (keep it open) | first `RAFT node 1/2/3 127.0.0.1:900X (pid …)`, then gateway + frontend |
@@ -97,7 +97,7 @@ Optional: `./.venv/Scripts/python.exe scripts/benchmark_risk_batch.py --quick` (
 - `No stress test for … yet: only N live price samples` → the gateway needs about a minute of live prices after start-up; try again.
 - `Start with all 3 nodes up` (step 9) → wait for `start_all.py` to restart a killed node (15 s).
 - A node can't start (port 9001-9003 in use) → an old `start_all.py` or node is still running; close it.
-- Two people must not run the same exchange keys (reconciliation BREAKs) — unchanged from before; RAFT data (`data/raft-testnet/`) is per machine.
+- Two people on the same exchange keys see each other's fills as reconciliation BREAKs — expected with the team's shared testnet keys (CONTRIBUTING.md *Exchange keys*); RAFT data (`data/raft-testnet/`) is per machine.
 
 ---
 

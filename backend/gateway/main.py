@@ -1,12 +1,13 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.gateway.config import settings
+from backend.gateway.config import LOCAL_ORIGIN_REGEX, settings
 from backend.gateway.dependencies import Services, default_risk_limits, get_services, init_services
+from backend.gateway.middleware.auth import load_jwt_secret, login_setup_problems, login_summary
 from backend.gateway.routers import (
     admin,
     algos,
@@ -90,6 +91,21 @@ async def lifespan(app: FastAPI):
         exchanges=settings.enabled_exchange_list,
         symbols=settings.symbol_list,
     )
+    # Security settings first: a bad one stops the start before anything connects.
+    if problems := [p for p in (settings.cors_problem(), *login_setup_problems()) if p]:
+        raise RuntimeError(" | ".join(problems))
+    logins = login_summary()
+    logger.info("logins", **logins)
+    if logins.get("demo_logins"):
+        logger.warning("demo_logins_active", users=logins["demo_logins"],
+                       detail="password = user name; set real ones with scripts/hash_password.py")
+    jwt_key = load_jwt_secret()
+    logger.info("login_signing_key_ready", **jwt_key)
+    if jwt_key.get("ignored_public_placeholder"):
+        logger.warning("jwt_secret_placeholder_ignored",
+                       detail="JWT_SECRET in .env is a public placeholder; this machine's own key is used")
+    logger.info("browser_origins_allowed",
+                origins=settings.cors_origin_list or "this machine's frontend (localhost / 127.0.0.1, any port)")
     svc = init_services()
     await svc.audit_store.open()
     await restore_state(svc)
@@ -166,12 +182,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Only our own frontend may use the API from a browser. With "*", any website
+# open in the same browser could log in and trade on this gateway. No cookies
+# (logins are a bearer token), so credentials stay off. Same rule for /ws.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[o for o in settings.cors_origin_list if o != "*"],  # "*" stops the start (lifespan)
+    allow_origin_regex=None if settings.cors_origin_list else LOCAL_ORIGIN_REGEX,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -247,24 +267,10 @@ def _consensus_health(svc: Services) -> str:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
-    svc = get_services()
-    user_id = ""
+async def websocket_endpoint(websocket: WebSocket):
+    """Live events for logged-in users only.
 
-    if token:
-        try:
-            from jose import jwt
-
-            payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            user_id = payload.get("sub", "")
-        except Exception:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-
-    conn_id = await svc.ws_manager.connect(websocket, user_id)
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            await svc.ws_manager.handle_client_message(conn_id, raw)
-    except WebSocketDisconnect:
-        await svc.ws_manager.disconnect(conn_id)
+    The login token comes in the FIRST message ({"type": "auth", "token": ...}),
+    never in the URL: URLs are printed in every access log. See ws_manager.py.
+    """
+    await get_services().ws_manager.serve(websocket)

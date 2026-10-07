@@ -81,7 +81,7 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-Fill it with **your own** exchange keys. Follow [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) step by step. The minimum to trade:
+Fill it with the exchange keys. **The team shares one set of testnet keys** (decided 2026-10-06): ask each owner privately — Gate: Fizza, OKX: Maham, Binance + Bybit: Sarmad (rules: CONTRIBUTING.md *Exchange keys*). To make your own instead, follow [`project-info/API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) step by step. The minimum to trade:
 
 | Exchange | What to create | Variables in `.env` |
 |---|---|---|
@@ -92,7 +92,7 @@ Optional: Gate (spot testnet) and OKX (Demo Trading, which also needs a **passph
 
 Rules for `.env`:
 - Keep `EXCHANGE_MODE=testnet`. Testnet and demo accounts use fake funds.
-- **Use your own keys, never someone else's.** If two people trade the same test account, each person's records show the other's trades as mismatches.
+- **Shared keys mean shared accounts:** a teammate's trades show on your Wallet as mismatches (reconciliation BREAKs). That's expected. Before the demo only the demo laptop trades, and it accepts the exchange balances once. Real-money keys (Phase 8) are never shared.
 - **Never commit `.env`** (it's in `.gitignore`), and never paste keys into WhatsApp, group chats, screenshots or the repo.
 - Each variable once only. If a name appears twice, the later line silently wins.
 - For the LLM copilot, add `GEMINI_API_KEY`: create your **own** free key at https://aistudio.google.com/apikey (Google account → *Create API key*; **don't** enable billing). Without it everything else runs; the copilot just reports itself unavailable.
@@ -112,7 +112,7 @@ Expected: `Ran 107 tests ... OK` (the count grows as we add tests).
 ```powershell
 python start_all.py
 ```
-Open http://localhost:5173 and log in as `admin` / `admin`. Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C.
+Open http://localhost:5173 and log in as `admin` / `admin` (the demo login of a developer machine; the demo laptop uses real passwords — `project-info/SECURITY_GUIDE.md`). Within a few seconds the Market Data page shows live prices and the Wallet shows your test balances. Your **opening balances** are captured automatically the first time. Try one tiny order (e.g. BUY 0.0002 BTC) and open it in the order list to see its routing proof and audit trail. Stop everything with Ctrl+C — it takes ~3–4 s (the gateway stops cleanly first, then the frontend and the RAFT nodes); Ctrl+C again stops everything at once.
 
 Your local audit database (`data/apnasor-testnet.db`) is created automatically and stays on your machine.
 
@@ -194,9 +194,15 @@ npx --prefix frontend tsc --noEmit -p frontend
 | `check_exchange_keys`: AUTH FAILED | Wrong key type (Bybit must be **Demo Trading**), or the secret was copied incompletely. See API_KEYS_GUIDE troubleshooting |
 | OKX "network error" / feed disconnected | Some ISPs' DNS blocks okx.com. Known; work without OKX |
 | Gate shows no balance | Known: Gate's spot testnet wallet isn't funded. Binance + Bybit are enough |
-| Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR (manual trade, testnet reset, someone else using your keys). If you're sure, click **Accept exchange balances** |
-| Port 8000 / 5173 already in use | Another gateway or dev server is running. Close it (or the other terminal) |
+| Binance answers **451** "restricted location", Bybit **403** | A VPN is on. Turn it off for live tests and the demo |
+| Pages load but nothing updates live; the gateway log shows `ws_refused` | Your frontend is older than your backend: the live connection now needs a login as its first message. `git merge origin/feature/crypto-pivot` (brings the new `services/websocket.ts`), restart the frontend, log in again |
+| Wallet shows a reconciliation **BREAK** | Your test balances changed outside ApnaSOR: a teammate traded on the shared keys (expected), a manual trade, or a testnet reset. Click **Accept exchange balances** when you want a clean start. Nobody can explain it? Tell the key's owner (CONTRIBUTING.md *Exchange keys*, rule 4) |
+| `admin` / `admin` refused and the Login page shows no demo buttons | This machine has real passwords (`AUTH_PASSWORD_HASH_*` in `.env`): use them, or delete those lines to go back to the demo login (`project-info/SECURITY_GUIDE.md`) |
+| `start_all.py` says "Nothing was started" about `JWT_SECRET`, `CORS_ORIGINS` or `AUTH_PASSWORD_HASH_…` | The message says the fix. Usually: delete the line from `.env` (the safe default takes over) |
+| Logged out right after pulling the security update ("Your session expired") | Expected once: logins are now signed with your machine's own key. Log in again |
+| `start_all.py` says "Port 8000 (gateway) is already in use - by python.exe, pid …" (or 5173 / 9001–9003) | ApnaSOR is already running in another terminal — use that one or press Ctrl+C there — or an earlier start was killed without stopping its children: run the `taskkill /PID … /T /F` line the message prints. Running `npm run dev` yourself? Start with `python start_all.py --no-frontend` |
 | Browser shows old UI after adding a file | Restart the frontend (`Ctrl+C`, `python start_all.py` again) |
+| `ModuleNotFoundError: No module named 'fastapi'` (or `httpx`, `jose`) when running a script | That terminal runs the system Python, not the project's. Run `.venv\Scripts\Activate.ps1` once in that terminal (prompt starts with `(.venv)`), or call `.venv\Scripts\python.exe` instead of `python` |
 | Tests fail right after cloning | Check `git branch --show-current` shows your branch and that the venv is active |
 | `git pull` says "merge conflict" | Two people edited the same lines. Don't panic and don't force-push: ask the other person or Sarmad, and resolve it together |
 

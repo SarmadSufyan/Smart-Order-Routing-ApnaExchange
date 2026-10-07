@@ -69,7 +69,7 @@ except Exception as e:  # noqa: BLE001
     sys.exit(f"  [2/2] Balance call failed: {e}")
 
 nonzero = {k: v for k, v in balance["total"].items() if v and v > 0}
-print(f"  [2/2] Keys valid  -  fetch_balance() succeeded\n")
+print("  [2/2] Keys valid  -  fetch_balance() succeeded\n")
 
 print("  Testnet balances (non-zero):")
 if nonzero:

@@ -1,6 +1,7 @@
 """RiskControls: the gateway side of RAFT — write through the leader, adopt
 the committed state, and stay fail-safe when the cluster has no majority."""
 
+import asyncio
 import unittest
 
 from backend.services.consensus.client import ConsensusUnavailableError
@@ -88,9 +89,10 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
         self.venues = VenueHealthMonitor(self.registry)
         self.cluster = FakeCluster()
 
-    def make(self, replicated: bool = True, mode: str = "testnet") -> RiskControls:
+    def make(self, replicated: bool = True, mode: str = "testnet", startup_wait_s: float = 0.3) -> RiskControls:
         return RiskControls(self.risk, OrderManager(), self.registry, self.venues,
-                            client=self.cluster if replicated else None, default_limits=RiskLimits(), mode=mode)
+                            client=self.cluster if replicated else None, default_limits=RiskLimits(), mode=mode,
+                            startup_wait_s=startup_wait_s)
 
     def audit_types(self) -> list[str]:
         return [a["event_type"] for a in self.audits]
@@ -237,6 +239,63 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("consensus_unreachable", self.audit_types())
         self.assertIn("kill_switch", c.status().pending_writes)
         self.assertIn("no majority", c.status().message)
+
+    def answer_after(self, calls: int, *, without_leader: bool = False) -> list[int]:
+        """The cluster's first ``calls`` answers are lost (or, ``without_leader``, come from
+        an election in progress); returns the list that counts the questions."""
+        asked: list[int] = []
+        real_states = self.cluster.states
+
+        async def states() -> dict:
+            asked.append(1)
+            if len(asked) > calls:
+                return await real_states()
+            if not without_leader:
+                return {i: None for i in self.cluster.nodes}
+            return {i: {**s, "role": "FOLLOWER", "leader": None} for i, s in (await real_states()).items()}
+
+        self.cluster.states = states  # type: ignore[method-assign]
+        return asked
+
+    async def test_startup_asks_again_when_the_first_answers_are_late(self) -> None:
+        # Live: the gateway's event loop is frozen ~2 s at start-up, so the first
+        # answers time out although the cluster is fine — that must not count as down.
+        asked = self.answer_after(2)
+        c = self.make(startup_wait_s=5)
+        await c.startup()
+        self.assertEqual(len(asked), 4)  # 2 lost, the 3rd answered, then the usual sync() reads once more
+        self.assertIn("consensus_synced", self.audit_types())
+        self.assertNotIn("consensus_unreachable", self.audit_types())
+        self.assertTrue(all(n.reachable for n in c.status().nodes))
+
+    async def test_startup_waits_for_an_election_to_finish(self) -> None:
+        asked = self.answer_after(2, without_leader=True)
+        c = self.make(startup_wait_s=5)
+        await c.startup()
+        self.assertEqual(len(asked), 4)  # 2 without a leader, the 3rd with one, then sync()
+        synced = next(a for a in self.audits if a["event_type"] == "consensus_synced")
+        self.assertIn("leader node 1", synced["summary"])
+
+    async def test_startup_gives_up_after_the_wait(self) -> None:
+        self.cluster.up = False
+        asked = self.answer_after(0)
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        c = self.make(startup_wait_s=0.6)
+        await c.startup()
+        self.assertGreaterEqual(loop.time() - started, 0.6)
+        self.assertGreater(len(asked), 1)
+        unreachable = next(a for a in self.audits if a["event_type"] == "consensus_unreachable")
+        self.assertIn("no answer for 0.6 s", unreachable["summary"])
+
+    async def test_startup_without_a_leader_in_time_still_syncs_what_the_nodes_have(self) -> None:
+        self.cluster.commit({"op": "set_kill_switch", "state": {"active": True, "reason": "x"}})
+        self.answer_after(1000, without_leader=True)
+        c = self.make(startup_wait_s=0.3)
+        await c.startup()
+        self.assertTrue(self.ks.is_active)  # adopted from the committed state
+        synced = next(a for a in self.audits if a["event_type"] == "consensus_synced")
+        self.assertIn("being elected", synced["summary"])
 
     async def test_nodes_of_another_exchange_mode_are_ignored(self) -> None:
         self.cluster.mode = "mainnet"

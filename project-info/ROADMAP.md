@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-05 (5c Arbitrage page; narrow-screen layouts; §6 RAFT cluster panel + TWAP pre-flight button).
+> Last updated: 2026-10-06 (§7 security hardening and CI on GitHub Actions; before that, 2026-10-05: 5c Arbitrage page, narrow-screen layouts, §6 RAFT cluster panel + TWAP pre-flight button).
 
 ---
 
@@ -29,7 +29,7 @@ The June 2026 panel review raised three critiques; every phase answers one of th
 | 5b | **LLM copilot** (plain English → confirmed, risk-checked orders) | ✅ API 2026-10-02 (verified live); chat panel ⏭ frontend |
 | 5c | **Arbitrage detector** (fee-aware, honest framing) | ✅ backend 2026-10-04 (verified live); page ✅ 2026-10-05 (`feature/frontend-v2`, verified live) |
 | 6 | **Parallelism proof**: multiprocessing risk + 3-node RAFT cluster + kill-a-node demo | ✅ 2026-10-02 (verified live); frontend RAFT panel + pre-flight button ✅ 2026-10-05 |
-| 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ |
+| 7 | Polish: CI, Docker, observability, doc rewrite, production DB backend | ⏭ in progress: `/ws` login ✅ 2026-10-05, CI ✅ 2026-10-06, security hardening ✅ 2026-10-06 |
 | 8 | Live-money demo: 2–3 exchanges on mainnet, $10–20, rehearsed | ⏭ last |
 
 **Priority if time runs short:** 5b and 6 matter most for the panel. 5c and the Phase 7 items are reach goals. DEX/Web3 (MetaMask, Uniswap) is a future-work slide only.
@@ -116,7 +116,9 @@ Done when:
 
 ### 7 — Polish
 
-- CI (GitHub Actions): backend tests + frontend type-check on every PR.
+- ~~CI (GitHub Actions): backend tests + frontend type-check on every PR~~ ✅ 2026-10-06 (Fizza): backend tests on Linux + Windows, ruff and the frontend type-check on every push and PR to the three team branches (`.github/workflows/ci.yml`).
+- Security hardening before the final demo: ~~the `/ws` WebSocket without a login~~ ✅ 2026-10-05 (login as the first message, token out of the logs, closed at expiry); ~~`JWT_SECRET` must be set (no default in code)~~ ✅ 2026-10-06 (each machine's own random key unless `.env` sets one); ~~CORS limited to the frontend's origin instead of `*`~~ ✅ 2026-10-06 (+ the same check on `/ws`); ~~the hardcoded POC users (password = username)~~ ✅ 2026-10-06 (real passwords as scrypt hashes in `.env`, the demo login only as a testnet fallback, logins audited — options, decisions and panel Q&A: [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md)); `npm audit` findings in the frontend.
+- ~~`start_all.py`: start the gateway only once the RAFT cluster has a leader; refuse a second start; Ctrl+C closes everything (RAFT nodes, the frontend's whole process tree) and stops the gateway cleanly ("Gateway stopped" + arbitrage statistics saved)~~ ✅ 2026-10-06 (Fizza; the "unreachable at start-up" warning was really the gateway's frozen event loop, fixed on the gateway side too — [`START_STOP_GUIDE.md`](START_STOP_GUIDE.md)).
 - Rewrite the stale `project-info/` docs for the crypto design; `ARCHITECTURE_V2.md` for the report.
 - Production DB: the audit store is SQLite today (`backend/shared/database/store.py`, plain SQL). Add a PostgreSQL/TimescaleDB backend behind the same interface — **decision pending** (Docker image vs. a native PostgreSQL install).
 - Docker for gateway + frontend; Prometheus/Grafana if time allows.
