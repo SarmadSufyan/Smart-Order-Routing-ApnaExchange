@@ -14,6 +14,7 @@ from backend.gateway.routers import (
     arbitrage,
     audit,
     auth,
+    automation,
     consensus,
     copilot,
     execution_reports,
@@ -49,6 +50,7 @@ WS_CHANNELS = [
     "wallet_update",
     "algo_update",
     "arb_update",
+    "bot_update",
 ]
 
 
@@ -119,6 +121,8 @@ async def lifespan(app: FastAPI):
     svc.pnl_service.start()
     await svc.algo_engine.load()  # after the recorder: interrupted algos are paused, and that is audited
     svc.algo_engine.start()
+    await svc.automation.load()  # bots too: a bot that was running comes back paused
+    svc.automation.start()
 
     # Fan every internal event out to WebSocket subscribers of that channel.
     for channel in WS_CHANNELS:
@@ -163,8 +167,9 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("shutting_down")
-    # Algos first: running TWAPs are paused and an in-flight slice finishes
-    # while the exchanges and the router are still up.
+    # Bots and algos first: running ones are paused and an order already at an
+    # exchange finishes while the exchanges and the router are still up.
+    await svc.automation.stop()
     await svc.algo_engine.stop()
     await record_audit("gateway_stopped", "Gateway stopped", actor="system")
     for service in reversed(background):
@@ -220,6 +225,10 @@ async def domain_error_handler(request, exc: DomainError):
         "PROPOSAL_NOT_FOUND": 404,
         "PROPOSAL_NOT_ACTIONABLE": 409,
         "CONSENSUS_UNAVAILABLE": 503,
+        "BOT_NOT_FOUND": 404,
+        "BOT_REJECTED": 409,
+        "FUND_REJECTED": 409,
+        "FUND_RESERVED": 409,
     }
     return JSONResponse(
         status_code=status_map.get(exc.code, 500),
@@ -228,7 +237,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos, copilot, consensus, arbitrage, research):
+                      algos, copilot, consensus, arbitrage, research, automation):
     app.include_router(router_module.router)
 
 

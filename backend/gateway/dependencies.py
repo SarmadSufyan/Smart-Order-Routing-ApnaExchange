@@ -7,6 +7,7 @@ from backend.services.agents import Copilot, build_llm_client
 from backend.services.algos import AlgoEngine
 from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
+from backend.services.automation import AutomationEngine, AutomationFund, PracticeLab
 from backend.services.consensus.client import ConsensusClient, parse_cluster
 from backend.services.consensus.wire import MessageSigner
 from backend.services.market_data.aggregator import MarketDataAggregator
@@ -57,6 +58,7 @@ class Services:
     preflight: PreflightService
     risk_controls: RiskControls
     arbitrage: ArbitrageDetector
+    automation: AutomationEngine
 
 
 _services: Services | None = None
@@ -191,6 +193,20 @@ def init_services() -> Services:
         settings.symbol_list, reference_fee_bps=fees.get("V1", 10.0), risk_engine=risk_engine,
     )
 
+    # Bots and the practice lab (Phase C): money set aside in the automation fund, every bot
+    # order through order_entry — whose gate keeps bots in their pockets and manual orders off
+    # what the fund holds. The lab's measured costs feed the research backtester and planner.
+    fund = AutomationFund(wallet_service, aggregator, settings.exchange_mode, store=store,
+                          protection_bps=settings.child_price_protection_bps)
+    order_entry.set_guard(fund.check_order)
+    lab = PracticeLab(store, research, volatility, aggregator, settings.exchange_mode, fees)
+    research.set_cost_source(lab.measured_slippage)
+    automation = AutomationEngine(
+        order_entry, order_manager, aggregator, routing_engine, registry, risk_engine, wallet_service, fund, lab,
+        settings.symbol_list, research=research, store=store, mode=settings.exchange_mode, market_fee_bps=fees,
+        protection_bps=settings.child_price_protection_bps,
+    )
+
     _services = Services(
         exchange_registry=registry,
         venue_monitor=venue_monitor,
@@ -218,6 +234,7 @@ def init_services() -> Services:
         ),
         risk_controls=risk_controls,
         arbitrage=arbitrage,
+        automation=automation,
     )
     return _services
 

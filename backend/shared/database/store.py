@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from backend.shared.models.audit import AuditEvent
+from backend.shared.models.automation import BotState, LabSample
 from backend.shared.models.order import Order
 from backend.shared.models.portfolio import FillRecord, VenueBaseline
 from backend.shared.models.strategy import TwapState
@@ -97,6 +98,26 @@ CREATE TABLE IF NOT EXISTS algos (
     snapshot   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_algos_created ON algos(created_at);
+
+CREATE TABLE IF NOT EXISTS bots (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    snapshot   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lab_samples (
+    id        TEXT PRIMARY KEY,
+    kind      TEXT NOT NULL,
+    bot_id    TEXT NOT NULL,
+    symbol    TEXT NOT NULL,
+    opened_at TEXT NOT NULL,
+    closed_at TEXT,
+    snapshot  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_lab_opened ON lab_samples(opened_at);
 """
 
 MAX_BATCH = 500
@@ -351,6 +372,41 @@ class AuditStore:
             "SELECT snapshot FROM algos ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall())
         return [TwapState.model_validate_json(r[0]) for r in reversed(rows)]
+
+    # ── bots and the practice lab (Phase C) ─────────────────────────
+    def upsert_bot(self, bot: BotState) -> None:
+        snapshot = bot.model_copy(update={"pocket": None, "value_usdt": None, "unrealized_usdt": None,
+                                          "pnl_usdt": None, "pnl_market_usdt": None})
+        self._enqueue(
+            "INSERT INTO bots (id, kind, created_at, updated_at, status, snapshot) VALUES (?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at,"
+            " status = excluded.status, snapshot = excluded.snapshot",
+            (bot.id, bot.kind.value, _iso(bot.created_at), _iso(bot.updated_at), bot.status.value,
+             snapshot.model_dump_json()),
+        )
+
+    async def load_bots(self, limit: int = 500) -> list[BotState]:
+        """The most recent ``limit`` bots, oldest first."""
+        rows = await self._read(lambda c: c.execute(
+            "SELECT snapshot FROM bots ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall())
+        return [BotState.model_validate_json(r[0]) for r in reversed(rows)]
+
+    def upsert_lab_sample(self, sample: LabSample) -> None:
+        self._enqueue(
+            "INSERT INTO lab_samples (id, kind, bot_id, symbol, opened_at, closed_at, snapshot)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(id) DO UPDATE SET closed_at = excluded.closed_at, snapshot = excluded.snapshot",
+            (sample.id, sample.kind.value, sample.bot_id, sample.symbol, _iso(sample.opened_at),
+             _iso(sample.closed_at) if sample.closed_at else None, sample.model_dump_json()),
+        )
+
+    async def load_lab_samples(self, limit: int = 50_000) -> list[LabSample]:
+        """The most recent ``limit`` lab samples, oldest first."""
+        rows = await self._read(lambda c: c.execute(
+            "SELECT snapshot FROM lab_samples ORDER BY opened_at DESC LIMIT ?", (limit,)
+        ).fetchall())
+        return [LabSample.model_validate_json(r[0]) for r in reversed(rows)]
 
     # ── key/value state (kill switch, risk limits) ──────────────────
     def kv_set(self, key: str, value: dict[str, Any]) -> None:

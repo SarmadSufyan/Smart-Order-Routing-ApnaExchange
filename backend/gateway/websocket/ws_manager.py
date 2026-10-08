@@ -50,6 +50,7 @@ VALID_CHANNELS = {
     "wallet_update",
     "algo_update",
     "arb_update",
+    "bot_update",
 }
 
 

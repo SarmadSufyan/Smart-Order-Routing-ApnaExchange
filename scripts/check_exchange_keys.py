@@ -19,12 +19,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ccxt.async_support as ccxt  # noqa: E402
 
+from backend.exchanges.binance.adapter import BinanceAdapter  # noqa: E402
+from backend.exchanges.bybit.adapter import BybitAdapter  # noqa: E402
+from backend.exchanges.gate.adapter import GateAdapter  # noqa: E402
+from backend.exchanges.okx.adapter import OkxAdapter  # noqa: E402
 from backend.exchanges.registry import EXCHANGE_CATALOG  # noqa: E402
 from backend.gateway.config import settings  # noqa: E402
 
 SHOW = ["USDT", "BTC", "ETH", "SOL", "BNB", "XRP"]
 DEMO_TRADING_VENUES = {"bybit"}  # mirrors CcxtVenueAdapter.test_environment == "demo"
 ENV_NAME = {"bybit": "demo", "okx": "demo"}  # what each exchange calls its fake-funds environment
+# The gateway's own ccxt options per exchange (spot only). Found 2026-10-08: without Binance's
+# "fetchMarkets": ["spot"], this check failed whenever Binance's FUTURES testnet was down,
+# although the spot testnet ApnaSOR trades on was fine.
+CCXT_OPTIONS = {"binance": BinanceAdapter.ccxt_options, "bybit": BybitAdapter.ccxt_options,
+                "okx": OkxAdapter.ccxt_options, "gate": GateAdapter.ccxt_options}
 
 
 async def check(exchange_id: str) -> str:
@@ -39,7 +48,8 @@ async def check(exchange_id: str) -> str:
         prefix = f"{exchange_id.upper()}_{settings.exchange_mode.upper()}_API"
         extra = f" / {prefix}_PASSPHRASE" if exchange_id == "okx" else ""
         return f"  {label:16s} NO KEYS in .env  -> add {prefix}_KEY / {prefix}_SECRET{extra}"
-    client = getattr(ccxt, exchange_id)({**creds, "enableRateLimit": True, "options": {"defaultType": "spot"}})
+    options = dict(CCXT_OPTIONS.get(exchange_id, {"defaultType": "spot"}))
+    client = getattr(ccxt, exchange_id)({**creds, "enableRateLimit": True, "options": options})
     if settings.exchange_mode == "testnet":
         if exchange_id in DEMO_TRADING_VENUES:
             client.enable_demo_trading(True)  # Bybit: Demo Trading, not Testnet

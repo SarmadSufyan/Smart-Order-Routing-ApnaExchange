@@ -10,6 +10,7 @@ it. Nothing is re-scored or edited afterwards.
 
 import asyncio
 import math
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -87,8 +88,22 @@ class ResearchService:
         self._fee_bps = reference_fee_bps
         self._slippage_bps = slippage_bps
         self._risk = risk_engine
+        # The practice lab's measured slippage (bps, orders) per coin, once it has enough of our own orders.
+        self._measured: Callable[[str], tuple[float, int] | None] | None = None
         self._models: dict[tuple[str, str], ModelState] = {}
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
+
+    def set_cost_source(self, measured: Callable[[str], tuple[float, int] | None] | None) -> None:
+        """Use the slippage measured on our own orders (the practice lab) instead of the assumption."""
+        self._measured = measured
+
+    def _slippage(self, symbol: str) -> tuple[float, str]:
+        """(slippage bps per trade, where it comes from)."""
+        m = self._measured(symbol) if self._measured is not None else None
+        if m is not None:
+            # A negative median (fills better than the mid) is real but not something to plan on.
+            return max(m[0], 0.0), f"measured on {m[1]} of our own orders (median {m[0]:+.2f} bps vs the mid)"
+        return self._slippage_bps, f"assumed {self._slippage_bps:g} bps (not enough of our own orders yet)"
 
     async def open_store(self) -> None:
         await asyncio.to_thread(self._store.open)
@@ -200,6 +215,12 @@ class ResearchService:
             except ResearchUnavailableError as exc:
                 out["horizons"].append({"horizon": tf, "label": HORIZON_LABEL[tf], "unavailable": str(exc)})
         return out
+
+    async def forecast_horizon(self, symbol: str, tf: str) -> dict:
+        """The forecast for one horizon of one coin (bots and the practice lab use this)."""
+        if tf not in TIMEFRAME_MS:
+            raise ResearchUnavailableError(f"Unknown timeframe {tf}; one of {', '.join(TIMEFRAME_MS)}")
+        return await self._forecast_one(self._check_symbol(symbol), tf)
 
     async def _forecast_one(self, symbol: str, tf: str) -> dict:
         data = await self._load(symbol, tf, MODEL_BARS[tf])
@@ -368,7 +389,7 @@ class ResearchService:
             raise ResearchUnavailableError(f"Unknown rule {strategy}; one of {', '.join(bt.STRATEGIES)}")
         data = await self._load(symbol, tf, max(MIN_BARS, min(bars, MODEL_BARS[tf])))
         fee = self._fee_bps if fee_bps is None else fee_bps
-        slip = self._slippage_bps if slippage_bps is None else slippage_bps
+        slip, slip_source = self._slippage(symbol) if slippage_bps is None else (slippage_bps, "set by you")
 
         def run() -> dict:
             probs, start = None, 0
@@ -383,7 +404,7 @@ class ResearchService:
             desired = bt.positions(strategy, params, data["close"], probs)
             res = bt.run_backtest(data["ts"], data["open"], data["close"], desired, fee, slip, capital, tf, start)
             return {"symbol": symbol, "timeframe": tf, "strategy": strategy, "params": params, "fee_bps": fee,
-                    "slippage_bps": slip, "capital": capital, **asdict(res),
+                    "slippage_bps": slip, "slippage_source": slip_source, "capital": capital, **asdict(res),
                     "note": ("Long only (spot). Decisions at each close, trades at the next open, fees and slippage "
                              "on every trade. Past results don't predict future ones.")}
 
@@ -395,7 +416,8 @@ class ResearchService:
         data = await self._load(symbol, tf, MODEL_BARS[tf])
         nbbo = await self._aggregator.compute_nbbo(symbol)
         entry = nbbo.best_ask if nbbo and nbbo.best_ask else float(data["close"][-1])  # a buy pays the ask
-        cost = 2 * (self._fee_bps + self._slippage_bps)
+        slip, slip_source = self._slippage(symbol)
+        cost = 2 * (self._fee_bps + slip)
         max_notional = self._risk.limits.max_order_notional if self._risk is not None else None
 
         def run() -> dict:
@@ -406,6 +428,7 @@ class ResearchService:
             return {"symbol": symbol, "timeframe": tf, "side": "BUY", "equity": equity, "risk_pct": risk_pct,
                     "k_atr": k_atr, "rr": rr, "max_bars": max_bars, "atr": float(a[-1]),
                     "plan": asdict(plan), "history": asdict(stats), "cost_bps_round_trip": cost,
+                    "slippage_source": slip_source,
                     "disclaimer": "A plan measured on past candles, not financial advice. Nothing is sent."}
 
         out = await asyncio.to_thread(run)
