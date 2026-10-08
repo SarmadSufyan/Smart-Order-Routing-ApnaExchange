@@ -857,6 +857,76 @@ export interface ExecutionReport {
   fee_asset?: string | null
 }
 
+// ── Bots & Lab (Phase C): the automation fund, bots, the practice lab ──
+export interface Pocket {
+  budget_usdt: number; cash_usdt: number
+  coins: Record<string, number>; cost_usdt: Record<string, number>; market_cost_usdt: Record<string, number>
+  realized_usdt: number; realized_market_usdt: number; fees_usdt: number; market_fees_usdt: number
+}
+export interface FundEvent { ts: string; actor: string; action: string; amount_usdt: number; bot_id: string | null; note: string | null }
+export interface FundView {
+  mode: string; allocated_usdt: number; unassigned_usdt: number; bots_cash_usdt: number
+  coins: Record<string, number>; coins_value_usdt: number | null; value_usdt: number | null
+  pnl_usdt: number | null; pnl_market_usdt: number | null
+  reserved: Record<string, number>; wallet_free: Record<string, number>; manual_free: Record<string, number>
+  pockets: Record<string, Pocket>; history: FundEvent[]; warnings: string[]; note: string
+}
+export type BotStatus = 'RUNNING' | 'PAUSED' | 'STOPPED' | 'FAILED'
+export type LotStatus = 'OPEN' | 'CLOSED' | 'WRITTEN_OFF'
+export interface Lot {
+  id: number; symbol: string; status: LotStatus; opened_at: string; qty: number; bought_qty: number
+  cost_usdt: number; market_cost_usdt: number; buy_price: number; mid_at_buy: number | null
+  target_price: number; stop_price: number | null; expires_at: string | null; buy_order_id: string; venues: string[]
+  sold_qty: number; proceeds_usdt: number; sold_cost_usdt: number; closed_at: string | null; exit_reason: string | null
+  profit_usdt: number | null; profit_market_usdt: number | null; proposal_id: string | null
+}
+export interface CycleParams {
+  symbol: string; budget_usdt: number; buy_usdt: number; threshold_pct: number; max_lots?: number | null
+  spacing_pct: number; cooldown_s: number; max_drawdown_pct: number; check_interval_s?: number
+  routing?: RoutingStrategyName; lab?: boolean; label?: string | null
+}
+export type AdvisorMode = 'ASK' | 'AUTO'
+export interface AdvisorParams {
+  symbols: string[]; budget_usdt: number; trade_usdt: number; mode: AdvisorMode; min_probability: number
+  require_edge: boolean; min_expectancy_r: number; k_atr: number; rr: number; max_hold_hours: number
+  max_open: number; max_trades_per_day: number; scan_interval_s: number; proposal_ttl_s: number
+  routing?: RoutingStrategyName; lab?: boolean; label?: string | null
+}
+export type ProposalStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'FAILED'
+export interface AdvisorProposal {
+  id: string; bot_id: string; created_at: string; expires_at: string; status: ProposalStatus; symbol: string
+  notional_usdt: number; entry_price: number; stop_price: number; target_price: number; max_hold_hours: number
+  p_up: number; reasons: string[]; decided_by: string | null; result: string | null; lot_id: number | null
+}
+export interface BotState {
+  id: string; kind: 'CYCLE' | 'ADVISOR'; label: string; created_by: string; created_at: string; updated_at: string
+  status: BotStatus; status_reason: string | null; lab: boolean
+  cycle: CycleParams | null; advisor: AdvisorParams | null; lots: Lot[]; proposals: AdvisorProposal[]
+  last_scan: { symbol: string; p_up?: number | null; edge?: boolean | null; decision: string; proposed?: boolean }[]
+  waiting_reason: string | null
+  stats: { buys: number; sells: number; lots_closed: number; wins: number; losses: number; timeouts: number; trades_today: number }
+  pocket: Pocket | null; value_usdt: number | null; unrealized_usdt: number | null
+  pnl_usdt: number | null; pnl_market_usdt: number | null
+}
+export interface Interval { mean: number; low: number; high: number }
+export interface LabReport {
+  mode: string; enabled: boolean; note: string; samples: Record<string, number>
+  costs: { venue_id: string; symbol: string; orders: number; filled: number; fill_ratio: number | null
+    slippage_bps_median: number | null; slippage_bps_mean: number | null; slippage_bps_p90: number | null
+    fee_bps_charged: number | null; market_fee_bps: number | null }[]
+  scoreboard: { variant: string; symbol: string; bots: string[]; running: boolean; threshold_pct: number | null
+    lots: number; closed: number; open: number; days: number; profit_market_usdt: number; profit_per_day_usdt: number
+    return_per_day_pct: number | null; return_per_lot_pct: Interval | null; median_hold_h: number | null
+    sold_within_24h: number | null; lots_older_than_24h: number }[]
+  advisor: { variant: string; trades: number; closed: number; open: number; wins: number; stops: number; timeouts: number
+    win_rate: number | null; return_pct: Interval | null; total_profit_market_usdt: number
+    by_probability: { bucket: string; n: number; win_rate: number; avg_return_pct: number }[] }[]
+  comparisons: { symbol: string; a: string; b: string; days_a: number; days_b: number; verdict: string; p_value?: number | null }[]
+  models: { kind: string; question: string; labelled: number; needed: number; status: string; edge: boolean
+    base_rate?: number; scores: { n: number; accuracy: number; baseline_accuracy: number; brier_skill: number; p_value: number } | null }[]
+  presets: { name: string; title: string; description: string; budget_usdt: number }[]
+}
+
 export const api = {
   login: (username: string, password: string) =>
     request<AuthResponse>('/api/auth/login', {
@@ -938,6 +1008,26 @@ export const api = {
   startTwap: (p: TwapParams) =>
     request<TwapState>('/api/algos/twap', { method: 'POST', body: JSON.stringify(p) }),
 
+  // Bots & Lab
+  getFund: () => request<FundView>('/api/automation/fund'),
+  moveFund: (direction: 'deposit' | 'withdraw', amount_usdt: number) =>
+    request<FundView>(`/api/automation/fund/${direction}`, { method: 'POST', body: JSON.stringify({ amount_usdt }) }),
+  getBots: () => request<{ bots: BotState[] }>('/api/automation/bots'),
+  startCycleBot: (p: CycleParams) =>
+    request<BotState>('/api/automation/bots/cycle', { method: 'POST', body: JSON.stringify(p) }),
+  startAdvisorBot: (p: AdvisorParams) =>
+    request<BotState>('/api/automation/bots/advisor', { method: 'POST', body: JSON.stringify(p) }),
+  controlBot: (id: string, action: 'pause' | 'resume' | 'stop') =>
+    request<BotState>(`/api/automation/bots/${id}/${action}`, { method: 'POST' }),
+  sellBotLots: (id: string, lot_id: number | null = null) =>
+    request<BotState>(`/api/automation/bots/${id}/sell-now`, { method: 'POST', body: JSON.stringify({ lot_id }) }),
+  releaseBotCoins: (id: string, how: 'to_manual' | 'lost') =>
+    request<BotState>(`/api/automation/bots/${id}/release-coins`, { method: 'POST', body: JSON.stringify({ how }) }),
+  decideProposal: (proposalId: string, approve: boolean) =>
+    request<BotState>(`/api/automation/proposals/${proposalId}/decide`, { method: 'POST', body: JSON.stringify({ approve }) }),
+  getLab: () => request<LabReport>('/api/automation/lab'),
+  startLabPreset: (name: string) =>
+    request<{ bots: BotState[] }>(`/api/automation/lab/presets/${name}`, { method: 'POST' }),
   getResearchForecast: (symbol: string) =>
     request<ForecastResponse>(`/api/research/forecast?symbol=${encodeURIComponent(symbol)}`),
 

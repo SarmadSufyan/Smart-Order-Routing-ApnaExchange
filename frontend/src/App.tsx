@@ -13,6 +13,7 @@ import { Arbitrage } from './pages/Arbitrage'
 import { AuditLog } from './pages/AuditLog'
 import { AlgoOrders } from './pages/AlgoOrders'
 import { Research } from './pages/Research'
+import { Automation } from './pages/Automation'
 import { useAuthStore } from './stores/authStore'
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="audit"        element={<AuditLog />} />
           <Route path="research"     element={<Research />} />
           <Route path="algos"        element={<AlgoOrders />} />
+          <Route path="bots"         element={<Automation />} />
           <Route path="order"        element={<Navigate to="/" replace />} />
         </Route>
 

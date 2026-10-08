@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
 import { fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
-import type { ReconStatus } from '../services/api'
+import { api } from '../services/api'
+import type { FundView, ReconStatus } from '../services/api'
 import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 
 const BAR_COLORS = [C.blue, C.green, C.orange, C.gold, C.purple, C.red]
@@ -15,6 +17,32 @@ const RECON_STYLE: Record<ReconStatus, { color: string; label: string }> = {
   BREAK:       { color: C.red,    label: 'BREAK' },
   UNKNOWN:     { color: C.dim,    label: 'UNREADABLE' },
   NO_BASELINE: { color: C.dim,    label: 'NO BASELINE' },
+}
+
+// The automation fund (Bots & Lab): what is set aside for bots, and what manual trading may still use.
+function FundStrip() {
+  const [fund, setFund] = useState<FundView | null>(null)
+  useEffect(() => {
+    let live = true
+    const load = () => api.getFund().then((f) => { if (live) setFund(f) }).catch(() => undefined)
+    load()
+    const timer = setInterval(load, 15_000)
+    return () => { live = false; clearInterval(timer) }
+  }, [])
+  if (!fund || (fund.allocated_usdt <= 0 && Object.keys(fund.pockets).length === 0)) return null
+  const coins = Object.entries(fund.reserved).filter(([a, q]) => a !== 'USDT' && q > 0)
+  return (
+    <div style={{
+      marginBottom: 14, padding: '10px 14px', borderRadius: 6, background: tint(C.purple, 8),
+      border: `1px solid ${tint(C.purple, 40)}`, fontSize: F.sm, color: C.text, display: 'flex', gap: 14, flexWrap: 'wrap',
+    }}>
+      <span><b>Automation fund</b>: {fmtUsd(fund.allocated_usdt)} set aside for bots · worth {fund.value_usdt === null ? '—' : fmtUsd(fund.value_usdt)}
+        {' '}({fmtPnl(fund.pnl_market_usdt, 2)} at real-market fees)</span>
+      <span style={{ color: C.muted }}>Free for manual trading: {fmtUsd(fund.manual_free.USDT ?? 0)} USDT
+        {coins.map(([a, q]) => ` · ${fmtQty(q)} ${a} held by bots`)}</span>
+      <Link to="/bots" style={{ color: C.purple, fontWeight: 700 }}>Bots &amp; Lab →</Link>
+    </div>
+  )
 }
 
 function pnlColor(v: number | null | undefined): string {
@@ -155,6 +183,8 @@ export function Wallet() {
           </div>
         </Card>
       </div>
+
+      <FundStrip />
 
       {alerts.length > 0 && (
         <div style={{

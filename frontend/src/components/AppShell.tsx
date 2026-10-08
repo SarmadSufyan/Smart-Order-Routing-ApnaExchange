@@ -14,6 +14,7 @@ const NAV = [
   { path: '/arbitrage',   label: 'Arbitrage Detector'   },
   { path: '/research',    label: 'Research & Forecasts' },
   { path: '/algos',       label: 'Algo Orders'          },
+  { path: '/bots',        label: 'Bots & Lab'           },
   { path: '/wallet',      label: 'Wallet'               },
   { path: '/howitworks',  label: 'How It Works'         },
   { path: '/venues',      label: 'Venue Connectivity'   },
