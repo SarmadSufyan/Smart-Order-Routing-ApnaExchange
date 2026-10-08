@@ -2,7 +2,7 @@
 
 > What is built, what is next, and what "done" means for each next piece.
 > Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
-> Last updated: 2026-10-07 (**Full product** plan — phases A–E; Phase A routing strategies done). Before that, 2026-10-06: §7 security hardening and CI on GitHub Actions.
+> Last updated: 2026-10-08 (Phase C built: automation fund, profit-cycle bot, advisor agent, practice lab). 2026-10-07: the **Full product** plan — phases A–E; Phase A routing strategies done. Before that, 2026-10-06: §7 security hardening and CI on GitHub Actions.
 
 ---
 
@@ -44,11 +44,35 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 |---|---|---|
 | **A** | **All algorithms.** Routing (the "where"): best price **with fees**, liquidity sweep, smart (fill reliability). Execution (the "when"): TWAP, VWAP, POV, implementation shortfall (Almgren–Chriss), iceberg (IOC version), **auto** (picks one and says why) | ✅ 2026-10-07 — every one live on testnet; [`ALGORITHMS_GUIDE.md`](ALGORITHMS_GUIDE.md) |
 | **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (SMA/EMA, RSI, MACD, Bollinger, ATR, OBV; the market VWAP lives with the algos), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ✅ 2026-10-08 — 5 coins × next minute / hour / day; [`RESEARCH_GUIDE.md`](RESEARCH_GUIDE.md) |
-| **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch | ⏭ |
+| **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch. **+ the automation fund** (money set aside for bots, kept apart from manual trading) **and the practice lab** (bots trade continuously on testnet; every trade is a sample the lab learns from) | ✅ built 2026-10-08 — live on testnet; [`AUTOMATION_GUIDE.md`](AUTOMATION_GUIDE.md). ⏭ the multi-day testnet run |
 | **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | ⏭ |
 | **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | decide later |
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
+
+### C — Bots and agents: "done" means — built 2026-10-08, the multi-day run is next
+
+Decisions (Sarmad, 2026-10-08): profit cycle **0.3 %** over both fees, **$50** budget, **$10** per buy; advisor
+auto-approve **testnet only**; a **dedicated automation fund** the owner fills from the wallet, kept apart from
+manual trading; a **practice lab** that trades continuously on testnet and learns from its own trades.
+
+- [x] Automation fund: deposit / withdraw, a pocket per bot, the gate at `OrderEntry` (a bot only uses its pocket,
+  a manual order never uses what the fund holds), its own P&L — also at real-market fees (`automation/fund.py`).
+- [x] Profit-cycle bot: lots with their own targets (cost + both fees + threshold, real-market fees as the floor),
+  sold only by a LIMIT at the target or better, spacing / cooldown / drawdown pause, dust carried into the next sale
+  (`automation/cycle.py`, `engine.py`).
+- [x] Advisor agent: next-hour forecast + the planner's ATR bracket and its history + the lab's evidence → a
+  proposal with its reasons; ask / auto (auto refused on real money); stop / target / time limit managed with IOC
+  orders (`automation/advisor.py`, `engine.py`).
+- [x] Practice lab: execution / lot / trade samples; measured costs (fed to the backtester and trade planner),
+  variant scoreboard with bootstrap intervals, permutation comparisons, outcome models (walk-forward, from 200
+  samples), three one-click experiments (`automation/lab.py`).
+- [x] Safety: every order through `OrderEntry`; kill switch pauses, restart leaves paused (verified live), three
+  refusals pause, nothing interrupted at an exchange; everything audited.
+- [x] Bots & Lab page + the fund on the Wallet page; 39 tests (456); live on testnet (journal 2026-10-08, Phase C).
+- [ ] **Run for days on testnet** (needs the gateway running — on a laptop left on, or Phase E hosting) and read
+  the lab's verdicts before any real money: which threshold earns most per day, how often lots sell within 24 h,
+  whether the advisor's trades beat their break-even, measured costs per exchange.
 
 ### B — Research and prediction: "done" means — ✅ 2026-10-08
 

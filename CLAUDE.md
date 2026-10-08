@@ -21,7 +21,7 @@ Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070
 
 ## What it is (one paragraph)
 
-A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then splits it across venues with a **routing strategy** (best price including fees, liquidity sweep, or smart) and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Large orders can be worked over time by an **execution algorithm** — TWAP, VWAP, implementation shortfall, POV or iceberg — or **Auto** picks one and explains why. Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book; every execution algorithm's children go through the same order path. **Research tools** forecast the next minute / hour / day with probabilities and a public track record, backtest rules with fees, and plan trades — read-only. An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades).
+A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then splits it across venues with a **routing strategy** (best price including fees, liquidity sweep, or smart) and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Large orders can be worked over time by an **execution algorithm** — TWAP, VWAP, implementation shortfall, POV or iceberg — or **Auto** picks one and explains why. Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book; every execution algorithm's children go through the same order path. **Research tools** forecast the next minute / hour / day with probabilities and a public track record, backtest rules with fees, and plan trades — read-only. **Bots** trade from an **automation fund** the owner sets aside (kept apart from manual trading): a **profit-cycle bot** (sells each lot only above cost + both fees + a threshold) and an **advisor agent** (proposes bracketed trades with its reasons; auto-approve on testnet only); a **practice lab** learns from every bot trade (measured costs, variant scoreboard, outcome models). An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades).
 
 > **History:** until June 2026 this was a simulated 5-venue *stock* system. The FYP panel rejected simulated data, so the team pivoted to real crypto exchanges (July 2026). The simulators live on the `archive/venue-simulators` branch. **Several docs in `project-info/` still describe the old design — see "Docs you can trust" below.**
 
@@ -54,6 +54,9 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    │        the market-VWAP benchmark                                    (project-info/ALGORITHMS_GUIDE.md)
    ├─ ResearchService: reference-market candles (data/market-history.db) → indicators, forecasts (P(up) next minute /
    │     hour / day, walk-forward tested, live track record), backtests, trade plans — read-only (project-info/RESEARCH_GUIDE.md)
+   ├─ AutomationEngine (Phase C): automation fund (a pocket per bot; OrderEntry's gate keeps bots in their pockets and
+   │     manual orders off the fund) · profit-cycle bot · advisor agent · practice lab (samples → costs, scoreboard,
+   │     outcome models) — every bot order through OrderEntry                    (project-info/AUTOMATION_GUIDE.md)
    ├─ AuditRecorder → AuditStore (SQLite: data/apnasor-<mode>.db)
    ├─ ArbitrageDetector (4 scans/s): every venue pair, both directions, gross vs after taker fees → windows +
    │     statistics (saved), profitable windows audited. Detection only: read-only lookups, cannot trade
@@ -113,6 +116,8 @@ backend/
     arbitrage/          detector.py (5c: pure edge math + WindowTracker at the top, ArbitrageDetector service)
     research/           candles.py (CandleStore + CandleSync), indicators.py, model.py (features, logistic, walk-forward,
                         scoring, ranges), signals.py, backtest.py, sizing.py (trade plan), service.py — all maths pure
+    automation/         fund.py (automation fund + the order gate), cycle.py / advisor.py (pure decisions), lab.py
+                        (practice lab: samples, costs, scoreboard, outcome models, presets), engine.py (runs the bots)
     agents/             copilot.py (propose / confirm / cancel), llm.py (one LLM interface; GeminiClient)
     consensus/          RAFT: core.py (the algorithm — no I/O, no clock, tick/step), storage.py (SQLite),
                         state_machine.py (kill switch / limits / blacklist), node.py (one node process:
@@ -123,7 +128,7 @@ backend/
                         exceptions.py, utils/logger.py (structlog), utils/asyncio_fixes.py (Windows connection-reset fix)
   tests/                unittest suites: test_exchanges, test_routing, test_portfolio, test_algos, test_arbitrage, ...
 frontend/src/
-  pages/                Dashboard, MarketData, Research, AlgoOrders, Wallet, HowItWorks, VenueHealth, RiskManager,
+  pages/                Dashboard, MarketData, Research, AlgoOrders, Automation (Bots & Lab), Wallet, HowItWorks, VenueHealth, RiskManager,
                         KillSwitch, AuditLog, Login (OrderTicket is unrouted legacy)
   components/           AppShell (nav), NewOrderModal, OrderProofModal, RoutingProof, AuditTimeline,
                         TwapChart, shared.tsx
@@ -153,7 +158,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (420 as of 2026-10-08)
+python -m unittest discover -s backend/tests -t .   # all backend tests (456 as of 2026-10-08)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -218,6 +223,13 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 - **`IsolatedAsyncioTestCase` runs asyncio in debug mode** (a stack trace per callback): fine for most tests, but timer-heavy ones (RAFT over TCP) must `set_debug(False)` or elections never settle.
 - **A VPN breaks the exchanges**: Binance answers 451 "restricted location", Bybit 403 (seen 2026-10-06). Turn it off for live tests and the demo.
 - **Windows asyncio and reset connections:** a connection reset at the wrong moment made asyncio's `_call_connection_lost` raise WinError 10054 before it detached from the server, so `Server.wait_closed()` (awaited by uvicorn before our shutdown, and by a RAFT node's `stop()`) never returned — Ctrl+C hung 60 s. Fixed by `backend/shared/utils/asyncio_fixes.py`, installed first thing by the gateway and each node: any new process that runs an asyncio server on Windows should call `fix_windows_connection_reset()` too.
+- **Binance's spot testnet charges no trading fees** (fills come back with fee 0; Bybit's demo charges 0.10 %). Anything
+  that judges profit (bots, the lab, the fund's P&L) must also count the real-market taker fee (`ARB_TAKER_FEES_BPS`),
+  or testnet practice flatters itself.
+- **Lot steps leave dust**: Binance's BTC step is 0.00001 (~$1) and the router rounds to the coarsest step; when a
+  buy fee is taken in the coin, a $10 lot can't be sold whole. Bots carry the remainder into their next sale.
+- **`scripts/check_exchange_keys.py` must load spot markets only** (each adapter's `ccxt_options`): with all market
+  types it failed whenever Binance's *futures* testnet was down, though the spot testnet we trade on was fine.
 - **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 - **The gateway's event loop is frozen ~2 s right after start** (ccxt loading the exchanges' markets). A network call with a sub-second timeout made at start-up fails although the other side answered — that was the "RAFT cluster unreachable at start-up" warning. Retry until a deadline instead of trusting one answer.
@@ -230,6 +242,6 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/AUTOMATION_GUIDE.md` (automation fund, profit-cycle bot, advisor agent, practice lab: decisions, verify-yourself, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

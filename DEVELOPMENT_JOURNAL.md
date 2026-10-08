@@ -1554,3 +1554,98 @@ Sarmad asked for a tool that predicts prices and suggests the next trade "using 
 ### Files
 
 New: `backend/services/research/` (`candles.py`, `indicators.py`, `model.py`, `signals.py`, `backtest.py`, `sizing.py`, `service.py`), `backend/gateway/routers/research.py`, `backend/tests/test_research/`, `frontend/src/pages/Research.tsx`, `frontend/src/components/ResearchChart.tsx`, `project-info/RESEARCH_GUIDE.md`. Changed: `backend/requirements.txt` (numpy), `gateway/config.py` (`MARKET_HISTORY_DB_PATH`), `gateway/dependencies.py`, `gateway/main.py`, `.env.example`; frontend `services/api.ts`, `App.tsx`, `components/AppShell.tsx`; ROADMAP, PROGRESS, CLAUDE.md.
+
+## 2026-10-08 (later) — Phase C: bots and agents, a fund of their own, and a practice lab
+
+*By Sarmad (relay holder, `feature/crypto-pivot`). ROADMAP *Full product* C. Plain-English guide with every decision,
+a verify-yourself list and the panel Q&A: [`project-info/AUTOMATION_GUIDE.md`](project-info/AUTOMATION_GUIDE.md).*
+
+### What Sarmad asked for, and the decisions
+
+- The two open questions of the Phase B handoff, decided: profit cycle **0.3 %** over both fees, **$50** budget,
+  **$10** per buy (up to 5 lots); the advisor may approve itself **on testnet only**.
+- New: *"on testnet we can play with any amount — let the trades run continuously and analyse the patterns, like
+  model training, so research and suggestions also learn from practice"* → the **practice lab**.
+- New: *"a proper dedicated fund the user sets from the wallet, so real money doesn't mix up"* → the **automation
+  fund**.
+- Real money stays last (Phase D); everything must work on testnet first.
+
+### Design
+
+- **One gate at the one entry.** `OrderEntry` got an optional guard (`set_guard`): the fund's `check_order`. A bot
+  order (`parent_id` = a bot with a pocket) may only use its pocket; any other order may only use what the fund
+  doesn't hold (free on the exchanges minus the fund's cash and the bots' coins). With an empty fund it returns at
+  once — nothing changes for manual trading. Refusals are recorded as REJECTED orders, so they are audited like
+  every other gate. Options: ApnaSOR's own book + gate (chosen: works on every exchange today), a separate exchange
+  sub-account per bot (Phase D, physical), transfers (no — our keys never withdraw).
+- **A pocket per bot** (`Pocket`): budget, cash, coins, what they cost, profit — fees as charged **and** at the
+  real-market rate. `summarize_order` turns an order's fills into the pocket's change (a fee in the coin = fewer
+  coins; in USDT = less cash; in BNB = charged to cash at its value).
+- **Profit cycle** (`cycle.py`, pure): `target = cost incl. buy fee × (1 + threshold) / (coins × (1 − sell fee))`;
+  sold by a LIMIT at the target rounded **up** to the tick (the exchange layer rounds to the nearest tick, which
+  could have sold a hair under). More lots only 0.5 % under the cheapest open one; no new buys at 10 % drawdown.
+- **Advisor** (`advisor.py`, pure): research's next-hour forecast + `trade_plan`'s ATR bracket and its history after
+  costs + the lab's similar trades and measured costs → propose when P(up) ≥ 55 % and the bracket's past average
+  > 0 R. Every reason is printed. Auto approval is refused in code on mainnet; an approval is refused if the ask
+  moved > 1 % or is already outside the bracket. Exits: target (LIMIT), stop / time limit (MARKET, price-protected).
+- **Practice lab** (`lab.py`): samples in a new `lab_samples` table — `EXECUTION` per child order (mid at send →
+  fill, fee, fill ratio), `CYCLE_LOT` / `ADVISOR_TRADE` per lot (market features at the buy → outcome). Outputs:
+  measured slippage (fed to `ResearchService` via `set_cost_source` once a coin has 20 filled orders; negative
+  medians floored at 0 for planning), the variant scoreboard (bootstrap 95 % intervals), comparisons by profit per
+  day (a permutation test, from 3 days each), outcome models (`fit_logistic` / `walk_forward` / `score` from the
+  research module, from 200 labelled samples). Statistics on a snapshot in a worker thread (bots keep writing).
+- **The engine** (`engine.py`) follows the algo engine's safety rules: kill switch pauses, restart → paused,
+  nothing interrupted at an exchange, three refusals before any exchange → paused; a lock per bot serialises its
+  loop, approvals and the owner's actions.
+
+### Found while building and checking live
+
+- **Binance's spot testnet charges no fees** (our fills: Binance fee 0, Bybit 10 bps). Every bot target, pocket and
+  lab number therefore also counts the real-market fee — otherwise practice would look better than real money.
+- **Dust from the lot step**: the fake exchange used 0.000001 BTC steps; Binance's is 0.00001 (~$1) and the router
+  uses the coarsest. With the buy fee taken in the coin, a $10 lot left up to ~$1 unsellable each cycle and the lot
+  never closed. Now a lot closes when under one step remains, and that dust goes out with the bot's next sale (a test
+  with the coarse step checks it never exceeds one step).
+- **The sell fee of a target** first took the highest fee of every routable exchange — Gate's 20 bps — for a lot
+  bought on Binance (10 bps) whose coins Gate can't sell: a target ~0.1 % too high. Now: the fee where the coins are.
+- **`scripts/check_exchange_keys.py`** reported Binance "ExchangeNotAvailable" (its futures testnet was down); the
+  gateway was fine because its adapter loads spot markets only. The script now uses each adapter's `ccxt_options`.
+- **The advisor's default bracket loses on past hours**: stop 1.5 ATR, target 2 R, 12 h → −0.20 to −0.30 R after
+  costs on ~4,900 past hours of each coin; next-hour P(up) 49.5–51.8 %. The default advisor therefore proposed
+  nothing (its scan explains it per coin) — the honest output.
+
+### Verified
+
+- **Tests:** 39 new (456): the fund (fills with fees in coin / USDT / BNB, the real-market floor, moving money, the
+  gate both ways, P&L identities, releasing coins), the rules (target maths, buy decisions, dust, allocation; the
+  advisor's every "why not" and its reasons), the lab (bootstrap, permutation, daily sums, slippage signs, cost table,
+  scoreboard + the 3-day rule, outcome models: finds a planted pattern, doesn't find one in noise), the engine
+  against a stand-in exchange (a full cycle sold at target with the limit rounded up, spacing, the gate refusing a
+  manual order, stop + an owner's sale below cost, released coins, kill switch, restart → paused, three refusals,
+  the minimum size, advisor ask → approve → stop, auto on testnet only, a moved price refusing approval, a preset).
+  Ruff clean, type-check clean.
+- **Live on testnet (2026-10-08, ~08:00–08:20 UTC):** $100 into the fund; a default profit cycle bought 0.00011 BTC
+  @ 83,004.01 on Binance (fee 0 → real-market fee counted), target set, "next buy at … or lower" shown; gateway
+  restarted → the bot came back **PAUSED** with the reason, fund and lot restored; resumed. An *Ask* advisor (loose
+  rule) proposed SOL and BNB with their reasons; SOL approved from the page → bought 0.086 SOL on Bybit (fee in the
+  coin, stop / target / 12 h set); BNB rejected (audited). That trade sold by the owner at the market: −$0.025
+  (−$0.035 at real-market fees), 0.000914 SOL of dust left, the bot stopped (cash back to the fund), the dust
+  released to manual trading — fund P&L unchanged by the release, as designed. Wallet page: the fund strip. Lab
+  experiments started (six cycle bots BTC / ETH × 0.1 / 0.3 / 1 %, the explore and strict auto advisors, $1,700 of
+  test money): the explore advisor opened four bracketed trades, the strict one none (its rule — see above); first
+  measured slippage −1.4 to +1.5 bps vs the real market's mid (test fills ≠ real fills: indicative). No errors in
+  the gateway log.
+- Not exercised live: a cycle lot reaching its target (the market moved < 0.3 % in the window — the engine test
+  covers the sale), a bracket stop on a real exchange (engine test), the kill switch with bots running (engine
+  test; the same mechanism as the algos, live-checked in earlier phases).
+
+### Files
+
+New: `backend/services/automation/` (`fund.py`, `cycle.py`, `advisor.py`, `lab.py`, `engine.py`), `backend/shared/models/automation.py`,
+`backend/gateway/routers/automation.py`, `backend/tests/test_automation/`, `frontend/src/pages/Automation.tsx`,
+`project-info/AUTOMATION_GUIDE.md`. Changed: `order_state/entry.py` (the guard), `research/service.py`
+(`forecast_horizon`, measured slippage), `database/store.py` (tables `bots`, `lab_samples`), `gateway/dependencies.py`,
+`gateway/main.py`, `websocket/ws_manager.py` (`bot_update`), `scripts/check_exchange_keys.py`; frontend `api.ts`,
+`App.tsx`, `AppShell.tsx`, `Wallet.tsx`; docs CLAUDE.md, PROGRESS.md, ROADMAP.md.
+
+---
