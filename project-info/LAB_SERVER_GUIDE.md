@@ -11,7 +11,7 @@
 ## 1. The idea in one picture
 
 ```
- Laptop (development, Phase D)                              AWS lab server (Mumbai, t4g.small, Ubuntu 24.04)
+ Laptop (development, Phase D)                              AWS lab server (Zurich, t4g.small, Ubuntu 24.04)
    your gateway + frontend, your data/                        ONE release = one commit you chose
    deploy.py ── SSH (port 22, your IP only) ───────────────►  gateway on 127.0.0.1:8000: bots + practice lab
    tunnel: laptop 127.0.0.1:18000 ─── SSH ──────────────────►  its own database, testnet keys only
@@ -37,12 +37,12 @@ What keeps the two sides from disturbing each other:
 
 ## 2. Money: what it costs, and how the account stays alive
 
-| Item (Mumbai, `ap-south-1`) | Price | Per month |
+| Item (Zurich, `eu-central-2`) | Price | Per month |
 |---|---|---|
-| t4g.small (2 vCPU Graviton, 2 GB) | $0.0112 / hour | ≈ $8.20 |
+| t4g.small (2 vCPU Graviton, 2 GB) | ≈ $0.021 / hour | ≈ $15.30 |
 | Public IPv4 address | $0.005 / hour | ≈ $3.65 |
-| 20 GB gp3 disk | ≈ $0.09 / GB-month | ≈ $1.80 |
-| **Total** | | **≈ $13.70 (≈ $0.46 a day)** |
+| 20 GB gp3 disk | ≈ $0.10 / GB-month | ≈ $2.00 |
+| **Total** | | **≈ $21 (≈ $0.70 a day)** |
 
 Measured 2026-10-09: the gateway with only the bots and the lab uses about **7 % of one CPU core and 380 MB**,
 so 2 GB is ample (1 GB would work but leaves no margin for the model training at start-up).
@@ -52,35 +52,43 @@ so 2 GB is ample (1 GB would work but leaves no margin for the model training at
 - On the Free plan the account **closes** when the credits run out or after 6 months, whichever comes first. You
   then have 90 days to upgrade before AWS deletes everything. A closed account means the server stops and the bots
   stop.
-- **The RDS database costs about $1 a day**, about $28 a month. ApnaSOR doesn't use it: the app keeps everything in
-  SQLite files. With the RDS database **and** the server, the credits run out around **2026-11-18**. Without the
-  RDS database, the server costs about $26 until 2026-12-05 and about **$32 is left**.
-  → **Your decision:** if nothing else uses that database, delete it. Go to RDS → Databases → select it →
-  Actions → Delete, and tick "Create final snapshot" if you might want the data. A snapshot of a small database
-  costs cents a month.
+- **The RDS database (about $1 a day) goes** — Sarmad deletes it (decided 2026-10-09). ApnaSOR doesn't use it: the
+  app keeps everything in SQLite files. Kept alongside the server, it would use up the credits by mid-November and
+  close the account. Without it, the server costs about $39 until 2026-12-05 and about **$19 is left**.
 - **Before 2026-12-05** do one of these:
   - Upgrade to a paid plan. The credits you have left keep paying the bills; they expire 12 months after the account
-    was created. Each month after that costs about $14.
+    was created. Each month after that costs about $21.
   - Or pull the last backup (`deploy.py backup-pull`) and terminate the server.
 
   Put a reminder in your calendar for 2026-11-28.
 - **Budget alert (free, do it now).** Billing and Cost Management → Budgets → Create budget → *Use a template* →
-  *Monthly cost budget*. Set $20 and your email. You get an email when the month heads past $20.
+  *Monthly cost budget*. Set $25 and your email. You get an email when the month heads past $25 (the server
+  alone is about $21, so an email means something else is running).
 
 ---
 
 ## 3. Part A — the AWS console (once, about 15 minutes)
 
-**A1. Region: Asia Pacific (Mumbai), `ap-south-1`.** Pick it in the top-right corner before anything else.
-Why there:
-- It is the cheapest nearby region.
-- UAE (`me-central-1`) and Bahrain were hit by drone strikes in March 2026, and AWS still reported them impaired in
-  September. Bybit also lists Dubai as restricted.
-- US regions are refused by Binance (451) and Bybit (403).
-- Singapore and Hong Kong are on Bybit's restricted list.
+**A1. Region: Europe (Zurich), `eu-central-2`.** Zurich is an *opt-in* region, so switch it on first: account menu
+(top right) → *Account* → *AWS Regions* → **Europe (Zurich)** → *Enable*. That takes a few minutes and costs
+nothing. Then pick **Europe (Zurich)** in the region menu (top right) before anything else.
 
-Part B checks right away that both exchanges accept the server's address. If they refuse it, use **Frankfurt**
-(`eu-central-1`, about $20 a month).
+Why Zurich:
+- **Tested 2026-10-09.** Binance (testnet and real market) and Bybit (demo and real market) were called from machines
+  in 17 countries. Every one answered except the US: Binance 451, Bybit 403, the same answers GitHub's US machines
+  got.
+- **Outside the EU.** Binance has served no new orders for EU residents since 2026-07-01 (no MiCA licence), so EU
+  regions such as Frankfurt, Stockholm, Ireland and Paris could become a problem. Switzerland isn't in the EU.
+- **On neither exchange's restricted list**, and away from any conflict zone.
+- **Ruled out elsewhere:**
+  - UAE and Bahrain: drone strikes in March 2026, still impaired in September; Bybit also restricts Dubai.
+  - Japan: Bybit is restricting residents of Japan in 2026.
+  - Singapore and Hong Kong: on Bybit's restricted list.
+  - US and Canada: refused or restricted.
+  - India: Sarmad's choice.
+
+Part B checks in the first minutes that both exchanges accept the server's address, with your own keys. Fallback, if
+ever needed: **Sydney** (`ap-southeast-2`), which passed the same test.
 
 **A2. EC2 → Instances → Launch instances**
 
@@ -97,7 +105,7 @@ Part B checks right away that both exchanges accept the server's address. If the
 Click **Launch instance**, open it, and copy its **Public IPv4 address**.
 
 **A3. A second way in (recommended).** Security groups → `apnasor-lab-ssh` → Edit inbound rules → Add rule:
-type **SSH**, source = the prefix list **`com.amazonaws.ap-south-1.ec2-instance-connect`**. After that,
+type **SSH**, source = the prefix list **`com.amazonaws.eu-central-2.ec2-instance-connect`**. After that,
 *EC2 → Instances → Connect → EC2 Instance Connect* gives you a terminal in the browser. It works even when your home
 IP has changed and the "My IP" rule no longer matches you.
 
@@ -142,7 +150,7 @@ python deploy/lab-server/deploy.py status
   - installs the release with `install_release.sh`: its own Python packages from `requirements.lock`, a start check,
     the unit tests (`--test`), systemd units, then waits until the gateway answers.
 - **check-exchanges** must show both venues authenticated with test balances. A `451` or `403` means the exchange
-  refuses this region: terminate the instance and redo part A in Frankfurt.
+  refuses this region: terminate the instance and redo part A in Sydney.
 - **status** shows:
   - the release, gateway uptime and restarts;
   - memory, disk and clock;
@@ -283,7 +291,7 @@ On the laptop it is off: there, every bot still comes back paused for you to rev
 
 ## 12. Panel questions
 
-- **"Is it deployed?"** The bots and the practice lab run 24/7 on an AWS EC2 server in Mumbai, against the
+- **"Is it deployed?"** The bots and the practice lab run 24/7 on an AWS EC2 server in Zurich, against the
   exchanges' testnet / demo. Real-money trading and the full dashboard run locally (Phase D/E decides the hosting
   for real money).
 - **"Why not Docker or Kubernetes?"** It is one Python process with SQLite files. systemd already gives automatic

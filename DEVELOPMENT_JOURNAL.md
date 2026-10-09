@@ -1760,3 +1760,21 @@ install `previous` pointed at `current` (now `readlink -e`). CI now checks for b
   `components/AppShell.tsx`, `pages/Login.tsx`.
 - Config and docs: `.env.example`, AUTOMATION_GUIDE.md, ROADMAP.md, CLAUDE.md, PROGRESS.md.
 
+**Later the same day: Zurich, not Mumbai** (Sarmad didn't want the server in India). The region was chosen by test
+this time, not by assumption. check-host.net called Binance (testnet + real market) and Bybit (demo + real market)
+from machines in 17 countries:
+- every country answered except the US control (Binance 451, Bybit 403, the same as GitHub's US runners);
+- so the exchanges block only US addresses at the network level, and everything else is decided by their country
+  rules — which matter for Sarmad's real Bybit account, because the demo key lives on it.
+
+That ruled out:
+- the EU: Binance has accepted no new orders from EU residents since 2026-07-01 (no MiCA licence);
+- Japan: Bybit is restricting residents of Japan in 2026;
+- Singapore, Hong Kong and Canada: on Bybit's restricted list;
+- the Gulf: still damaged.
+
+**Zurich (`eu-central-2`)** is outside the EU, on neither list and stable: ≈ $21/month (t4g.small ≈ $0.021/h, IPv4,
+20 GB), about $39 of the credits until 2026-12-05 with the RDS database deleted (Sarmad will). It is an opt-in region,
+so it has to be enabled first. Sydney passed the same test and is the fallback. The kit needed no change: only
+project-info/LAB_SERVER_GUIDE.md (§2–3), PROGRESS.md and ROADMAP.md.
+
