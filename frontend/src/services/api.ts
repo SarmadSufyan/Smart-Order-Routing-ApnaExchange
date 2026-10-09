@@ -1,4 +1,7 @@
-const API_BASE = 'http://127.0.0.1:8000'
+// Which gateway this page talks to. Default: the one on this machine. `npm run dev:lab-server` builds the page
+// for the lab server instead (frontend/.env.lab-server: through the SSH tunnel), with a badge naming it.
+export const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+export const SERVER_LABEL: string | undefined = import.meta.env.VITE_SERVER_LABEL || undefined
 
 let accessToken: string | null = null
 

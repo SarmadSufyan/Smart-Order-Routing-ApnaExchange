@@ -7,6 +7,7 @@ import { useDataStore } from '../stores/dataStore'
 import { useThemeStore } from '../stores/themeStore'
 import { backendVenueToUi } from '../adapters'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
+import { API_BASE, SERVER_LABEL } from '../services/api'
 
 const NAV = [
   { path: '/',            label: 'Dashboard'            },
@@ -177,6 +178,17 @@ export function AppShell() {
               }}
             >
               {exchangeMode === 'mainnet' ? 'MAINNET · REAL FUNDS' : 'TESTNET'}
+            </span>
+          )}
+          {SERVER_LABEL && (
+            <span
+              title={`This page shows the gateway at ${API_BASE}, not the one on this machine`}
+              style={{
+                borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
+                background: tint(C.blue, 16), color: C.blue, border: `1px solid ${C.blue}`, whiteSpace: 'nowrap',
+              }}
+            >
+              {SERVER_LABEL}
             </span>
           )}
         </div>

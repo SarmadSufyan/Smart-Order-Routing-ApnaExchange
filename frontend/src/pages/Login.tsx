@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { BOOT_LINES, MOCK_VENUES } from '../mockData'
 import { useAuthStore } from '../stores/authStore'
-import { api } from '../services/api'
+import { api, API_BASE, SERVER_LABEL } from '../services/api'
 
 // Shown only for users the gateway says still have the demo login
 // (GET /api/auth/demo-logins) — none on a machine with real passwords.
@@ -235,7 +235,7 @@ export function Login() {
             <span>© 2026 APNASOR · APNA EXCHANGE</span>
             <span>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: C.green, marginRight: 4 }} />
-              Connected to localhost:8000
+              {SERVER_LABEL ? `${SERVER_LABEL} · ` : ''}Connected to {new URL(API_BASE).host}
             </span>
           </div>
         </div>

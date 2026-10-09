@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lab-server": "vite --mode lab-server --port 5180 --strictPort",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

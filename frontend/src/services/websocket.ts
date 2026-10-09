@@ -1,6 +1,8 @@
+import { API_BASE } from './api'
+
 type WSHandler = (data: any) => void
 
-const WS_BASE = 'ws://127.0.0.1:8000'
+const WS_BASE = API_BASE.replace(/^http/, 'ws')  // http -> ws, https -> wss
 
 // The gateway refuses (close code 4401) a connection whose first message isn't
 // a valid login, and closes an open one when the login expires. The token goes
