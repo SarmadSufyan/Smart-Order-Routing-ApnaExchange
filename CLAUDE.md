@@ -138,7 +138,13 @@ frontend/src/
 scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py, benchmark_risk_batch.py,
                         raft_demo.py (kill the leader; --gateway --twap 0.0006 against the live system),
                         arb_watch.py (arbitrage detector live in the terminal), hash_password.py (the .env
-                        line for a real login password), security_check.py (tries the §7 attacks, read-only)
+                        line for a real login password), security_check.py (tries the §7 attacks, read-only),
+                        lab_status.py (bots + lab from a database, read-only; --db for a backup),
+                        backup_databases.py (online SQLite copies, gzipped, kept N days)
+deploy/lab-server/      the 24/7 lab server on AWS (bots + practice lab, testnet only): deploy.py (laptop: init,
+                        setup, release, env, passwords, status, logs, tunnel, backup-pull, rollback), setup.sh,
+                        install_release.sh (backup -> install -> switch -> healthy or roll back), systemd/ units,
+                        requirements.lock (exact Linux packages)                (project-info/LAB_SERVER_GUIDE.md)
 project-info/           ROADMAP.md, API_KEYS_GUIDE.md (current) + older design docs (partly stale)
 venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used by the running app
 start_all.py            starts the RAFT nodes (if enabled; waits for a leader), gateway + frontend; refuses a second
@@ -158,11 +164,12 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (456 as of 2026-10-08)
+python -m unittest discover -s backend/tests -t .   # all backend tests (461 as of 2026-10-09)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
+python deploy/lab-server/deploy.py status        # the 24/7 lab server on AWS (project-info/LAB_SERVER_GUIDE.md)
 ```
 
 Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.
@@ -230,6 +237,11 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
   buy fee is taken in the coin, a $10 lot can't be sold whole. Bots carry the remainder into their next sale.
 - **`scripts/check_exchange_keys.py` must load spot markets only** (each adapter's `ccxt_options`): with all market
   types it failed whenever Binance's *futures* testnet was down, though the spot testnet we trade on was fine.
+- **`git archive` on Windows converts line endings like a checkout** (`core.autocrlf=true`): a shell script for the
+  lab server would arrive with CRLF and fail on Linux (`$'': command not found`). `.gitattributes` keeps `*.sh` and
+  `deploy/lab-server/**` LF — keep new Linux-side files under those patterns.
+- **The lab server runs a release, not the branch**: `deploy.py release` copies ONE commit there; nothing you
+  commit reaches it otherwise. Its database is its own: the laptop's lab bots stay stopped while the server runs the lab.
 - **Measuring layouts in an automated browser**: a hidden browser pane paints no frames, so `ResizeObserver` never fires and charts look stuck at their starting width. Force a frame (take a screenshot) after every resize before measuring.
 - **Quiet markets look frozen**: an unchanged mid for several seconds at night is real (verified against Binance's public quote), not a stale feed.
 - **The gateway's event loop is frozen ~2 s right after start** (ccxt loading the exchanges' markets). A network call with a sub-second timeout made at start-up fails although the other side answered — that was the "RAFT cluster unreachable at start-up" warning. Retry until a deadline instead of trusting one answer.
@@ -242,6 +254,6 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/AUTOMATION_GUIDE.md` (automation fund, profit-cycle bot, advisor agent, practice lab: decisions, verify-yourself, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/AUTOMATION_GUIDE.md` (automation fund, profit-cycle bot, advisor agent, practice lab: decisions, verify-yourself, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), `project-info/LAB_SERVER_GUIDE.md` (the 24/7 lab server on AWS: costs, console steps, deploy, what happens when, security), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

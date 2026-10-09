@@ -1649,3 +1649,110 @@ New: `backend/services/automation/` (`fund.py`, `cycle.py`, `advisor.py`, `lab.p
 `App.tsx`, `AppShell.tsx`, `Wallet.tsx`; docs CLAUDE.md, PROGRESS.md, ROADMAP.md.
 
 ---
+
+---
+
+## 2026-10-09 — The lab server: the bots and the practice lab 24/7 on AWS
+
+**Why.** The practice lab built in Phase C learns from days of its own trades, but its first run on the laptop
+stopped after 73 minutes: the laptop slept (Modern Standby turned the network off). Sarmad can't leave the laptop on
+for days. The rest of the work (Phase D) must also go on in parallel without disturbing the lab, and the lab must not
+disturb it. So the bots and the lab, and only those, go to a small always-on server.
+
+**Where, and the money.** Sarmad's AWS account is on the Free plan: $58.32 credits, and the plan ends 2026-12-05.
+
+- **Machine size.** Measured first: the gateway with only the bots and the lab uses ~7 % of one core and ~380 MB
+  (`ARB_ENABLED=false`, `RISK_POOL_WORKERS=1`, the 15 research models trained at start). → **t4g.small** (2 vCPU
+  Graviton, 2 GB).
+- **arm64 packages.** Every package has a ready-built arm64 wheel, checked with
+  `uv pip compile --python-platform aarch64-manylinux_2_28 --only-binary :all:`. `pip download` can't check this
+  from Windows: it evaluates the `winloop` marker on the host.
+- **Region: not UAE**, the first idea. AWS's UAE region was hit by drone strikes in March 2026 and was still impaired
+  in September (one zone's data unrecoverable), and Bybit lists Dubai as restricted.
+- **Other regions ruled out.** US regions are refused by Binance (451) and Bybit (403). Singapore and Hong Kong are
+  on Bybit's list.
+- **Mumbai** is the cheapest nearby region: ≈ $13.70/month with the IPv4 address and a 20 GB disk.
+  `check-exchanges` proves in the first minutes that the exchanges accept it; Frankfurt is the fallback.
+- **The RDS database.** The account's bill shows one (≈ $1/day) that ApnaSOR doesn't use. With it, the credits run
+  out ≈ 2026-11-18 and the Free plan closes the account. This is Sarmad's decision, and it comes first in the guide.
+
+**Design choices.**
+- **The server runs a release, not the branch.** `deploy.py` makes `git archive` of one commit and copies it over
+  SSH. So:
+  - uncommitted work never reaches the server;
+  - the server holds no GitHub credentials;
+  - the server changes only when someone runs `deploy.py release`.
+
+  Data (`shared/data`) and settings (`shared/lab.env`) live outside every release, so swapping a release never
+  touches them. `current` / `previous` symlinks make a rollback one command.
+- **A release proves itself or goes back.** `install_release.sh`:
+  1. builds its own venv from the lock file;
+  2. imports the whole gateway with the server's settings and **refuses anything but testnet**;
+  3. runs the unit tests if asked, in a separate copy with no keys and no data;
+  4. backs up the databases;
+  5. switches and restarts;
+  6. waits for the gateway to answer within 4 minutes, or goes back to the previous release.
+- **systemd, not Docker.** It is one Python process with SQLite files. systemd gives, with nothing extra to run:
+  - restart on crash (`Restart=always`, never giving up);
+  - a memory cap and timers;
+  - a sandbox: the system and the code are read-only, and the service writes only to `shared/`.
+
+  The stop signal is SIGINT, the same as Ctrl+C, so the gateway's own clean shutdown runs: bots are paused and an
+  order at an exchange finishes. A gateway that is stuck but still running is caught by a 5-minute health check
+  (3 failures → restart).
+- **Nothing listens on the internet but SSH.** The gateway binds 127.0.0.1. The laptop sees the server's Bots & Lab
+  page through an SSH tunnel (`deploy.py tunnel` + `npm run dev:lab-server`). The frontend's gateway address is now
+  a build setting, `VITE_API_BASE`, and a blue **LAB SERVER** badge makes the page impossible to mistake for the
+  laptop's.
+- **Least secrets.** `deploy.py env` builds the server's settings from the laptop's .env:
+  - Binance and Bybit testnet keys and the login hashes only;
+  - no Gemini key, no RAFT secret, and never a mainnet key (asserted, and tested).
+
+  Values are written single-quoted, so the server reads exactly what the laptop's gateway reads. An unquoted
+  `${HOME}` is expanded once, on the laptop: a test caught our first assumption here. Server-only login passwords
+  come from `deploy.py passwords` (hashes in `data/lab-server/logins.env`).
+- **`LAB_AUTO_RESUME`: the one exception to "a restart leaves bots paused".** An unattended server that restarts at
+  3 a.m. (crash, reboot, new release) must not stop the lab until someone looks.
+  - With the setting on, lab bots that *only the restart* paused resume 60 s after the start.
+  - The flag is `BotState.resume_after_restart`. The clean stop sets it, and so does a load after a crash; any other
+    status change clears it.
+  - Never on real money: lab bots are testnet-only.
+  - Never while the kill switch is engaged: `bots_auto_resume_skipped` is audited and the flag is kept.
+  - Never a bot that a person, the kill switch or the three-refusals rule paused.
+  - Off by default, so laptops keep the old rule.
+- **Backups.**
+  - SQLite's online backup gives a consistent copy while the gateway writes; then `quick_check` and gzip.
+  - They run daily at 22:30 UTC and before every release.
+  - 14 days are kept, but never fewer than the newest three.
+  - `deploy.py backup-pull` brings one to the laptop, and `scripts/lab_status.py --db` reads it.
+- **Line endings.** `git archive` on Windows converts like a checkout (`core.autocrlf=true`), and a CRLF shell script
+  fails on Linux. `.gitattributes` keeps `*.sh` and `deploy/lab-server/**` LF.
+
+**Tested.**
+- **10 new unit tests (466 in total).**
+  - Auto-resume: only the restart-paused lab bots; a crash counts as a restart; the kill switch; mainnet; the delay,
+    and a stop that cancels it.
+  - The backup copy and the pruning.
+  - The server settings: no mainnet key; a missing key stops it; server logins win; the server reads what the laptop
+    reads.
+- **The whole kit end to end** on a clean Ubuntu 24.04 with systemd, in `.github/workflows/lab-server-kit.yml`.
+  It runs `deploy.py init` / `setup --test` / `status` / `backup-pull` / `release` / `rollback` over SSH to the runner
+  itself, then:
+  - kills the gateway (systemd restarts it);
+  - freezes it (the health check restarts it, cleanly);
+  - checks the gateway isn't reachable from the network.
+
+  Docker Desktop on the laptop failed to start (a local Docker problem), so the CI runner is the test server. It is
+  the better test anyway.
+
+**Files.**
+- New: `deploy/lab-server/` (deploy.py, setup.sh, install_release.sh, rollback.sh, lib.sh, healthcheck.sh,
+  status.sh, versions.env, requirements.lock, systemd/), `scripts/backup_databases.py`, `scripts/lab_status.py`,
+  `backend/tests/test_lab_server.py`, `.gitattributes`, `.github/workflows/lab-server-kit.yml`,
+  `project-info/LAB_SERVER_GUIDE.md`.
+- Backend: `services/automation/engine.py`, `shared/models/automation.py`, `gateway/config.py`, `gateway/main.py`,
+  `tests/test_automation/test_engine.py`.
+- Frontend: `services/api.ts`, `services/websocket.ts`, `vite-env.d.ts`, `.env.lab-server`, `package.json`,
+  `components/AppShell.tsx`, `pages/Login.tsx`.
+- Config and docs: `.env.example`, AUTOMATION_GUIDE.md, ROADMAP.md, CLAUDE.md, PROGRESS.md.
+
