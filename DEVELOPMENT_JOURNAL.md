@@ -1763,7 +1763,8 @@ install `previous` pointed at `current` (now `readlink -e`). CI now checks for b
 **Later the same day: Zurich, not Mumbai** (Sarmad didn't want the server in India). The region was chosen by test
 this time, not by assumption. check-host.net called Binance (testnet + real market) and Bybit (demo + real market)
 from machines in 17 countries:
-- every country answered except the US control (Binance 451, Bybit 403, the same as GitHub's US runners);
+- every country answered except the US control (Binance 451, Bybit 403, the same as GitHub's US runners) and Hong
+  Kong (the checker gave no result there);
 - so the exchanges block only US addresses at the network level, and everything else is decided by their country
   rules — which matter for Sarmad's real Bybit account, because the demo key lives on it.
 

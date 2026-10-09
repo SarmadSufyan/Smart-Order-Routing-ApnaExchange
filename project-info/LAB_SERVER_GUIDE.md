@@ -75,8 +75,8 @@ nothing. Then pick **Europe (Zurich)** in the region menu (top right) before any
 
 Why Zurich:
 - **Tested 2026-10-09.** Binance (testnet and real market) and Bybit (demo and real market) were called from machines
-  in 17 countries. Every one answered except the US: Binance 451, Bybit 403, the same answers GitHub's US machines
-  got.
+  in 17 countries. All answered except the US (Binance 451, Bybit 403, the same answers GitHub's US machines got)
+  and Hong Kong (the checker gave no result there).
 - **Outside the EU.** Binance has served no new orders for EU residents since 2026-07-01 (no MiCA licence), so EU
   regions such as Frankfurt, Stockholm, Ireland and Paris could become a problem. Switzerland isn't in the EU.
 - **On neither exchange's restricted list**, and away from any conflict zone.
