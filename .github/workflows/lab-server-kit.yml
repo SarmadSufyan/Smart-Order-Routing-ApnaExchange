@@ -77,6 +77,7 @@ jobs:
             echo "the gateway answers on the network - it must listen on 127.0.0.1 only"; exit 1
           fi
           sudo journalctl -u apnasor-lab -o cat | grep -q lab_auto_resume_on
+          if [ -e /opt/apnasor/previous ]; then echo "a first install has no previous release"; exit 1; fi
 
       - name: deploy.py status
         run: $DEPLOY status
@@ -90,11 +91,14 @@ jobs:
 
       - name: A hang -> three failed health checks restart it, cleanly
         run: |
-          sudo systemctl kill -s SIGSTOP apnasor-lab   # frozen: running, but not answering
+          sudo systemctl kill --kill-whom=main -s SIGSTOP apnasor-lab   # the gateway frozen: running, not answering
           for i in 1 2 3; do sudo bash /opt/apnasor/current/deploy/lab-server/healthcheck.sh; done
           for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health 2>/dev/null && break; sleep 3; done
           curl -fsS -o /dev/null http://127.0.0.1:8000/api/health
           sudo journalctl -u apnasor-lab -o cat | grep -q shutdown_complete   # the restart stopped it like Ctrl+C
+          if sudo journalctl -u apnasor-lab -o cat | grep -q KeyboardInterrupt; then
+            echo "the stop reached the worker processes (KillMode)"; exit 1
+          fi
 
       - name: deploy.py backup-pull (and read it on "the laptop")
         run: |

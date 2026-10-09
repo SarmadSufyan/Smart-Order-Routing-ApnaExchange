@@ -19,6 +19,9 @@ ExecStart=/opt/apnasor/current/.venv/bin/python -m uvicorn backend.gateway.main:
 # Stop like Ctrl+C: the gateway pauses the bots (LAB_AUTO_RESUME resumes them after the start), lets an order that is
 # at an exchange finish and closes the databases - a few seconds. After 90 s systemd would kill it.
 KillSignal=SIGINT
+# Only the gateway gets it; it shuts its risk-check worker down itself (a SIGINT to the whole group made the idle
+# worker print a KeyboardInterrupt traceback - found in CI). Anything left after it exits is killed.
+KillMode=mixed
 TimeoutStopSec=90
 Restart=always
 RestartSec=10

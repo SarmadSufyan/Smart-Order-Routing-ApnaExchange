@@ -71,8 +71,8 @@ if restart_gateway; then
 else
   echo "   NOT healthy after 4 minutes - last log lines:"
   journalctl -u apnasor-lab -n 30 --no-pager -o cat | cut -c1-240
-  if [[ -L "$BASE/previous" && "$(readlink -f "$BASE/previous")" != "$REL" ]]; then
-    prev="$(readlink -f "$BASE/previous")"
+  if [[ -L "$BASE/previous" && "$(readlink -e "$BASE/previous")" != "$REL" ]]; then
+    prev="$(readlink -e "$BASE/previous")"
     echo "== going back to $(basename "$prev")"
     install_units "$prev"
     switch_to "$prev"
@@ -82,7 +82,7 @@ else
 fi
 
 echo "== 5/5 tidy up: keep the 3 newest releases (and the current and previous ones)"
-keep_cur="$(readlink -f "$BASE/current")"; keep_prev="$(readlink -f "$BASE/previous" 2>/dev/null || true)"
+keep_cur="$(readlink -e "$BASE/current")"; keep_prev="$(readlink -e "$BASE/previous" 2>/dev/null || true)"
 ls -1dt "$BASE"/releases/*/ 2>/dev/null | tail -n +4 | while read -r old; do
   old="${old%/}"
   [[ "$old" == "$keep_cur" || "$old" == "$keep_prev" ]] && continue

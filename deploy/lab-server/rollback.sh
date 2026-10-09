@@ -8,8 +8,8 @@ cd /  # the service user can't read the login user's home, and uv looks around t
 source "$HERE/lib.sh"
 
 [[ $EUID -eq 0 ]] || die "run as root: sudo bash $0"
-prev="$(readlink -f "$BASE/previous" 2>/dev/null || true)"
-cur="$(readlink -f "$BASE/current" 2>/dev/null || true)"
+prev="$(readlink -e "$BASE/previous" 2>/dev/null || true)"
+cur="$(readlink -e "$BASE/current" 2>/dev/null || true)"
 [[ -n "$prev" && -f "$prev/.installed" && "$prev" != "$cur" ]] || die "there is no previous release to go back to"
 
 echo "== from $(basename "$cur") back to $(basename "$prev")"

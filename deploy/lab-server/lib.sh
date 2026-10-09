@@ -19,7 +19,7 @@ install_units() {
 # Point "current" at a release (atomically) and remember the one before as "previous".
 switch_to() {
   local rel="$1" before
-  before="$(readlink -f "$BASE/current" 2>/dev/null || true)"
+  before="$(readlink -e "$BASE/current" 2>/dev/null || true)"  # -e: empty when there is no current yet
   ln -sfn "$rel" "$BASE/current.new"
   mv -Tf "$BASE/current.new" "$BASE/current"
   if [[ -n "$before" && "$before" != "$(readlink -f "$rel")" ]]; then
