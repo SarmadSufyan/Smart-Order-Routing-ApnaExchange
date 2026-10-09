@@ -1744,6 +1744,10 @@ disturb it. So the bots and the lab, and only those, go to a small always-on ser
 
   Docker Desktop on the laptop failed to start (a local Docker problem), so the CI runner is the test server. It is
   the better test anyway.
+The first CI run found two things, both fixed: systemd's stop sent Ctrl+C to the whole process group, so the idle
+risk-check worker printed a `KeyboardInterrupt` traceback on every stop (now `KillMode=mixed`: only the gateway gets it
+and shuts its worker down itself); and `readlink -f` accepts a path that doesn't exist yet, so after the very first
+install `previous` pointed at `current` (now `readlink -e`). CI now checks for both.
 
 **Files.**
 - New: `deploy/lab-server/` (deploy.py, setup.sh, install_release.sh, rollback.sh, lib.sh, healthcheck.sh,
