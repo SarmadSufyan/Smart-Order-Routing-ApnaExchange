@@ -274,6 +274,8 @@ class BotState(BaseModel):
     updated_at: datetime = Field(default_factory=_now)
     status: BotStatus = BotStatus.RUNNING
     status_reason: str | None = None
+    # Paused only because the gateway stopped while it ran: the lab server (LAB_AUTO_RESUME) resumes these, nothing else.
+    resume_after_restart: bool = False
     lab: bool = False
     cycle: CycleParams | None = None
     advisor: AdvisorParams | None = None

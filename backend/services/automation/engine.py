@@ -5,10 +5,13 @@ risk, the kill switch, the fund gate (a bot can only use its own pocket), routin
 price-protected IOC children. The engine never talks to an exchange itself.
 
 Safety, the same as the algo engine: the kill switch pauses every running bot, a restart
-leaves them paused (never auto-resumed), an order already at the exchange is never
-interrupted (pause / stop take effect between orders), and three orders in a row refused
-before reaching any exchange pause the bot with the reason. Advisor auto-approve and lab
-bots are testnet only (decided 2026-10-08) — refused on real money.
+leaves them paused, an order already at the exchange is never interrupted (pause / stop
+take effect between orders), and three orders in a row refused before reaching any
+exchange pause the bot with the reason. Advisor auto-approve and lab bots are testnet only
+(decided 2026-10-08) — refused on real money. The one exception to "a restart leaves them
+paused" is the unattended lab server (LAB_AUTO_RESUME=true, decided 2026-10-09): lab bots
+that were running when the gateway stopped are resumed after a delay — testnet only, never
+while the kill switch is engaged, never a bot a person or a safety rule paused.
 
 Each loop (every ``check_interval_s``):
     1. open lots: sell the ones whose exit has come (cycle: target; advisor: target / stop /
@@ -94,6 +97,7 @@ class AutomationEngine:
         self._locks: dict[str, asyncio.Lock] = {}
         self._busy: set[str] = set()  # an order of this bot is at the exchange right now
         self._buy_retry_at: dict[str, datetime] = {}
+        self._auto_resume_task: asyncio.Task | None = None
 
     # ── lifecycle ───────────────────────────────────────────────────
     async def load(self) -> None:
@@ -104,18 +108,27 @@ class AutomationEngine:
             return
         for bot in await self._store.load_bots():
             self._bots[bot.id] = bot
-            if bot.status == BotStatus.RUNNING:
+            if bot.status == BotStatus.RUNNING:  # the gateway died without its clean stop (crash, power cut)
                 await self._set_status(bot, BotStatus.PAUSED, "system",
-                                       "Gateway restarted while this bot was running — review and resume it")
+                                       "Gateway restarted while this bot was running — review and resume it",
+                                       restart=True)
 
-    def start(self) -> None:
+    def start(self, auto_resume_after_s: float | None = None) -> None:
+        """Start listening; with ``auto_resume_after_s`` (the lab server) also resume the interrupted lab bots then."""
         event_bus.subscribe("kill_switch", self._on_kill_switch)
+        if auto_resume_after_s is not None:
+            self._auto_resume_task = asyncio.create_task(self._auto_resume_later(auto_resume_after_s),
+                                                         name="bots-auto-resume")
 
     async def stop(self) -> None:
+        if self._auto_resume_task is not None:  # first: nothing may resume a bot while we stop them
+            self._auto_resume_task.cancel()
+            await asyncio.gather(self._auto_resume_task, return_exceptions=True)
         event_bus.unsubscribe("kill_switch", self._on_kill_switch)
         for bot in list(self._bots.values()):
             if bot.status == BotStatus.RUNNING:
-                await self._set_status(bot, BotStatus.PAUSED, "system", "Gateway stopped — resume it after the restart")
+                await self._set_status(bot, BotStatus.PAUSED, "system", "Gateway stopped — resume it after the restart",
+                                       restart=True)
         deadline = asyncio.get_running_loop().time() + STOP_GRACE_S
         while self._busy and asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.2)
@@ -300,7 +313,7 @@ class AutomationEngine:
         await self._set_status(bot, BotStatus.PAUSED, actor, f"Paused by {actor}")
         return self.view(bot)
 
-    async def resume(self, bot_id: str, actor: str) -> BotState:
+    async def resume(self, bot_id: str, actor: str, reason: str | None = None) -> BotState:
         bot = self.get(bot_id)
         if bot.status != BotStatus.PAUSED:
             raise BotRejectedError(f"{bot_id} is {bot.status.value}, not paused")
@@ -309,11 +322,49 @@ class AutomationEngine:
         if bot.lab and not self.lab.enabled:
             raise BotRejectedError("Lab bots run on testnet only")
         bot.stats.consecutive_rejections = 0
-        await self._set_status(bot, BotStatus.RUNNING, actor, f"Resumed by {actor}")
+        await self._set_status(bot, BotStatus.RUNNING, actor, reason or f"Resumed by {actor}")
         task = self._tasks.get(bot_id)
         if task is None or task.done():
             self._launch(bot)
         return self.view(bot)
+
+    async def auto_resume(self) -> list[str]:
+        """The lab server after a restart: resume the lab bots that only the restart paused. Returns their ids.
+
+        Testnet only (lab bots can't run on real money), never while the kill switch is engaged, and never a bot
+        that a person, the kill switch or the three-refusals rule paused — those wait for a person.
+        """
+        waiting = [b for b in self._bots.values()
+                   if b.lab and b.status == BotStatus.PAUSED and b.resume_after_restart]
+        if not waiting:
+            return []
+        if not self.lab.enabled:
+            logger.warning("bots_auto_resume_refused", reason="lab bots run on testnet only", bots=len(waiting))
+            return []
+        if self._risk.kill_switch.is_active:
+            await audit("bots_auto_resume_skipped",
+                        f"Lab bots not resumed after the restart: the kill switch is engaged "
+                        f"({', '.join(b.id for b in waiting)} stay paused)", actor="system")
+            return []
+        resumed = []
+        for bot in sorted(waiting, key=lambda b: b.created_at):
+            try:
+                await self.resume(bot.id, "system", "Resumed automatically after the restart (lab server, "
+                                                    "LAB_AUTO_RESUME)")
+                resumed.append(bot.id)
+            except BotRejectedError as exc:
+                logger.warning("bot_auto_resume_refused", bot_id=bot.id, reason=exc.message)
+        if resumed:
+            await audit("bots_auto_resumed", f"Lab bots resumed automatically after the restart: {', '.join(resumed)}",
+                        actor="system", payload={"bots": resumed})
+        return resumed
+
+    async def _auto_resume_later(self, delay_s: float) -> None:
+        await asyncio.sleep(delay_s)  # the exchanges' books and the wallet need a moment after a start
+        try:
+            await self.auto_resume()
+        except Exception as exc:  # noqa: BLE001 — a failed resume leaves the bots paused, which is safe
+            logger.error("bots_auto_resume_failed", error=str(exc)[:200])
 
     async def stop_bot(self, bot_id: str, actor: str) -> BotState:
         """No new trades. Its cash goes back to the fund; open lots stay (sell them or release the coins)."""
@@ -798,8 +849,10 @@ class AutomationEngine:
     async def _publish(self, bot: BotState) -> None:
         await event_bus.publish("bot_update", {"id": bot.id, "status": bot.status.value})
 
-    async def _set_status(self, bot: BotState, status: BotStatus, actor: str, reason: str) -> None:
+    async def _set_status(self, bot: BotState, status: BotStatus, actor: str, reason: str,
+                          restart: bool = False) -> None:
         bot.status, bot.status_reason = status, reason
+        bot.resume_after_restart = restart  # any later change (a person, the kill switch, a resume) clears it
         self._touch(bot)
         if (wake := self._wake.get(bot.id)) is not None:
             wake.set()

@@ -123,6 +123,14 @@ class Settings(BaseSettings):
     arb_min_net_bps: float = 0.0  # "profitable" = net edge after fees above this
     arb_audit_cooldown_s: float = 60.0  # at most one audit per direction per this
 
+    # ─── Lab server (unattended practice lab, testnet only) ───────
+    # After a restart (crash, reboot, a new release) resume the LAB bots that were running when the
+    # gateway stopped, this long after the start (the exchanges' books need a moment). Off = every
+    # bot comes back paused for a person to review. Never on real money, never while the kill switch
+    # is engaged, never a bot a person or a safety rule paused. deploy/lab-server/ sets it on.
+    lab_auto_resume: bool = False
+    lab_auto_resume_delay_s: float = 60.0
+
     # ─── Audit log / book of record ───────────────────────────────
     # Empty = data/apnasor-<exchange_mode>.db, so testnet and mainnet records
     # never mix. ":memory:" keeps nothing (tests).

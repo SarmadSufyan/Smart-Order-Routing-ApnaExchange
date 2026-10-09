@@ -77,6 +77,21 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         await e.pause(bot.id, "test")  # the test drives the next steps itself
         return bot.id
 
+    async def lab_bot(self, e: AutomationEngine) -> str:
+        await e.fund.deposit(500, "admin")
+        bot = await e.create_cycle(CycleParams(symbol="BTC/USDT", lab=True, label="lab: BTC"), "admin")
+        await asyncio.sleep(0.05)
+        return bot.id
+
+    async def restarted(self, mode: str = "testnet") -> AutomationEngine:
+        """A clean stop of every engine so far, then a new engine on the same database (a gateway restart)."""
+        for e in self.engines:
+            await e.stop()
+        await self.store.flush()
+        again = self.engine(mode)
+        await again.load()
+        return again
+
     async def test_a_cycle_buys_waits_and_sells_at_its_target(self) -> None:
         e = self.engine()
         bot = e.get(await self.started_cycle(e))
@@ -189,6 +204,64 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("restarted", restored.status_reason)
         self.assertEqual(len(restored.lots), 1)
         self.assertAlmostEqual(again.fund.state.allocated_usdt, 500)
+
+    async def test_the_lab_server_resumes_only_the_lab_bots_the_restart_paused(self) -> None:
+        e = self.engine()
+        lab_bots = await e.start_preset("cycle_thresholds", "admin")
+        await e.fund.deposit(100, "admin")
+        own = await e.create_cycle(CycleParams(symbol="ETH/USDT"), "admin")  # a person's bot, not a lab bot
+        await asyncio.sleep(0.05)
+        await e.pause(lab_bots[0].id, "admin")  # a person paused this one: it waits for a person
+        again = await self.restarted()
+        self.assertTrue(all(b.status == BotStatus.PAUSED for b in again.bots().values()))
+        resumed = await again.auto_resume()
+        self.assertEqual(sorted(resumed), sorted(b.id for b in lab_bots[1:]))
+        self.assertEqual(again.get(lab_bots[0].id).status, BotStatus.PAUSED)
+        self.assertEqual(again.get(own.id).status, BotStatus.PAUSED)
+        self.assertIn("automatically", again.get(lab_bots[1].id).status_reason)
+        self.assertFalse(again.get(lab_bots[1].id).resume_after_restart)
+        self.assertEqual(await again.auto_resume(), [])  # once: nothing is left to resume
+
+    async def test_a_crash_counts_as_a_restart_too(self) -> None:
+        e = self.engine()
+        bot_id = await self.lab_bot(e)
+        await self.store.flush()  # no clean stop: the database still says RUNNING
+        again = self.engine()
+        await again.load()
+        self.assertTrue(again.get(bot_id).resume_after_restart)
+        self.assertEqual(await again.auto_resume(), [bot_id])
+
+    async def test_no_auto_resume_while_the_kill_switch_is_engaged(self) -> None:
+        e = self.engine()
+        bot_id = await self.lab_bot(e)
+        again = await self.restarted()
+        self.risk.kill_switch.is_active = True
+        self.assertEqual(await again.auto_resume(), [])
+        self.assertEqual(again.get(bot_id).status, BotStatus.PAUSED)
+        self.risk.kill_switch.is_active = False
+        self.assertEqual(await again.auto_resume(), [bot_id])  # the flag survives a refused attempt
+
+    async def test_no_auto_resume_on_real_money(self) -> None:
+        e = self.engine()
+        bot_id = await self.lab_bot(e)
+        again = await self.restarted(mode="mainnet")
+        self.assertEqual(await again.auto_resume(), [])
+        self.assertEqual(again.get(bot_id).status, BotStatus.PAUSED)
+
+    async def test_auto_resume_waits_for_its_delay_and_a_stop_cancels_it(self) -> None:
+        e = self.engine()
+        bot_id = await self.lab_bot(e)
+        again = await self.restarted()
+        again.start(auto_resume_after_s=0.2)
+        await asyncio.sleep(0.05)
+        self.assertEqual(again.get(bot_id).status, BotStatus.PAUSED)  # not yet
+        await asyncio.sleep(0.3)
+        self.assertEqual(again.get(bot_id).status, BotStatus.RUNNING)
+        third = await self.restarted()
+        third.start(auto_resume_after_s=0.2)
+        await third.stop()  # stopped before the delay: it never resumes anything
+        await asyncio.sleep(0.3)
+        self.assertEqual(third.get(bot_id).status, BotStatus.PAUSED)
 
     async def test_three_refusals_in_a_row_pause_the_bot(self) -> None:
         e = self.engine()

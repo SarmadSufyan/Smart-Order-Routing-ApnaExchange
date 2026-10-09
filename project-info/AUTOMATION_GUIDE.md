@@ -18,7 +18,8 @@
    happened after real-market fees) and learns from them: measured trading costs, a scoreboard of variants with
    confidence intervals, and outcome models trained on our own trades.
 5. Every bot order goes through `OrderEntry.submit` — pre-trade risk, the kill switch, routing, price-protected
-   IOC children — the kill switch pauses every bot, and a restart leaves them paused.
+   IOC children — the kill switch pauses every bot, and a restart leaves them paused (the 24/7 lab server resumes
+   its lab bots by itself: [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md)).
 
 ## Words used below
 
@@ -141,12 +142,15 @@ running; the lab runs only while the gateway runs (24/7 hosting is Phase E).
 - Every bot order goes through `OrderEntry.submit`: pre-trade risk, the kill switch, the fund gate, routing,
   price-protected IOC children. A bot never talks to an exchange.
 - The kill switch pauses every running bot; a resume is refused while it is engaged.
-- A restart leaves every bot **paused** (never auto-resumed) — verified live 2026-10-08.
+- A restart leaves every bot **paused** — verified live 2026-10-08. One exception, for the unattended **lab
+  server** only (`LAB_AUTO_RESUME=true`, decided 2026-10-09): lab bots that only the restart paused resume 60 s
+  after the start. Never on real money, never while the kill switch is engaged, never a bot a person or a safety
+  rule paused (`resume_after_restart`, `engine.auto_resume`). Off on a laptop. [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md)
 - An order already at an exchange is never interrupted; pause / stop take effect between orders.
 - Three orders in a row refused before reaching any exchange pause the bot with the reason.
 - Auto-approve and lab experiments are testnet only (code-enforced).
 - Everything is audited: `fund_*`, `bot_started / paused / resumed / stopped`, `bot_buy`, `bot_sell`,
-  `advisor_proposal / approved / rejected / expired`, `lab_preset_started` (+ every order as usual).
+  `advisor_proposal / approved / rejected / expired`, `lab_preset_started`, `bots_auto_resumed` (+ every order as usual).
 
 ## Verify it yourself (≈ 10 min, testnet)
 

@@ -122,7 +122,11 @@ async def lifespan(app: FastAPI):
     await svc.algo_engine.load()  # after the recorder: interrupted algos are paused, and that is audited
     svc.algo_engine.start()
     await svc.automation.load()  # bots too: a bot that was running comes back paused
-    svc.automation.start()
+    # The unattended lab server (LAB_AUTO_RESUME) resumes the lab bots only the restart paused, later.
+    svc.automation.start(auto_resume_after_s=settings.lab_auto_resume_delay_s if settings.lab_auto_resume else None)
+    if settings.lab_auto_resume:
+        logger.info("lab_auto_resume_on", delay_s=settings.lab_auto_resume_delay_s,
+                    detail="lab bots paused by a restart are resumed (testnet only, kill switch respected)")
 
     # Fan every internal event out to WebSocket subscribers of that channel.
     for channel in WS_CHANNELS:
