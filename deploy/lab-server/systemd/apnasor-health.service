@@ -1,0 +1,6 @@
+[Unit]
+Description=ApnaSOR lab server: is the gateway answering? (restarts it after 3 failed checks in a row)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/apnasor/current/deploy/lab-server/healthcheck.sh

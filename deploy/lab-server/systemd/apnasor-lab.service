@@ -1,0 +1,42 @@
+[Unit]
+Description=ApnaSOR lab server: the gateway with the bots and the practice lab (exchange testnet / demo only)
+Documentation=file:///opt/apnasor/current/project-info/LAB_SERVER_GUIDE.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+# Never give up restarting (by default systemd stops after 5 quick failures).
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=apnasor
+Group=apnasor
+# "current" points at the live release; .env and data/ in it point at /opt/apnasor/shared.
+WorkingDirectory=/opt/apnasor/current
+Environment=PYTHONUNBUFFERED=1
+# Only on this machine (127.0.0.1): the laptop reaches it through an SSH tunnel, nobody else at all.
+# --loop asyncio: the same event loop the tests and the laptop use.
+ExecStart=/opt/apnasor/current/.venv/bin/python -m uvicorn backend.gateway.main:app --host 127.0.0.1 --port 8000 --loop asyncio --no-access-log
+# Stop like Ctrl+C: the gateway pauses the bots (LAB_AUTO_RESUME resumes them after the start), lets an order that is
+# at an exchange finish and closes the databases - a few seconds. After 90 s systemd would kill it.
+KillSignal=SIGINT
+TimeoutStopSec=90
+Restart=always
+RestartSec=10
+# A runaway gateway is stopped (and restarted) before it can starve the machine; it normally uses ~400 MB.
+MemoryHigh=1G
+MemoryMax=1400M
+UMask=0027
+# Least privilege: the code and Python are read-only to the service; it writes only to /opt/apnasor/shared.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/apnasor/shared
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,119 @@
+# The lab-server kit (deploy/lab-server), tested end to end on a clean Ubuntu 24.04 machine with systemd -
+# the same system as the AWS server. The runner plays both parts: "the laptop" runs deploy.py, and "the
+# server" is this machine itself, reached over SSH as the user `ubuntu` (as on EC2). It proves:
+#   setup.sh, install_release.sh (+ the unit tests on the server), the systemd units, a crash (restart),
+#   a hang (health check), a clean stop, backups pulled to "the laptop", a second release and the rollback.
+# The exchanges are not reached from here (GitHub's machines are in the US: Binance 451, Bybit 403) and the
+# keys are dummies; `deploy.py check-exchanges` proves the real keys from the real server.
+
+name: Lab server kit
+
+on:
+  push:
+    branches: [feature/crypto-pivot]
+    paths:
+      - deploy/lab-server/**
+      - scripts/backup_databases.py
+      - scripts/lab_status.py
+      - backend/requirements.txt
+      - .github/workflows/lab-server-kit.yml
+  workflow_dispatch: # a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lab-server-kit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    name: Deploy to a clean Ubuntu 24.04 over SSH
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DEPLOY: python deploy/lab-server/deploy.py
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: "The laptop side: Python packages and a .env with dummy testnet keys"
+        run: |
+          pip install -r backend/requirements.txt
+          printf '%s\n' BINANCE_TESTNET_API_KEY=ci-dummy BINANCE_TESTNET_API_SECRET=ci-dummy \
+            BYBIT_TESTNET_API_KEY=ci-dummy BYBIT_TESTNET_API_SECRET=ci-dummy > .env
+
+      - name: "The server side: an 'ubuntu' user with password-less sudo, reachable over SSH"
+        run: |
+          sudo useradd --create-home --shell /bin/bash --groups adm ubuntu
+          echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-ubuntu >/dev/null
+          ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/kit_test
+          sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.ssh
+          sudo install -o ubuntu -g ubuntu -m 600 ~/.ssh/kit_test.pub /home/ubuntu/.ssh/authorized_keys
+          sudo apt-get install -y -q openssh-server >/dev/null
+          sudo systemctl start ssh
+
+      - name: deploy.py init
+        run: $DEPLOY init --host 127.0.0.1 --key ~/.ssh/kit_test
+
+      - name: deploy.py setup --test (machine, settings, first release, unit tests on the server)
+        run: $DEPLOY setup --test
+
+      - name: The service runs as designed
+        run: |
+          systemctl is-enabled apnasor-lab apnasor-health.timer apnasor-backup.timer
+          systemctl is-active apnasor-lab
+          test "$(systemctl show -p User --value apnasor-lab)" = apnasor
+          test "$(sudo stat -c '%U %a' /opt/apnasor/shared/lab.env)" = "apnasor 600"
+          sudo grep -q "^LAB_AUTO_RESUME='true'" /opt/apnasor/shared/lab.env
+          if sudo grep -qi mainnet_api /opt/apnasor/shared/lab.env; then echo "a mainnet key reached the server"; exit 1; fi
+          curl -fsS http://127.0.0.1:8000/api/health | python -m json.tool | head -n 5
+          if curl -fsS --max-time 3 "http://$(hostname -I | awk '{print $1}'):8000/api/health"; then
+            echo "the gateway answers on the network - it must listen on 127.0.0.1 only"; exit 1
+          fi
+          sudo journalctl -u apnasor-lab -o cat | grep -q lab_auto_resume_on
+
+      - name: deploy.py status
+        run: $DEPLOY status
+
+      - name: A crash -> systemd restarts the gateway
+        run: |
+          sudo systemctl kill -s SIGKILL apnasor-lab
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health 2>/dev/null && break; sleep 3; done
+          curl -fsS -o /dev/null http://127.0.0.1:8000/api/health
+          test "$(systemctl show -p NRestarts --value apnasor-lab)" -ge 1
+
+      - name: A hang -> three failed health checks restart it, cleanly
+        run: |
+          sudo systemctl kill -s SIGSTOP apnasor-lab   # frozen: running, but not answering
+          for i in 1 2 3; do sudo bash /opt/apnasor/current/deploy/lab-server/healthcheck.sh; done
+          for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:8000/api/health 2>/dev/null && break; sleep 3; done
+          curl -fsS -o /dev/null http://127.0.0.1:8000/api/health
+          sudo journalctl -u apnasor-lab -o cat | grep -q shutdown_complete   # the restart stopped it like Ctrl+C
+
+      - name: deploy.py backup-pull (and read it on "the laptop")
+        run: |
+          $DEPLOY backup-pull
+          db="$(ls -1 data/lab-server/backups/*/apnasor-testnet.db | tail -n 1)"
+          python scripts/lab_status.py --db "$db"
+
+      - name: A second release, then deploy.py rollback
+        run: |
+          first="$(basename "$(readlink -f /opt/apnasor/current)")"
+          git -c user.name=ci -c user.email=ci@example.invalid commit -q --allow-empty -m "ci: a second release"
+          $DEPLOY release
+          second="$(basename "$(readlink -f /opt/apnasor/current)")"
+          test "$first" != "$second"
+          test "$(basename "$(readlink -f /opt/apnasor/previous)")" = "$first"
+          $DEPLOY rollback
+          test "$(basename "$(readlink -f /opt/apnasor/current)")" = "$first"
+          ls -1 /opt/apnasor/shared/backups
+
+      - name: The gateway's log
+        if: always()
+        run: sudo journalctl -u apnasor-lab -n 80 --no-pager -o cat | cut -c1-250

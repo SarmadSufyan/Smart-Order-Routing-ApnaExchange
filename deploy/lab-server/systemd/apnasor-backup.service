@@ -1,0 +1,11 @@
+[Unit]
+Description=ApnaSOR lab server: copy the databases (daily and before every release; kept 14 days)
+
+[Service]
+Type=oneshot
+User=apnasor
+Group=apnasor
+UMask=0027
+Nice=10
+WorkingDirectory=/opt/apnasor/current
+ExecStart=/opt/apnasor/current/.venv/bin/python scripts/backup_databases.py --dest /opt/apnasor/shared/backups --keep-days 14

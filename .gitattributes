@@ -1,0 +1,5 @@
+# Files that run on Linux (the lab server) keep LF line endings, even from a Windows checkout with
+# core.autocrlf=true: `git archive` (deploy/lab-server/deploy.py) converts like a checkout, and a CRLF
+# shell script fails on Linux with "$'\r': command not found".
+*.sh text eol=lf
+deploy/lab-server/** text eol=lf

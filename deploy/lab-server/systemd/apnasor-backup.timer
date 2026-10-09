@@ -1,0 +1,10 @@
+[Unit]
+Description=ApnaSOR lab server: database backup every day at 22:30 UTC (03:30 in Pakistan)
+
+[Timer]
+OnCalendar=*-*-* 22:30:00 UTC
+# A day missed while the machine was off is made up at the next start.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
