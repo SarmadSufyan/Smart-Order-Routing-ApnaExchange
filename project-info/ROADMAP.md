@@ -45,10 +45,23 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 | **A** | **All algorithms.** Routing (the "where"): best price **with fees**, liquidity sweep, smart (fill reliability). Execution (the "when"): TWAP, VWAP, POV, implementation shortfall (Almgren–Chriss), iceberg (IOC version), **auto** (picks one and says why) | ✅ 2026-10-07 — every one live on testnet; [`ALGORITHMS_GUIDE.md`](ALGORITHMS_GUIDE.md) |
 | **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (SMA/EMA, RSI, MACD, Bollinger, ATR, OBV; the market VWAP lives with the algos), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ✅ 2026-10-08 — 5 coins × next minute / hour / day; [`RESEARCH_GUIDE.md`](RESEARCH_GUIDE.md) |
 | **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch. **+ the automation fund** (money set aside for bots, kept apart from manual trading) **and the practice lab** (bots trade continuously on testnet; every trade is a sample the lab learns from) | ✅ built 2026-10-08 — live on testnet; [`AUTOMATION_GUIDE.md`](AUTOMATION_GUIDE.md). ⏭ the multi-day testnet run |
-| **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | ⏭ |
+| **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | 🟡 safety rails built 2026-10-12 (trade-only key confirmed by the exchange, hard caps in `.env`, on-screen confirmations, cycle bots off); ⏭ the first real orders (Sarmad) — [`REAL_MONEY_GUIDE.md`](REAL_MONEY_GUIDE.md) |
 | **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | 🟡 the **lab server** (bots + practice lab, testnet) on AWS EC2 Zurich — **live since 2026-10-12** (kit built and tested 2026-10-09), [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md); hosting for real money decided with D |
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
+
+### D — Real money: "done" means — rails ✅ 2026-10-12, first real orders next
+
+- [x] Mainnet keys for every exchange in `.env` (read only when `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`), never copied to the lab server.
+- [x] **A venue trades real money only with a key its exchange confirms can trade spot and can't withdraw** — asked at start and every 10 min, blocked until the exchange answers (`exchanges/key_permissions.py`; Binance, Bybit, OKX, Gate).
+- [x] **Hard caps** in `.env` (`MAINNET_MAX_*`: per order, per algo, exposure, loss limit): no limit in force is above them, a change past one is refused (also before RAFT replication), the loss limit can't be off (`risk_engine/ceilings.py`).
+- [x] Every real-money action is confirmed on screen (order ticket, algo form: tick box; advisor approval, sell now: dialog); the Risk page shows the caps, the Venues page the key verdict.
+- [x] Profit-cycle bots off on real money until `MAINNET_CYCLE_BOTS=true`; the advisor always asks.
+- [x] `scripts/check_exchange_keys.py --mode mainnet`: real keys checked read-only before switching.
+- [x] Verified: unit tests (21 new); a real-money **dry run without keys** (caps clamp, raise refused, demo login refused, tick boxes, start-up audit, cycle bot refused); testnet unchanged (a live round trip).
+- [ ] **Sarmad:** trade-only keys on Binance (+ Bybit), small balance, `--mode mainnet` check, switch, first real orders (≈ $12–15, then a small TWAP, kill switch test) → numbers in the journal ([`REAL_MONEY_GUIDE.md`](REAL_MONEY_GUIDE.md) parts 3–5).
+- [ ] Real fee rates from the account instead of the public base tier; sub-account per bot fund; where real-money bots run 24/7 (after the lab's verdict).
+- [ ] Web3 wallet / DEX venue.
 
 ### C — Bots and agents: "done" means — built 2026-10-08, the multi-day run is next
 
@@ -193,7 +206,7 @@ Done when:
 
 ### 8 — Live-money demo (last)
 
-Switch 2–3 exchanges to mainnet (`EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`), $10–20 per venue, per-order cap ~$10, kill switch armed, loss limit low, rehearsed, backup video recorded.
+Switch 2–3 exchanges to mainnet (`EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`), $10–20 per venue, per-order cap ~$10, kill switch armed, loss limit low, rehearsed, backup video recorded. **Now part of Phase D** (*Full product* above): the rails are built, the steps are in [`REAL_MONEY_GUIDE.md`](REAL_MONEY_GUIDE.md).
 
 ---
 

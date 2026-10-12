@@ -21,7 +21,7 @@ Team: Sarmad Sufyan Ahmed (23SP-078-CS, lead, backend) · Fizza Mubeen (23SP-070
 
 ## What it is (one paragraph)
 
-A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then splits it across venues with a **routing strategy** (best price including fees, liquidity sweep, or smart) and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Large orders can be worked over time by an **execution algorithm** — TWAP, VWAP, implementation shortfall, POV or iceberg — or **Auto** picks one and explains why. Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book; every execution algorithm's children go through the same order path. **Research tools** forecast the next minute / hour / day with probabilities and a public track record, backtest rules with fees, and plan trades — read-only. **Bots** trade from an **automation fund** the owner sets aside (kept apart from manual trading): a **profit-cycle bot** (sells each lot only above cost + both fees + a threshold) and an **advisor agent** (proposes bracketed trades with its reasons; auto-approve on testnet only); a **practice lab** learns from every bot trade (measured costs, variant scoreboard, outcome models). An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades).
+A trader submits an order. ApnaSOR keeps live order books from **real crypto exchanges**, computes the NBBO, runs deterministic **pre-trade risk**, checks the venues can **fund** it, then splits it across venues with a **routing strategy** (best price including fees, liquidity sweep, or smart) and sends **price-protected IOC child orders** to each exchange's **testnet / demo** environment (fake funds, real exchange systems). Large orders can be worked over time by an **execution algorithm** — TWAP, VWAP, implementation shortfall, POV or iceberg — or **Auto** picks one and explains why. Fills update a **unified wallet**, a **P&L ledger** that is **reconciled** against each exchange, and an append-only **audit log**. A **risk monitor** (trading-loss limit → automatic kill switch, concentration alerts) watches the whole book; every execution algorithm's children go through the same order path. **Research tools** forecast the next minute / hour / day with probabilities and a public track record, backtest rules with fees, and plan trades — read-only. **Bots** trade from an **automation fund** the owner sets aside (kept apart from manual trading): a **profit-cycle bot** (sells each lot only above cost + both fees + a threshold) and an **advisor agent** (proposes bracketed trades with its reasons; auto-approve on testnet only); a **practice lab** learns from every bot trade (measured costs, variant scoreboard, outcome models). An **arbitrage detector** watches the real-market books for cross-exchange price gaps and measures them against the taker fees (detection only — it never trades). **Real money** (Phase D, started 2026-10-12) uses the same path behind extra rails: an exchange gets orders only once it confirms our key can't withdraw, and hard caps in `.env` that no screen can loosen (`project-info/REAL_MONEY_GUIDE.md`).
 
 > **History:** until June 2026 this was a simulated 5-venue *stock* system. The FYP panel rejected simulated data, so the team pivoted to real crypto exchanges (July 2026). The simulators live on the `archive/venue-simulators` branch. **Several docs in `project-info/` still describe the old design — see "Docs you can trust" below.**
 
@@ -41,6 +41,7 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    │                        → a venue's REFUSED quantity re-routed without it (≤ 2 rounds); a venue that
    │                          refuses our key's right to trade is paused for TRADING_BLOCK_COOLDOWN_S
    ├─ PreTradeRiskEngine (7 checks = one pure function, checks.py) · KillSwitch (persisted) · PositionTracker
+   │     └─ real money: every limit clamped to the .env caps (MAINNET_MAX_*, ceilings.py); a change past one refused
    │     └─ risk batch: pre-flight of many orders (a TWAP's slices before it starts, POST /api/risk/preflight)
    │        + Monte Carlo stress test, on a pool of worker PROCESSES when the batch is big enough
    ├─ RiskControls ← the ONE way to change the kill switch, risk limits, venue blacklist
@@ -66,7 +67,8 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
  RAFT cluster (backend/services/consensus/, Phase 6) — 3 node processes on 127.0.0.1:9001-9003, each with its
    own SQLite log (data/raft-<mode>/); leader election + log replication; started by start_all.py when enabled
    │
- Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync
+ Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync;
+   real money: a venue trades only once its exchange confirms the key can't withdraw (key_permissions.py)
    V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
 ```
 
@@ -92,7 +94,8 @@ Trading universe: **BTC, ETH, SOL, BNB, XRP vs USDT**, decimal quantities. `MARK
 ```
 backend/
   exchanges/            base.py (ExchangeAdapter, SymbolRules, ExecutionResult), ccxt_venue.py (shared execution
-                        core: IOC, client-id idempotency, reconciliation, fees), orderbook.py, precision.py,
+                        core: IOC, client-id idempotency, reconciliation, fees), key_permissions.py (real money:
+                        what the key may do, per exchange, pure parsers + the verdict), orderbook.py, precision.py,
                         update_id_sync.py / stream_sync.py (book integrity), registry.py (EXCHANGE_CATALOG),
                         binance/ bybit/ okx/ gate/ coinbase/ (per-venue feed + quirks)
   gateway/              main.py (lifespan: open store → restore state → start services), config.py (Settings,
@@ -103,7 +106,8 @@ backend/
     order_state/        order_manager.py (state machine, in-flight tracking, restore), entry.py (OrderEntry)
     routing_engine/     engine.py (pipeline + child execution, per-venue fill ratios), strategies/: best_price.py
                         (fee-aware depth walk), sweep.py (proportional, one price cap), smart.py (fill reliability)
-    risk_engine/        pre_trade.py (gate), checks.py (the 7 checks, pure), batch.py (pre-flight, stress test,
+    risk_engine/        pre_trade.py (gate), checks.py (the 7 checks, pure), ceilings.py (real-money caps, pure),
+                        batch.py (pre-flight, stress test,
                         process pool), preflight.py (basket API), volatility.py (live realized vol),
                         controls.py (RiskControls: local or through RAFT), kill_switch.py, position_tracker.py,
                         risk_monitor.py
@@ -135,7 +139,8 @@ frontend/src/
   services/api.ts       every REST call + response types      services/websocket.ts  one multiplexed WS
   stores/dataStore.ts   Zustand: all server state; WS events trigger refetches
   theme.ts / format.ts  colour + font tokens (C, F), number formatting (fmtPrice, fmtQty, fmtUsd, fmtPnl)
-scripts/                check_exchange_keys.py (all venues), check_binance_testnet.py, benchmark_risk_batch.py,
+scripts/                check_exchange_keys.py (all venues; --mode mainnet = your real keys, read-only),
+                        check_binance_testnet.py, benchmark_risk_batch.py,
                         raft_demo.py (kill the leader; --gateway --twap 0.0006 against the live system),
                         arb_watch.py (arbitrage detector live in the terminal), hash_password.py (the .env
                         line for a real login password), security_check.py (tries the §7 attacks, read-only),
@@ -164,7 +169,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (461 as of 2026-10-09)
+python -m unittest discover -s backend/tests -t .   # all backend tests (487 as of 2026-10-12)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
@@ -192,7 +197,7 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 ## Non-negotiable design rules
 
 1. **One way in.** Every order — button, TWAP, copilot — goes through `OrderEntry.submit`. Never call an exchange adapter or `RoutingEngine.route_order` from a new feature directly. Likewise every change to the kill switch, risk limits or venue blacklist goes through `RiskControls` (`svc.risk_controls`), so it is replicated when RAFT is on.
-2. **Testnet / demo only** until Phase 8. Mainnet needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; mainnet keys stay empty in dev.
+2. **Testnet / demo by default; real money only through the Phase D rails** ([`project-info/REAL_MONEY_GUIDE.md`](project-info/REAL_MONEY_GUIDE.md)). Mainnet needs `EXCHANGE_MODE=mainnet` **and** `ALLOW_MAINNET=true`; each key must be trade-only (the exchange is asked; a key that can withdraw gets no orders); the `.env` caps (`MAINNET_MAX_*`) are never loosened from a screen; mainnet keys stay empty on development machines and never reach the lab server.
 3. **Children are IOC LIMIT, price-protected.** No resting orders; MARKET parents are capped at the worst planned price ± `CHILD_PRICE_PROTECTION_BPS` (and the venue's own price-limit rule).
 4. **Reality wins.** A fill reported by an exchange is always recorded (even on a cancelled parent). Never "fix" a mismatch by editing the ledger — reconciliation shows it; an operator accepts exchange balances (audited).
 5. **Fail-safe state.** The kill switch, risk limits and venue blacklist are persisted (and replicated with RAFT on); a restart keeps an engaged kill switch engaged and leaves running TWAPs **paused**. Without a RAFT majority, *tightening* (engage, blacklist) still happens at once; *loosening* (release, un-blacklist, limit changes) is refused.
@@ -254,6 +259,6 @@ must say "Every attack was refused." Details, options and panel Q&A: `project-in
 
 | Current (trust these) | Stale (old simulated / stock design — read critically, being rewritten) |
 |---|---|
-| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/AUTOMATION_GUIDE.md` (automation fund, profit-cycle bot, advisor agent, practice lab: decisions, verify-yourself, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), `project-info/LAB_SERVER_GUIDE.md` (the 24/7 lab server on AWS: costs, console steps, deploy, what happens when, security), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
+| this file, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `CONTRIBUTING.md`, `project-info/ROADMAP.md`, `project-info/ALGORITHMS_GUIDE.md` (every routing + execution algorithm: idea, maths, live results, panel Q&A), `project-info/RESEARCH_GUIDE.md` (forecasts, indicators, backtests, trade plans: how, how well, panel Q&A), `project-info/AUTOMATION_GUIDE.md` (automation fund, profit-cycle bot, advisor agent, practice lab: decisions, verify-yourself, panel Q&A), `project-info/API_KEYS_GUIDE.md`, `project-info/PHASE6_GUIDE.md` (risk batch + RAFT: explained, self-check, panel Q&A), `project-info/EXCHANGE_API_KEY_SECURITY.md` (how exchange API keys are protected), `project-info/SECURITY_GUIDE.md` (logins, signing key, CORS: options, decisions, demo-laptop checklist, panel Q&A), `project-info/START_STOP_GUIDE.md` (`start_all.py`: RAFT leader wait, second start refused, ordered Ctrl+C), `project-info/LAB_SERVER_GUIDE.md` (the 24/7 lab server on AWS: costs, console steps, deploy, what happens when, security), `project-info/REAL_MONEY_GUIDE.md` (Phase D: the safety rails, trade-only keys, the switch, the first real orders, panel Q&A), the code | `project-info/ARCHITECTURE.md`, `API_SPECIFICATION.md`, `ALGORITHMS.md`, `BACKEND_GUIDE.md`, `FRONTEND_GUIDE.md`, `DATABASE_SCHEMA.md`, `DEPLOYMENT.md`, `MILESTONES.md`, `PROJECT_STRUCTURE.md`, `DEVELOPMENT_SETUP.md` |
 
 The live API contract is the gateway's Swagger page: http://127.0.0.1:8000/docs.

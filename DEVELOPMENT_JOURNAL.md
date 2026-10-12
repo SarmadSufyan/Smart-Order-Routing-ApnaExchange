@@ -1824,3 +1824,78 @@ server's page is always current while the laptop's own app is a separate system;
 asking, while on real money the advisor always asks. Next session: `deploy.py status` first, then the part Sarmad
 picks (by the roadmap, Phase D).
 
+---
+
+## 2026-10-12 (evening) — Phase D begins: the real-money safety rails
+
+**What.** Before anyone puts real money in, the code now makes the dangerous mistakes impossible or loud:
+(1) on real money a venue trades only once **its exchange confirms our key can trade spot and can't withdraw**;
+(2) **hard caps in `.env`** (`MAINNET_MAX_ORDER_USDT` 25, `MAINNET_MAX_ALGO_USDT` 100, `MAINNET_MAX_EXPOSURE_USDT` 150,
+`MAINNET_MAX_TRADING_LOSS_USDT` 10) that no screen, login or RAFT cluster can loosen; (3) a red tick box or dialog on
+every money action in the UI; (4) profit-cycle bots off on real money until `MAINNET_CYCLE_BOTS=true`; (5) mainnet keys
+for every exchange, checkable read-only with `check_exchange_keys.py --mode mainnet`. Guide:
+`project-info/REAL_MONEY_GUIDE.md`.
+
+**Why now, and what the code check found.** The roadmap called real money "mostly built" (two switches). Reading the
+code showed otherwise: only **Binance** had mainnet key settings (Bybit, OKX and Gate would have run with no keys);
+and a fresh mainnet database would have started with the **testnet-sized defaults** ($10,000 per order, $1,000 loss
+limit), changeable by any admin from the Risk page. Nothing checked what a key could do.
+
+**Design choices.**
+- *Ask the exchange, don't trust the setup.* People make mistakes when they create keys; the exchange's own answer
+  (Binance `apiRestrictions`, Bybit `query-api`, OKX `account/config`, Gate `main_keys`) is the only fact. Each parser is
+  a pure function; anything it doesn't recognise is "unknown", and unknown is refused. Field names were checked
+  against Binance's and Bybit's docs; OKX's site doesn't resolve on this network (the known DNS issue), so its parser
+  only accepts the documented `perm` words; Gate shows no separate withdrawal flag, so a writable wallet area counts as
+  "may withdraw" (strict: a Gate key may be refused that couldn't withdraw — the safe side).
+- *Blocked until the first answer; the last verdict stands through a network blip.* A venue is never assumed safe. A
+  failed re-check doesn't block a confirmed key (the internet hiccups) and doesn't unblock a refused one. Re-asked every
+  10 min (someone may edit the key on the website), every 30 s until a first answer.
+- *Clamp everywhere, refuse at the door.* The pre-trade engine clamps every limit it holds (saved limits, the defaults,
+  a RAFT cluster's state), so nothing in force is ever above a cap. A change from the Risk page past a cap is refused
+  with the exact setting to edit, before it is replicated (otherwise the cluster would hold a limit this gateway can't
+  apply). Adopting a cluster's limits compares the clamped values, so a too-high committed limit doesn't produce an
+  audit line on every 1-s poll. A loss limit of 0 means "off", which counts as above any cap: on real money it can't be
+  off.
+- *Caps in `.env`, not in the UI:* a stolen admin login or a mis-click must not turn a $25 system into a $10,000 one.
+  Raising a cap needs the machine itself (edit, restart).
+- *The tick box resets when the order changes*, so a box ticked for $16 doesn't approve $200.
+- *Cycle bots off until the owner says so:* they trade without asking, and the lab (running since this morning) hasn't
+  given its verdict yet. The advisor already refuses auto-approve on real money (Phase C).
+
+**Verified.** 21 new tests (487): the parsers with the documented answers; an adapter that is blocked until the exchange
+answers, stays blocked for a key that can withdraw, sees a later fix, keeps a confirmed key through a failed re-check;
+the watcher loop; ceilings (clamp, refuse, loss limit off, testnet untouched); RiskControls refusing before replication
+and adopting only up to the caps; settings (mainnet keys for all four, a zero cap stops the start); cycle bots refused on
+real money and allowed when turned on. **Live:** Bybit's demo answered the permission call — *trade spot: yes, withdraw:
+no, IP list: no* — so the Bybit parser has seen a real answer (Binance's and Gate's test environments don't offer the
+endpoint; the check only runs on real money anyway). A **real-money dry run without any keys** (nothing can trade; a
+throwaway database and admin password): limits came up clamped to the caps; raising the per-order limit to $1,000 → 400
+"Refused on real money: the per-order limit $1,000.00 is above the real-money ceiling $25.00 (MAINNET_MAX_ORDER_USDT in
+.env)…"; switching the loss limit off → refused; tightening to $15 → accepted; the demo login → refused; the order ticket
+showed "REAL MONEY — BUY 0.0002 BTC (~$16.55)…", Submit locked until ticked, unticked again after editing the quantity;
+the algo form the same; the Risk page the caps note; the audit log "Gateway started (mainnet …) — REAL MONEY, hard caps:
+$25.00 per order …"; a cycle bot refused with the MAINNET_CYCLE_BOTS hint. Back on testnet: no caps, all venues
+routable, and a live round trip (BUY 0.0002 BTC filled on Bybit, SELL on Binance). The dry run's login-signing key
+(`data/jwt-secret-mainnet.key`) was deleted afterwards, so the first real start makes a fresh one.
+
+**Found on the way.**
+- A throwaway launcher that calls `uvicorn.run()` at import breaks the risk batch's worker processes on Windows (each
+  worker re-imports the launcher and tries to bind :8000) — the `if __name__ == "__main__":` gotcha again. Only the
+  launcher was affected; `start_all.py` and `python -m uvicorn` are fine.
+- The lab server's SSH timed out at the start of the session; this laptop's public IP has changed since the
+  server was set up, so the security group's "My IP" rule probably no longer matches (LAB_SERVER_GUIDE *What happens when*). The bots don't depend
+  on SSH; the rule needs Sarmad in the AWS console.
+
+**Not done (honest).** No real order has been placed: that needs Sarmad's own trade-only keys and his own click
+(guide part 5). The router still ranks venues by the public base-tier taker fee, not the account's real rate. The bot
+fund is still a bookkeeping separation on one account (a sub-account per fund would make it physical).
+
+**Files.** `backend/exchanges/key_permissions.py` (new), `ccxt_venue.py`, `base.py`; `backend/services/risk_engine/
+ceilings.py` (new), `pre_trade.py`, `controls.py`; `backend/shared/models/risk.py`, `venue.py`, `exceptions.py`;
+`backend/services/venue_monitor/health_checker.py`; `backend/services/automation/engine.py`; `backend/gateway/config.py`,
+`dependencies.py`, `main.py`, `routers/risk.py`; `scripts/check_exchange_keys.py`; frontend `components/shared.tsx`,
+`NewOrderModal.tsx`, `pages/AlgoOrders.tsx`, `Automation.tsx`, `RiskManager.tsx`, `VenueHealth.tsx`, `services/api.ts`;
+tests `test_exchanges/test_key_permissions.py`, `test_real_money.py`, `test_automation/test_engine.py`,
+`test_consensus/test_risk_controls.py`; `.env.example`; docs `project-info/REAL_MONEY_GUIDE.md` (new), ROADMAP, CLAUDE.md,
+PROGRESS.md.
