@@ -137,6 +137,14 @@ export function VenueHealth() {
                       </div>
                     </div>
                   )}
+                  {b.key_note && v.canTrade && (
+                    <div style={{
+                      fontSize: F.xs, color: C.green, background: tint(C.green, 8), borderRadius: 3,
+                      padding: '6px 8px', marginBottom: 10, lineHeight: 1.4,
+                    }}>
+                      🔒 {b.key_note}
+                    </div>
+                  )}
                   {!v.canTrade && b.execution_note && (
                     <div style={{
                       fontSize: F.xs, color: C.muted, background: C.surface, borderRadius: 3,

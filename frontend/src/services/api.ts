@@ -93,6 +93,7 @@ export interface VenueHealth {
   execution_available?: boolean   // false = data-only venue (e.g. Coinbase: no real testnet)
   trading_enabled?: boolean       // execution available AND API keys present
   execution_note?: string | null  // why the venue can't trade, if it can't
+  key_note?: string | null        // real money: the exchange's verdict on our API key (trade-only?)
   // Per symbol: does the venue's execution (testnet) book track the real market?
   execution_coherence?: Record<string, CoherenceState>
 }
@@ -759,6 +760,15 @@ export interface BackendRiskStatus {
     latency_us: number
   }>
   portfolio?: PortfolioRiskState | null
+  real_money_ceilings?: RiskCeilings | null
+}
+
+/** Real-money hard caps from .env (MAINNET_MAX_*): no limit in force is above them. */
+export interface RiskCeilings {
+  max_order_notional: number
+  max_algo_notional_usdt: number
+  max_notional_exposure: number
+  max_trading_loss_usdt: number
 }
 
 // UI-friendly normalized version
@@ -785,6 +795,7 @@ export interface RiskStatus {
   }>
   limits: RiskLimits | null
   portfolio: PortfolioRiskState | null
+  ceilings: RiskCeilings | null  // real money only
 }
 
 export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
@@ -817,6 +828,7 @@ export function normalizeRisk(r: BackendRiskStatus): RiskStatus {
     })),
     limits: r.risk_limits ?? null,
     portfolio: r.portfolio ?? null,
+    ceilings: r.real_money_ceilings ?? null,
   }
 }
 

@@ -212,6 +212,18 @@ export function RiskManager() {
 
         <Card>
           <CardTitle>PORTFOLIO LIMITS</CardTitle>
+          {riskStatus?.ceilings && (
+            <div style={{
+              fontSize: F.xs, color: C.red, background: tint(C.red, 8), border: `1px solid ${tint(C.red, 35)}`,
+              borderRadius: 4, padding: '6px 8px', marginBottom: 10, lineHeight: 1.5,
+            }}>
+              <b>REAL MONEY — hard caps from .env:</b> {fmtUsd(riskStatus.ceilings.max_order_notional)} per order ·{' '}
+              {fmtUsd(riskStatus.ceilings.max_algo_notional_usdt)} per algo order ·{' '}
+              {fmtUsd(riskStatus.ceilings.max_notional_exposure)} total exposure · trading-loss limit{' '}
+              {fmtUsd(riskStatus.ceilings.max_trading_loss_usdt)} (can't be off). Limits can be tightened here, never
+              raised past these: to go higher, edit MAINNET_MAX_* in .env and restart.
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {PORTFOLIO_LIMITS.map((l) => (
               <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

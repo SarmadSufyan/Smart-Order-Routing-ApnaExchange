@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { Card, CardTitle, confirmRealMoney, useRealMoney } from '../components/shared'
 import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { SYMBOLS } from '../mockData'
 import { api } from '../services/api'
@@ -232,6 +232,7 @@ function LotsTable({ lots, advisor }: { lots: Lot[]; advisor: boolean }) {
 }
 
 function ProposalCard({ p, onDecide }: { p: AdvisorProposal; onDecide: (approve: boolean) => void }) {
+  const realMoney = useRealMoney()
   return (
     <div style={{ border: `1px solid ${C.blue}`, borderRadius: 4, padding: 10, marginTop: 8, background: tint(C.blue, 5) }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -240,7 +241,8 @@ function ProposalCard({ p, onDecide }: { p: AdvisorProposal; onDecide: (approve:
           <span style={{ fontWeight: 400, color: C.muted, fontSize: F.sm }}> · stop {fmtPrice(p.stop_price)} · target {fmtPrice(p.target_price)} · max {p.max_hold_hours} h</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => onDecide(true)} style={button(C.green)}>Approve</button>
+          <button onClick={() => confirmRealMoney(realMoney, `approve the advisor's buy of ${fmtUsd(p.notional_usdt)} of ${baseAsset(p.symbol)}`)
+            && onDecide(true)} style={button(C.green)}>Approve</button>
           <button onClick={() => onDecide(false)} style={button(C.muted)}>Reject</button>
         </div>
       </div>
@@ -256,6 +258,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const narrow = useMediaQuery(MQ.narrow)
+  const realMoney = useRealMoney()
   const act = async (fn: () => Promise<unknown>, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return
     setBusy(true); setError(null)
@@ -282,7 +285,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
           {(bot.status === 'RUNNING' || bot.status === 'PAUSED') && <button disabled={busy} onClick={() => act(() => api.controlBot(bot.id, 'stop'),
             'Stop this bot? No new trades; its cash goes back to the fund. Open lots stay until you sell or release them.')} style={button(C.red, busy)}>Stop</button>}
           {open.length > 0 && <button disabled={busy} onClick={() => act(() => api.sellBotLots(bot.id),
-            `Sell all ${open.length} open lot(s) at the market now — even below what they cost?`)} style={button(C.muted, busy)}>Sell open lots now</button>}
+            `${realMoney ? 'REAL MONEY: ' : ''}Sell all ${open.length} open lot(s) at the market now — even below what they cost?`)} style={button(C.muted, busy)}>Sell open lots now</button>}
           {bot.status === 'STOPPED' && heldCoins && <button disabled={busy} onClick={() => act(() => api.releaseBotCoins(bot.id, 'to_manual'),
             'Move this bot\'s coins to manual trading (no sale; they leave the fund at today\'s price)?')} style={button(C.muted, busy)}>Coins to manual</button>}
         </div>

@@ -5,6 +5,7 @@ import { backendVenueToUi } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { RoutingProof } from './RoutingProof'
+import { RealMoneyCheck, useRealMoney } from './shared'
 import { ROUTING_STRATEGIES, routingStrategyLabel } from '../services/api'
 import type { Order as BackendOrder, RoutingStrategyName } from '../services/api'
 import type { OrderSide } from '../types'
@@ -63,6 +64,8 @@ export function NewOrderModal({
 
   const venues = backendVenues.map(backendVenueToUi)
   const killActive = riskStatus?.kill_switch_active ?? false
+  const realMoney = useRealMoney()
+  const [realOk, setRealOk] = useState(false)
 
   const [form, setForm] = useState<NewOrderForm>({
     symbol:    initialSymbol,
@@ -199,6 +202,7 @@ export function NewOrderModal({
 
   function update<K extends keyof NewOrderForm>(field: K, val: NewOrderForm[K]) {
     setForm((prev) => ({ ...prev, [field]: val }))
+    setRealOk(false)  // a changed order needs a new real-money tick
     if (errors[field as keyof ValidationErrors]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
@@ -439,15 +443,21 @@ export function NewOrderModal({
             </div>
           )}
 
+          {realMoney && (
+            <RealMoneyCheck checked={realOk} onChange={setRealOk}
+              what={`${form.side} ${form.qty || '…'} ${baseAsset(form.symbol)}${indicativePrice && parseFloat(form.qty)
+                ? ` (~${fmtUsd(parseFloat(form.qty) * indicativePrice)})` : ''}`} />
+          )}
           <button
             onClick={handleSubmit}
-            disabled={killActive}
+            disabled={killActive || (realMoney && !realOk)}
             style={{
               width: '100%', height: 42, border: 'none', borderRadius: 4,
               background: killActive ? C.dim : form.side === 'BUY' ? C.green : C.red,
               color: '#fff', fontSize: F.md, fontWeight: 700,
-              cursor: killActive ? 'not-allowed' : 'pointer', fontFamily: 'inherit', letterSpacing: '.05em',
-              transition: 'opacity .15s', opacity: killActive ? 0.6 : 1,
+              cursor: killActive || (realMoney && !realOk) ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              letterSpacing: '.05em', transition: 'opacity .15s',
+              opacity: killActive || (realMoney && !realOk) ? 0.6 : 1,
             }}
           >
             {killActive ? 'KILL SWITCH ACTIVE — TRADING DISABLED' : `Submit ${form.side} Order →`}

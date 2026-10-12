@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { Card, CardTitle, RealMoneyCheck, useRealMoney } from '../components/shared'
 import { TwapChart } from '../components/TwapChart'
 import { OrderProofModal } from '../components/OrderProofModal'
 import { useDataStore } from '../stores/dataStore'
@@ -213,6 +213,8 @@ export function AlgoOrders() {
   const [refresh, setRefresh] = useState('5')
   const [variance, setVariance] = useState('20')
   const [busy, setBusy]       = useState(false)
+  const realMoney = useRealMoney()
+  const [realOk, setRealOk]   = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -283,12 +285,16 @@ export function AlgoOrders() {
     return p
   }
 
+  // a changed algo needs a new real-money tick
+  useEffect(() => { setRealOk(false) }, [kind, symbol, side, qty, limit])
+
   async function submit() {
     if (!preview) return
     setBusy(true)
     setFormError(null)
     const [algo, err] = await startAlgo(params())
     setBusy(false)
+    setRealOk(false)  // the next algo needs its own real-money tick
     if (err) setFormError(err)
     if (algo) setSelectedId(algo.id)
   }
@@ -602,14 +608,19 @@ export function AlgoOrders() {
                 </div>
               )}
             </div>
+            {realMoney && (
+              <RealMoneyCheck checked={realOk} onChange={setRealOk}
+                what={`${algoKindLabel(kind)} ${side} ${qty || '…'} ${base}${preview?.total ? ` (~${fmtUsd(preview.total)})` : ''}`} />
+            )}
             <button
               onClick={submit}
-              disabled={busy || !preview || killActive}
+              disabled={busy || !preview || killActive || (realMoney && !realOk)}
               title={killActive ? 'Kill switch is active' : undefined}
               style={{
                 padding: '10px 0', borderRadius: 4, border: 'none', fontFamily: 'inherit', fontSize: F.base, fontWeight: 700,
                 background: side === 'BUY' ? C.green : C.red, color: '#fff',
-                cursor: busy ? 'wait' : 'pointer', opacity: busy || !preview || killActive ? 0.45 : 1,
+                cursor: busy ? 'wait' : 'pointer',
+                opacity: busy || !preview || killActive || (realMoney && !realOk) ? 0.45 : 1,
               }}
             >
               {killActive ? 'Kill switch active' : busy ? 'Starting…' : `Start ${algoKindLabel(kind)} — ${side} ${qty || '…'} ${base}`}

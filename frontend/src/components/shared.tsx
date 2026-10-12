@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { C, F, tint, resolveColor } from '../theme'
 import { useThemeStore } from '../stores/themeStore'
+import { useDataStore } from '../stores/dataStore'
 import type { VenueStatus, OrderState } from '../types'
 
 // ── Connection dot ─────────────────────────────────────────────
@@ -121,4 +122,33 @@ export function Sparkline({ data }: { data: number[] }) {
 export function fmtAge(ms: number): string {
   const s = Math.floor(ms / 1000)
   return s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`
+}
+
+// ── Real money (EXCHANGE_MODE=mainnet) ─────────────────────────
+/** True when the gateway trades real funds (any venue in mainnet mode). */
+export function useRealMoney(): boolean {
+  return useDataStore((s) => s.venues.some((v) => v.mode === 'mainnet'))
+}
+
+/** On real money, a one-click action that spends money asks first; on testnet it just runs. */
+export function confirmRealMoney(realMoney: boolean, what: string): boolean {
+  return !realMoney || window.confirm(`REAL MONEY: ${what}\n\nThis uses real funds on the exchange. Continue?`)
+}
+
+/** The tick box a real-money form needs before its button works (the form resets it when the order changes). */
+export function RealMoneyCheck({ checked, onChange, what }: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  what: string
+}) {
+  return (
+    <label style={{
+      display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', marginBottom: 10, borderRadius: 4,
+      border: `1px solid ${C.red}`, background: tint(C.red, 10), color: C.red, fontSize: F.sm, lineHeight: 1.4,
+      cursor: 'pointer',
+    }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: 2 }} />
+      <span><b>REAL MONEY</b> — {what}. I understand this uses real funds on the exchange.</span>
+    </label>
+  )
 }
