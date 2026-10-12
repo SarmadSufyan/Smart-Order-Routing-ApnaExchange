@@ -46,7 +46,7 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 | **B** | **Research and prediction tools:** historical candles from the exchanges, indicators (SMA/EMA, RSI, MACD, Bollinger, ATR, OBV; the market VWAP lives with the algos), order-book signals (imbalance, microprice), volatility, a forecast **with probabilities and a range** (never a promise), a backtester with fees and slippage, position sizing, and an accuracy scoreboard (how often the forecast was right) | ✅ 2026-10-08 — 5 coins × next minute / hour / day; [`RESEARCH_GUIDE.md`](RESEARCH_GUIDE.md) |
 | **C** | **Bots and agents, proven on testnet for days first:** an advisor agent (collects the data, proposes a trade with its reasons; the owner approves, or lets it auto-approve within limits) and a **profit-cycle bot** (buy a small amount; sell only when the price beats buy price + both fees + the owner's threshold; repeat). Hard limits: budget, daily loss, kill switch. **+ the automation fund** (money set aside for bots, kept apart from manual trading) **and the practice lab** (bots trade continuously on testnet; every trade is a sample the lab learns from) | ✅ built 2026-10-08 — live on testnet; [`AUTOMATION_GUIDE.md`](AUTOMATION_GUIDE.md). ⏭ the multi-day testnet run |
 | **D** | **Real money:** exchange accounts first (mainnet keys that can trade but never withdraw, tiny amounts, hard caps — mostly built: `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`); a Web3 wallet / DEX venue after that. May start while B continues if B stalls | ⏭ |
-| **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | 🟡 2026-10-09: the **lab server** (bots + practice lab, testnet) on AWS EC2 Zurich — kit built and tested, [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md); hosting for real money decided with D |
+| **E** | **Running 24/7** so bots work while the owner sleeps — hosting decided before C goes live | 🟡 the **lab server** (bots + practice lab, testnet) on AWS EC2 Zurich — **live since 2026-10-12** (kit built and tested 2026-10-09), [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md); hosting for real money decided with D |
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
 
@@ -70,7 +70,7 @@ manual trading; a **practice lab** that trades continuously on testnet and learn
 - [x] Safety: every order through `OrderEntry`; kill switch pauses, restart leaves paused (verified live), three
   refusals pause, nothing interrupted at an exchange; everything audited.
 - [x] Bots & Lab page + the fund on the Wallet page; 39 tests (456); live on testnet (journal 2026-10-08, Phase C).
-- [ ] **Run for days on testnet** — on the 24/7 lab server (AWS, [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md); its lab
+- [ ] **Run for days on testnet** — **running since 2026-10-12** on the 24/7 lab server (AWS, [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md); its lab
   bots resume by themselves after a restart, `LAB_AUTO_RESUME`) — and read
   the lab's verdicts before any real money: which threshold earns most per day, how often lots sell within 24 h,
   whether the advisor's trades beat their break-even, measured costs per exchange.

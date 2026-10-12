@@ -1,6 +1,6 @@
 # Lab server guide — the bots and the practice lab, 24/7 on AWS
 
-> Current as of 2026-10-09. The lab server runs **only** the gateway with the bots and the practice lab, on
+> Current as of 2026-10-12 — **the server is live since 2026-10-12** (Zurich, release `12b3e41`, 8 lab bots). The lab server runs **only** the gateway with the bots and the practice lab, on
 > exchange **testnet / demo** (fake funds), day and night, so the lab collects days of samples while the team
 > keeps building on the laptop. The product demo still runs locally (`python start_all.py`).
 > Kit: [`deploy/lab-server/`](../deploy/lab-server/). One command on the laptop does everything:
@@ -71,7 +71,8 @@ so 2 GB is ample (1 GB would work but leaves no margin for the model training at
 
 **A1. Region: Europe (Zurich), `eu-central-2`.** Zurich is an *opt-in* region, so switch it on first: account menu
 (top right) → *Account* → *AWS Regions* → **Europe (Zurich)** → *Enable*. That takes a few minutes and costs
-nothing. Then pick **Europe (Zurich)** in the region menu (top right) before anything else.
+nothing. Then pick **Europe (Zurich)** in the region menu (top right) before anything else — it is at the bottom of the
+Europe list, so scroll down inside the menu.
 
 Why Zurich:
 - **Tested 2026-10-09.** Binance (testnet and real market) and Bybit (demo and real market) were called from machines
@@ -95,7 +96,7 @@ ever needed: **Sydney** (`ap-southeast-2`), which passed the same test.
 | Field | Value |
 |---|---|
 | Name | `apnasor-lab` |
-| Application and OS image | **Ubuntu Server 24.04 LTS**, architecture **64-bit (Arm)** |
+| Application and OS image | **Ubuntu Server 24.04 LTS**, architecture **64-bit (Arm)**. The wizard may offer Ubuntu 26.04 first: choose 24.04 — the kit is tested on it (newer releases replaced `sudo` and the basic file commands) |
 | Instance type | **t4g.small** (it says "Free tier eligible") |
 | Key pair | *Create new key pair* → name `apnasor-lab`, type **ED25519**, format **.pem** → it downloads once. Move it to `C:\Users\TLS\.ssh\apnasor-lab.pem`. AWS can never give it to you again; never put it in the repo or a chat. |
 | Network settings → Edit | Auto-assign public IP: **Enable**. Security group: *Create* `apnasor-lab-ssh`, one rule: **SSH, source "My IP"**. No HTTP or HTTPS rules: nothing else may be open. |

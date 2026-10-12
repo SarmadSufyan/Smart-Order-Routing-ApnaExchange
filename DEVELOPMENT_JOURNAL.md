@@ -1779,3 +1779,40 @@ That ruled out:
 so it has to be enabled first. Sydney passed the same test and is the fallback. The kit needed no change: only
 project-info/LAB_SERVER_GUIDE.md (§2–3), PROGRESS.md and ROADMAP.md.
 
+---
+
+## 2026-10-12 — The lab server goes live (AWS Zurich)
+
+**What.** Sarmad launched the server in the AWS console (Zurich `eu-central-2`, t4g.small, Ubuntu 24.04 arm64, SSH
+from his IP only, 20 GB, credit specification Standard) and the kit did the rest from the laptop:
+
+- `deploy.py init`: connected — Ubuntu 24.04.4, aarch64, 2 CPUs, 1,836 MB.
+- `deploy.py setup --test`: machine prepared, settings and testnet keys sent, market history copied (6.5 MB), release
+  `12b3e41` installed; **466 tests passed on the server** (22 s), gateway healthy.
+- `deploy.py check-exchanges`: Binance testnet and Bybit demo both authenticate **from Zurich** — the region test of
+  2026-10-09 held with real keys. `status`: both live feeds connected, 5/5 books each.
+- `deploy.py passwords` + `env`: server-only login passwords (the demo-login warning is gone after the restart).
+- Through the tunnel (`dev:lab-server`, the LAB SERVER badge), Sarmad started the three experiments: 8 lab bots,
+  $1,700 of testnet USDT in the fund. Within a minute the six cycle bots held one lot each and the exploring
+  advisor four; the strict advisor proposed nothing (its normal rule, as on the laptop).
+
+**Auto-resume, proven on the real server.** `systemctl restart apnasor-lab`: the stop took 4 s (clean), all 8 bots
+were PAUSED, the gateway started at 11:20:35 UTC and `bots_auto_resumed` at 11:21:35 brought all 8 back — exactly the
+60 s delay.
+
+**Found on the way** (the guide now says so):
+- Windows refused the key file at first: another local group could read it. `deploy.py init` printed the `icacls`
+  line that fixes it (the file is readable by the owner only now).
+- The launch wizard offered Ubuntu 26.04 first; the kit is tested on 24.04 and newer releases replaced `sudo` and the
+  basic file commands, so 24.04 it is.
+- Zurich sits at the bottom of the region menu's Europe list (scroll inside the menu).
+- "Experiments are started" was first reported while nothing ran anywhere: the server's audit log (no login, no
+  bots) and the laptop (no tunnel, no page) showed it in a minute. `status` reads the database, not what anyone
+  remembers doing.
+
+**From here.** The lab lives on the server only; the laptop's 9 old lab bots get stopped, not resumed. Daily
+`deploy.py status`, weekly `backup-pull`; the lab's verdicts after 3+ days feed the Phase D defaults. The server
+changes only by `deploy.py release`.
+
+**Files.** Docs only: PROGRESS.md, project-info/ROADMAP.md, project-info/LAB_SERVER_GUIDE.md, this journal.
+
