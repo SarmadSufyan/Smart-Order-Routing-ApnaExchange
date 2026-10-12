@@ -80,6 +80,7 @@ class VenueHealth(BaseModel):
     execution_available: bool = True  # False for data-only venues (e.g. Coinbase: no real testnet)
     trading_enabled: bool = False  # execution available AND API keys present
     execution_note: str | None = None  # why the venue can't trade, if it can't
+    key_note: str | None = None  # real money: the exchange's verdict on our API key (trade-only?)
     # Per symbol: does the execution (testnet) book track the real market?
     execution_coherence: dict[str, CoherenceState] = {}
 

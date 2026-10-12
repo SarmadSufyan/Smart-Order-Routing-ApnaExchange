@@ -34,6 +34,7 @@ async def get_risk_status(user: Annotated[User, Depends(get_current_user)]):
         risk_limits=risk.limits,
         recent_checks=risk.recent_checks[-20:],
         portfolio=svc.risk_monitor.state,
+        real_money_ceilings=risk.ceilings,
     )
 
 

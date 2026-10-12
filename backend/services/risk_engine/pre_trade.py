@@ -11,11 +11,13 @@ import time
 from datetime import UTC, datetime
 
 from backend.shared.events.event_bus import audit, event_bus
+from backend.shared.exceptions import RiskLimitAboveCeilingError
 from backend.shared.models.order import Order
-from backend.shared.models.risk import RiskCheckDetail, RiskCheckResult, RiskLimits
+from backend.shared.models.risk import RiskCeilings, RiskCheckDetail, RiskCheckResult, RiskLimits
 from backend.shared.utils.logger import get_logger
 
 from .batch import BatchReport, Mode, RiskBatchRunner, StressParams, plan_jobs
+from .ceilings import apply_ceilings, ceiling_breaches
 from .checks import OrderSpec, RiskContext, evaluate_order
 from .kill_switch import KillSwitch
 from .position_tracker import PositionTracker
@@ -32,10 +34,13 @@ class PreTradeRiskEngine:
         position_tracker: PositionTracker,
         limits: RiskLimits | None = None,
         batch_runner: RiskBatchRunner | None = None,
+        ceilings: RiskCeilings | None = None,
     ) -> None:
         self._kill_switch = kill_switch
         self._positions = position_tracker
-        self._limits = limits or RiskLimits()
+        # Real money: every limit held here is clamped to the .env ceilings (ceilings.py).
+        self._ceilings = ceilings
+        self._limits = apply_ceilings(limits or RiskLimits(), ceilings)
         self._batch = batch_runner or RiskBatchRunner()
         self._recent_checks: list[RiskCheckDetail] = []
         self._order_timestamps: list[float] = []
@@ -58,10 +63,25 @@ class PreTradeRiskEngine:
 
     @limits.setter
     def limits(self, new_limits: RiskLimits) -> None:
-        self._limits = new_limits
+        self._limits = apply_ceilings(new_limits, self._ceilings)
+
+    @property
+    def ceilings(self) -> RiskCeilings | None:
+        """The real-money ceilings (None on testnet)."""
+        return self._ceilings
+
+    def effective(self, limits: RiskLimits) -> RiskLimits:
+        """These limits as they would be in force here (clamped to the ceilings)."""
+        return apply_ceilings(limits, self._ceilings)
+
+    def check_ceilings(self, limits: RiskLimits) -> None:
+        """Refuse limits above a real-money ceiling (raises RiskLimitAboveCeilingError)."""
+        if breaches := ceiling_breaches(limits, self._ceilings):
+            raise RiskLimitAboveCeilingError(breaches)
 
     async def update_limits(self, new_limits: RiskLimits, actor: str) -> RiskLimits:
-        """Change the limits, audited and persisted (they survive a restart)."""
+        """Change the limits, audited and persisted (they survive a restart). Never past a real-money ceiling."""
+        self.check_ceilings(new_limits)
         old = self._limits.model_dump()
         self._limits = new_limits
         new = new_limits.model_dump()

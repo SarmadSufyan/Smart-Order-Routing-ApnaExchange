@@ -89,6 +89,7 @@ class VenueHealthMonitor:
                 execution_available=adapter.execution_available,
                 trading_enabled=adapter.can_trade,
                 execution_note=adapter.execution_note,
+                key_note=getattr(adapter, "key_note", None),
             )
             self._metrics[vid] = VenueMetrics()
 
@@ -270,6 +271,7 @@ class VenueHealthMonitor:
         health.degraded_mode = adapter.degraded
         health.trading_enabled = adapter.can_trade
         health.execution_note = adapter.execution_note
+        health.key_note = getattr(adapter, "key_note", None)  # real money only
         if self._coherence is not None and adapter.execution_available:
             health.execution_coherence = self._coherence.venue_states(vid)
 

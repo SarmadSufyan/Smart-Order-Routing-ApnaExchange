@@ -9,6 +9,10 @@ market-data feed differs, so a venue subclass implements ``_run_feed()``
 Two ccxt clients may exist: the EXECUTION client (``mode``: testnet/demo or
 mainnet, carries the API keys) and a public DATA client (``data_mode``),
 never given keys.
+
+Real money (``mode == "mainnet"``): a venue trades only once its exchange has
+confirmed that the key can trade spot and can NOT withdraw (``key_permissions.py``),
+checked again every few minutes.
 """
 
 import asyncio
@@ -40,6 +44,12 @@ from backend.exchanges.base import (
     SymbolRules,
     TickerStats,
 )
+from backend.exchanges.key_permissions import (
+    KeyPermissions,
+    fetch_key_permissions,
+    key_note,
+    real_money_problem,
+)
 from backend.exchanges.orderbook import LocalOrderBook
 from backend.exchanges.precision import floor_to_step, is_close
 from backend.shared.models.execution_report import ExecType
@@ -54,6 +64,10 @@ _MSG_RE = re.compile(r'"(?:msg|message|ret_msg|sMsg)"\s*:\s*"([^"]+)"')
 # doesn't map yet — found live: OKX 50124 "This API Key does not have trading
 # permission for the market" arrives as a plain ExchangeError.
 _PERMISSION_RE = re.compile(r"permission|not allowed to trade|trading (?:is )?(?:not allowed|disabled)", re.I)
+# Real money: how often the key's permissions are asked again (someone may edit the key on the
+# exchange's website), and how soon after a failed ask (until then the venue stays blocked).
+KEY_RECHECK_S = 600.0
+KEY_RETRY_S = 30.0
 
 
 def venue_client_id(child_order_id: str) -> str:
@@ -127,6 +141,12 @@ class CcxtVenueAdapter(ExchangeAdapter):
         # Set when the venue rejects our API key; the venue stops being
         # tradable until an authenticated call succeeds again.
         self._auth_error: str | None = None
+        # Real money only: why the key may not trade (None = confirmed trade-only). Blocked until
+        # the exchange has answered — a key is never assumed safe.
+        self._key_permissions: KeyPermissions | None = None
+        self._key_problem: str | None = (
+            "checking with the exchange that the API key can't withdraw" if self.key_check_required else None
+        )
         # The public data client loads its markets on first use (Gate's list takes
         # ~15 s): shared and shielded, so a caller's timeout never restarts it.
         self._history_markets: asyncio.Task | None = None
@@ -137,13 +157,55 @@ class CcxtVenueAdapter(ExchangeAdapter):
     # a venue whose key was being rejected.
     @property
     def can_trade(self) -> bool:
-        return super().can_trade and self._auth_error is None
+        return super().can_trade and self._auth_error is None and self._key_problem is None
 
     @property
     def execution_note(self) -> str | None:
         if self._auth_error:
             return f"{self.name} rejected the API key: {self._auth_error}"
+        if self._key_problem:
+            return f"{self.name}: {self._key_problem}"
         return super().execution_note
+
+    # ── real money: a trade-only key ────────────────────────────────
+    @property
+    def key_check_required(self) -> bool:
+        return self.mode == "mainnet" and bool(self._credentials)
+
+    @property
+    def key_permissions(self) -> KeyPermissions | None:
+        return self._key_permissions
+
+    @property
+    def key_note(self) -> str | None:
+        if not self.key_check_required:
+            return None
+        return key_note(self._key_permissions, self._key_problem)
+
+    async def _watch_key_permissions(self) -> None:
+        """Real money: trade only with a key the exchange confirms can't withdraw; asked again every 10 min."""
+        while self._running:
+            answered = await self._check_key_permissions()
+            await asyncio.sleep(KEY_RECHECK_S if answered else KEY_RETRY_S)
+
+    async def _check_key_permissions(self) -> bool:
+        """Ask once. False = no answer (network, auth): the last verdict stands — blocked until a first one."""
+        try:
+            perms = await fetch_key_permissions(self._client, self.exchange_id, (self._credentials or {})["apiKey"])
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — no answer settles nothing
+            logger.warning("key_permissions_check_failed", venue_id=self.venue_id, error=short_error(exc))
+            return False
+        problem = real_money_problem(perms, self.name)
+        if problem != self._key_problem:
+            if problem:
+                logger.error("key_refused_for_real_money", venue_id=self.venue_id, reason=problem)
+            else:
+                logger.info("key_confirmed_trade_only", venue_id=self.venue_id,
+                            summary=perms.summary if perms else "")
+        self._key_permissions, self._key_problem = perms, problem
+        return True
 
     def _record_auth(self, error: str | None) -> None:
         if error != self._auth_error:
@@ -214,6 +276,8 @@ class CcxtVenueAdapter(ExchangeAdapter):
     async def _run(self) -> None:
         await self._load_markets_with_retry()
         await self._verify_credentials()
+        if self.key_check_required:
+            self._spawn(self._watch_key_permissions(), f"{self.venue_id}-key-permissions")
         await self._run_feed()
 
     @abstractmethod

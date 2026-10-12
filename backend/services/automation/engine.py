@@ -75,7 +75,7 @@ class AutomationEngine:
     def __init__(self, entry, order_manager, aggregator, router, registry, risk_engine, wallet,
                  fund: AutomationFund, lab: PracticeLab, symbols: list[str], research=None, store=None,
                  mode: str = "testnet", market_fee_bps: dict[str, float] | None = None,
-                 protection_bps: float = 50.0) -> None:
+                 protection_bps: float = 50.0, cycle_bots_on_real_money: bool = False) -> None:
         self._entry = entry
         self._orders = order_manager
         self._aggregator = aggregator
@@ -89,6 +89,9 @@ class AutomationEngine:
         self._research = research
         self._store = store
         self._mode = mode
+        # A profit-cycle bot trades without asking: on real money only once the owner has turned it on
+        # (MAINNET_CYCLE_BOTS, after reading the practice lab's verdict).
+        self._cycle_real = cycle_bots_on_real_money
         self._fees = dict(market_fee_bps or {})
         self._protection = protection_bps / 1e4
         self._bots: dict[str, BotState] = {}
@@ -232,8 +235,15 @@ class AutomationEngine:
             raise BotRejectedError(f"{what} ${usdt:,.2f} is above the per-order limit "
                                    f"${self._risk.limits.max_order_notional:,.2f}")
 
+    def _check_cycle_allowed(self) -> None:
+        if self._mode != "testnet" and not self._cycle_real:
+            raise BotRejectedError("Profit-cycle bots trade without asking, so on real money they are off until you "
+                                   "turn them on: read the practice lab's verdict first, then set "
+                                   "MAINNET_CYCLE_BOTS=true in .env and restart (the advisor in ASK mode works now)")
+
     async def create_cycle(self, params: CycleParams, user: str) -> BotState:
         self._check_new(params.lab, [params.symbol])
+        self._check_cycle_allowed()
         await self._check_size(params.symbol, params.buy_usdt, "Each buy of")
         bot = BotState(id=f"CYCLE-{uuid4().hex[:6].upper()}", kind=BotKind.CYCLE, created_by=user, lab=params.lab,
                        label=params.label or f"{params.symbol} cycle {params.threshold_pct:g}%"
@@ -321,6 +331,8 @@ class AutomationEngine:
             raise BotRejectedError("Kill switch is active — release it before resuming")
         if bot.lab and not self.lab.enabled:
             raise BotRejectedError("Lab bots run on testnet only")
+        if bot.kind == BotKind.CYCLE:
+            self._check_cycle_allowed()
         bot.stats.consecutive_rejections = 0
         await self._set_status(bot, BotStatus.RUNNING, actor, reason or f"Resumed by {actor}")
         task = self._tasks.get(bot_id)

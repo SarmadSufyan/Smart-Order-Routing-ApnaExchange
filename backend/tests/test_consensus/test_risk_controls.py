@@ -14,7 +14,8 @@ from backend.services.risk_engine.position_tracker import PositionTracker
 from backend.services.risk_engine.pre_trade import PreTradeRiskEngine
 from backend.services.venue_monitor.health_checker import VenueHealthMonitor
 from backend.shared.events.event_bus import event_bus
-from backend.shared.models.risk import RiskLimits
+from backend.shared.exceptions import RiskLimitAboveCeilingError
+from backend.shared.models.risk import RiskCeilings, RiskLimits
 from backend.shared.models.venue import VenueStatus
 
 
@@ -213,6 +214,24 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.ks.is_active)
         self.assertNotEqual(self.venues.get_venue_health("V4").status, VenueStatus.BLACKLISTED)
         self.assertGreaterEqual(self.audit_types().count("consensus_adopted"), 3)
+
+    async def test_real_money_ceilings_hold_against_the_page_and_the_cluster(self) -> None:
+        caps = RiskCeilings(max_order_notional=25, max_algo_notional_usdt=100, max_notional_exposure=150,
+                            max_trading_loss_usdt=10)
+        self.risk = PreTradeRiskEngine(KillSwitch(), PositionTracker(), RiskLimits(), ceilings=caps)
+        c = self.make()
+        await c.sync()
+        with self.assertRaises(RiskLimitAboveCeilingError):
+            await c.set_limits(RiskLimits(), "admin")  # the testnet-sized defaults: far above
+        self.assertEqual([p for p in self.cluster.proposed if p.get("op") == "set_risk_limits"
+                          and p.get("actor") == "admin"], [])  # refused before anything was replicated
+        # Another client's committed limits are adopted only as far as this gateway's ceilings allow
+        self.cluster.commit({"op": "set_risk_limits", "limits": {"max_order_notional": 5_000.0}})
+        await c.sync()
+        self.assertEqual(self.risk.limits.max_order_notional, 25)
+        adopted = self.audit_types().count("consensus_adopted")
+        await c.sync()
+        self.assertEqual(self.audit_types().count("consensus_adopted"), adopted)  # no audit on every poll
 
     async def test_a_new_cluster_is_seeded_with_this_gateways_limits(self) -> None:
         self.risk.limits = RiskLimits(max_order_notional=321)

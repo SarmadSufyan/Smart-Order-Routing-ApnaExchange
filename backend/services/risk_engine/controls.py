@@ -101,6 +101,7 @@ class RiskControls:
 
     # ── risk limits (any change needs a majority) ───────────────────
     async def set_limits(self, limits: RiskLimits, actor: str) -> RiskLimits:
+        self._risk.check_ceilings(limits)  # real money: refused here, before anything is replicated
         async with self._lock:
             reply = await self._loosen(
                 "risk_limits",
@@ -247,7 +248,7 @@ class RiskControls:
 
         limits = state.get("risk_limits")
         if limits is not None and "risk_limits" not in self._pending:
-            merged = RiskLimits.model_validate({**self._defaults.model_dump(), **limits})
+            merged = self._risk.effective(RiskLimits.model_validate({**self._defaults.model_dump(), **limits}))
             if merged != self._risk.limits:
                 self._risk.limits = merged
                 await audit("consensus_adopted", "Risk limits updated here from the RAFT cluster's committed state",

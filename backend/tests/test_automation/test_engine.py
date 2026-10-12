@@ -58,7 +58,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
             await e.stop()
         await self.store.close()
 
-    def engine(self, mode: str = "testnet") -> AutomationEngine:
+    def engine(self, mode: str = "testnet", **kw) -> AutomationEngine:
         self.risk = Risk()
         self.research = Research(self.market)
         fund = AutomationFund(self.wallet, self.market, mode, store=self.store)
@@ -66,7 +66,7 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         lab = PracticeLab(self.store, self.research, None, self.market, mode, FEES)
         e = AutomationEngine(self.exchange, None, self.market, Router(), Registry(), self.risk, self.wallet, fund, lab,
                              ["BTC/USDT", "ETH/USDT"], research=self.research, store=self.store, mode=mode,
-                             market_fee_bps=FEES)
+                             market_fee_bps=FEES, **kw)
         self.engines.append(e)
         return e
 
@@ -303,6 +303,23 @@ class EngineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((lot.status, lot.exit_reason), (LotStatus.CLOSED, "stop"))
         self.assertLess(lot.profit_usdt, 0)
         self.assertEqual(bot.stats.losses, 1)
+
+    async def test_cycle_bots_on_real_money_wait_for_the_owner(self) -> None:
+        real = self.engine(mode="mainnet")
+        await real.fund.deposit(500, "admin")
+        with self.assertRaises(BotRejectedError) as refused:
+            await real.create_cycle(CycleParams(symbol="BTC/USDT"), "admin")
+        self.assertIn("MAINNET_CYCLE_BOTS", refused.exception.message)
+        allowed = self.engine(mode="mainnet", cycle_bots_on_real_money=True)
+        await allowed.fund.deposit(500, "admin")
+        bot = await allowed.create_cycle(CycleParams(symbol="BTC/USDT"), "admin")
+        await allowed.pause(bot.id, "test")
+        self.assertEqual(allowed.get(bot.id).status, BotStatus.PAUSED)
+        await allowed.stop()
+        again = self.engine(mode="mainnet")  # the owner turned them off again: a paused bot stays paused
+        await again.load()
+        with self.assertRaises(BotRejectedError):
+            await again.resume(bot.id, "admin")
 
     async def test_auto_mode_approves_itself_on_testnet_only(self) -> None:
         e = self.engine()

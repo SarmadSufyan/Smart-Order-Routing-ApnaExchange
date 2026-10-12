@@ -33,6 +33,15 @@ class RiskCheckFailedError(DomainError):
         super().__init__(f"Risk check failed: {reason}", "RISK_CHECK_FAILED")
 
 
+class RiskLimitAboveCeilingError(DomainError):
+    def __init__(self, breaches: list[str]):
+        super().__init__(
+            "Refused on real money: " + "; ".join(breaches)
+            + ". To go higher, raise the ceiling in .env and restart the gateway.",
+            "RISK_LIMIT_ABOVE_CEILING",
+        )
+
+
 class KillSwitchActiveError(DomainError):
     def __init__(self):
         super().__init__(

@@ -65,7 +65,16 @@ async def restore_state(svc: Services) -> None:
         svc.risk_engine.kill_switch.restore(KillSwitchState.model_validate(saved))
     if saved := await store.kv_get("risk_limits"):
         # Defaults first, so limits added in a newer version get their default.
-        svc.risk_engine.limits = RiskLimits.model_validate({**default_risk_limits().model_dump(), **saved})
+        restored = RiskLimits.model_validate({**default_risk_limits().model_dump(), **saved})
+        svc.risk_engine.limits = restored  # real money: clamped to the .env ceilings
+        if (capped := svc.risk_engine.limits) != restored:
+            await record_audit(
+                "risk_limits_capped",
+                "Saved risk limits lowered to the real-money ceilings in .env: " + "; ".join(
+                    f"{k} {v} -> {getattr(capped, k)}" for k, v in restored.model_dump().items()
+                    if getattr(capped, k) != v),
+                actor="system", persist={"key": "risk_limits", "value": capped.model_dump()},
+            )
     if saved := await store.kv_get("venue_blacklist"):
         svc.venue_monitor.restore_blacklist(saved.get("venues", []))
 
@@ -146,9 +155,14 @@ async def lifespan(app: FastAPI):
     event_bus.subscribe("execution_report", refresh_wallet_after_fill)
 
     ks = svc.risk_engine.kill_switch.get_state()
+    caps = svc.risk_engine.ceilings
     await record_audit(
         "gateway_started",
         f"Gateway started ({settings.exchange_mode}; venues {', '.join(settings.enabled_exchange_list)})"
+        + (f" — REAL MONEY, hard caps: ${caps.max_order_notional:,.2f} per order, "
+           f"${caps.max_algo_notional_usdt:,.2f} per algo, ${caps.max_notional_exposure:,.2f} exposure, "
+           f"loss limit ${caps.max_trading_loss_usdt:,.2f}; an exchange trades only once it confirms the key "
+           "can't withdraw" if caps else "")
         + (f" — kill switch still ENGAGED: {ks.reason}" if ks.active else ""),
         actor="system",
         payload={"exchange_mode": settings.exchange_mode, "exchanges": settings.enabled_exchange_list,
@@ -220,6 +234,7 @@ async def domain_error_handler(request, exc: DomainError):
         "VENUE_UNAVAILABLE": 503,
         "INVALID_STATE_TRANSITION": 409,
         "RISK_CHECK_FAILED": 400,
+        "RISK_LIMIT_ABOVE_CEILING": 400,
         "KILL_SWITCH_ACTIVE": 503,
         "UNSUPPORTED_SYMBOL": 400,
         "ALGO_NOT_FOUND": 404,

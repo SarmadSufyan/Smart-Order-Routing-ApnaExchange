@@ -53,8 +53,6 @@ class Settings(BaseSettings):
 
     binance_testnet_api_key: SecretStr | None = None
     binance_testnet_api_secret: SecretStr | None = None
-    binance_mainnet_api_key: SecretStr | None = None
-    binance_mainnet_api_secret: SecretStr | None = None
     bybit_testnet_api_key: SecretStr | None = None
     bybit_testnet_api_secret: SecretStr | None = None
     okx_testnet_api_key: SecretStr | None = None  # OKX "Demo Trading" API key
@@ -62,6 +60,18 @@ class Settings(BaseSettings):
     okx_testnet_api_passphrase: SecretStr | None = None
     gate_testnet_api_key: SecretStr | None = None
     gate_testnet_api_secret: SecretStr | None = None
+    # REAL-money keys: read only when EXCHANGE_MODE=mainnet. Each must be able to read and trade spot and
+    # must NOT be able to withdraw - the exchange is asked, and a key that can withdraw gets no orders
+    # (exchanges/key_permissions.py). Never shared, never copied to the lab server.
+    binance_mainnet_api_key: SecretStr | None = None
+    binance_mainnet_api_secret: SecretStr | None = None
+    bybit_mainnet_api_key: SecretStr | None = None
+    bybit_mainnet_api_secret: SecretStr | None = None
+    okx_mainnet_api_key: SecretStr | None = None
+    okx_mainnet_api_secret: SecretStr | None = None
+    okx_mainnet_api_passphrase: SecretStr | None = None
+    gate_mainnet_api_key: SecretStr | None = None
+    gate_mainnet_api_secret: SecretStr | None = None
 
     # ─── Market data ──────────────────────────────────────────────
     orderbook_snapshot_depth: int = 1000
@@ -122,6 +132,18 @@ class Settings(BaseSettings):
     arb_taker_fees_bps: str = "binance:10,bybit:10,okx:15,gate:20,coinbase:120"
     arb_min_net_bps: float = 0.0  # "profitable" = net edge after fees above this
     arb_audit_cooldown_s: float = 60.0  # at most one audit per direction per this
+
+    # ─── Real money (Phase D: EXCHANGE_MODE=mainnet only) ─────────
+    # Hard caps in USDT. The risk limits in force are never above them; the Risk page can tighten a limit
+    # but not loosen it past its ceiling, and the trading-loss limit can't be off. Raising one = edit .env
+    # and restart (risk_engine/ceilings.py). Small on purpose: the first real money is a test.
+    mainnet_max_order_usdt: float = 25.0
+    mainnet_max_algo_usdt: float = 100.0
+    mainnet_max_exposure_usdt: float = 150.0
+    mainnet_max_trading_loss_usdt: float = 10.0
+    # Profit-cycle bots trade without asking. On real money they stay off until the owner has read the
+    # practice lab's verdict and turns them on here. (The advisor always asks on real money.)
+    mainnet_cycle_bots: bool = False
 
     # ─── Lab server (unattended practice lab, testnet only) ───────
     # After a restart (crash, reboot, a new release) resume the LAB bots that were running when the
@@ -201,7 +223,19 @@ class Settings(BaseSettings):
                 "EXCHANGE_MODE=mainnet trades REAL money and also requires "
                 "ALLOW_MAINNET=true. Refusing to start."
             )
+        if self.exchange_mode == "mainnet":
+            bad = [name for name in ("mainnet_max_order_usdt", "mainnet_max_algo_usdt", "mainnet_max_exposure_usdt",
+                                     "mainnet_max_trading_loss_usdt") if not getattr(self, name) > 0]
+            if bad:
+                raise ValueError(
+                    "Real money needs every ceiling above 0 - fix " + ", ".join(n.upper() for n in bad)
+                    + " in .env (e.g. MAINNET_MAX_ORDER_USDT=25). Refusing to start."
+                )
         return self
+
+    @property
+    def is_real_money(self) -> bool:
+        return self.exchange_mode == "mainnet"
 
     def raft_secret_problem(self) -> str | None:
         """Why the RAFT secret can't be used, or None. Checked where RAFT starts

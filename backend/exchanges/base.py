@@ -135,6 +135,11 @@ class ExchangeAdapter(ABC):
     def can_trade(self) -> bool:
         return self.execution_available and self.has_credentials
 
+    @property
+    def key_note(self) -> str | None:
+        """Real money: what the exchange says our API key may do (None where it isn't checked)."""
+        return None
+
     # ── lifecycle ───────────────────────────────────────────────────
     @abstractmethod
     async def start(self) -> None:

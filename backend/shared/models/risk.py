@@ -36,6 +36,19 @@ class RiskLimits(BaseModel):
     max_venue_concentration_pct: float = 80.0  # one exchange's share (counterparty risk)
 
 
+class RiskCeilings(BaseModel):
+    """Real-money hard caps in USDT (EXCHANGE_MODE=mainnet), from .env (MAINNET_MAX_*).
+
+    The limits in force are never above them; the Risk page can tighten a limit but not loosen it past its
+    ceiling, and the trading-loss limit can't be switched off (risk_engine/ceilings.py).
+    """
+
+    max_order_notional: float
+    max_algo_notional_usdt: float
+    max_notional_exposure: float
+    max_trading_loss_usdt: float
+
+
 class RiskCheckDetail(BaseModel):
     order_id: str
     result: RiskCheckResult
@@ -121,3 +134,4 @@ class RiskStatusResponse(BaseModel):
     risk_limits: RiskLimits
     recent_checks: list[RiskCheckDetail] = []
     portfolio: PortfolioRiskState | None = None
+    real_money_ceilings: RiskCeilings | None = None  # set on real money only

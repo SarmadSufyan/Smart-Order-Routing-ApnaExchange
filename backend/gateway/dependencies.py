@@ -30,7 +30,7 @@ from backend.services.venue_monitor.coherence import CoherenceMonitor
 from backend.services.venue_monitor.health_checker import VenueHealthMonitor
 from backend.services.wallet import PnLService, WalletService
 from backend.shared.database.store import AuditStore
-from backend.shared.models.risk import RiskLimits
+from backend.shared.models.risk import RiskCeilings, RiskLimits
 
 
 @dataclass
@@ -62,6 +62,18 @@ class Services:
 
 
 _services: Services | None = None
+
+
+def real_money_ceilings() -> RiskCeilings | None:
+    """The .env caps on real money (None on testnet): no limit in force is ever above them."""
+    if not settings.is_real_money:
+        return None
+    return RiskCeilings(
+        max_order_notional=settings.mainnet_max_order_usdt,
+        max_algo_notional_usdt=settings.mainnet_max_algo_usdt,
+        max_notional_exposure=settings.mainnet_max_exposure_usdt,
+        max_trading_loss_usdt=settings.mainnet_max_trading_loss_usdt,
+    )
 
 
 def default_risk_limits() -> RiskLimits:
@@ -109,7 +121,8 @@ def init_services() -> Services:
     position_tracker = PositionTracker()
     # Pre-flight batches with a stress test run on a pool of worker processes.
     batch_runner = RiskBatchRunner(settings.risk_pool_workers, settings.risk_pool_min_orders)
-    risk_engine = PreTradeRiskEngine(kill_switch, position_tracker, default_risk_limits(), batch_runner)
+    risk_engine = PreTradeRiskEngine(kill_switch, position_tracker, default_risk_limits(), batch_runner,
+                                     ceilings=real_money_ceilings())
 
     wallet_service = WalletService(
         registry,
@@ -204,7 +217,7 @@ def init_services() -> Services:
     automation = AutomationEngine(
         order_entry, order_manager, aggregator, routing_engine, registry, risk_engine, wallet_service, fund, lab,
         settings.symbol_list, research=research, store=store, mode=settings.exchange_mode, market_fee_bps=fees,
-        protection_bps=settings.child_price_protection_bps,
+        protection_bps=settings.child_price_protection_bps, cycle_bots_on_real_money=settings.mainnet_cycle_bots,
     )
 
     _services = Services(
