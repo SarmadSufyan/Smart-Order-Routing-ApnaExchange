@@ -1816,3 +1816,11 @@ changes only by `deploy.py release`.
 
 **Files.** Docs only: PROGRESS.md, project-info/ROADMAP.md, project-info/LAB_SERVER_GUIDE.md, this journal.
 
+**Later the same day: handoff.** An hour after the launch the server still showed 8 bots RUNNING, both feeds
+connected and 0 errors. A daily read-only check is scheduled in the Claude desktop app on Sarmad's laptop ("Lab server
+daily check": `deploy.py status`, report only what needs attention; it runs only while the app is open, and the bots
+don't depend on it). Three questions Sarmad asked are now in the guide (§12): the bots run with the laptop off; the
+server's page is always current while the laptop's own app is a separate system; and the lab's bots trade without
+asking, while on real money the advisor always asks. Next session: `deploy.py status` first, then the part Sarmad
+picks (by the roadmap, Phase D).
+

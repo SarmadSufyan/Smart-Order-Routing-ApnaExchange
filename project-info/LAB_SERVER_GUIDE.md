@@ -290,7 +290,28 @@ On the laptop it is off: there, every bot still comes back paused for you to rev
 | `versions.env` | uv and Python versions, the base folder |
 | `systemd/` | the three services and two timers |
 
-## 12. Panel questions
+## 12. Questions that came up (2026-10-12)
+
+- **Do the bots keep running when the laptop is off?** Yes. They live on the AWS server. Closing the tunnel, stopping the page
+  or shutting the laptop down changes nothing for them.
+- **Is the laptop in sync with the results when I come back?** It depends on the page:
+  - The **server's page** (tunnel + `npm --prefix frontend run dev:lab-server`, port 5180, LAB SERVER badge) shows
+    everything live, including every trade made while the laptop was off. The data is stored on the server.
+  - The **laptop's own app** (`python start_all.py`, port 5173) shows only the laptop's data, never the server's bots.
+    The two are separate on purpose. Because both use the same testnet accounts, the laptop's Wallet shows the server's
+    trades as reconciliation BREAKs (expected).
+- **Do the bots ask before trading?** On the server, no:
+  - **Profit-cycle bots** are automatic by design: buy a small lot, check every 5 seconds, sell only above cost + both
+    fees + the threshold, repeat.
+  - **The advisor** has two modes. *Ask me* proposes a trade with its reasons and waits (a proposal expires after 10
+    minutes). *Auto* approves its own trades within its limits. The two lab advisors run in Auto.
+  - **On real money** the advisor's Auto mode is refused by the code, so it always asks. A profit-cycle bot stays
+    automatic but can only spend its pocket of the automation fund, and the kill switch stops every bot.
+- **Who checks the server every day?** A scheduled check in the Claude desktop app on Sarmad's laptop ("Lab server
+  daily check", about 10:07 local time) runs `deploy.py status` read-only and reports. It only runs while that app is
+  open. Anyone with the key can run `deploy.py status` by hand.
+
+## 13. Panel questions
 
 - **"Is it deployed?"** The bots and the practice lab run 24/7 on an AWS EC2 server in Zurich, against the
   exchanges' testnet / demo. Real-money trading and the full dashboard run locally (Phase D/E decides the hosting
