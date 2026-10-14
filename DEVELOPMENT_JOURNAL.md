@@ -1899,3 +1899,43 @@ ceilings.py` (new), `pre_trade.py`, `controls.py`; `backend/shared/models/risk.p
 tests `test_exchanges/test_key_permissions.py`, `test_real_money.py`, `test_automation/test_engine.py`,
 `test_consensus/test_risk_controls.py`; `.env.example`; docs `project-info/REAL_MONEY_GUIDE.md` (new), ROADMAP, CLAUDE.md,
 PROGRESS.md.
+
+---
+
+## 2026-10-14 — Sandbox wording and real data on every screen
+
+**Why.** Sarmad asked for a review of the Milestone 1 + 2 report (by Fizza) before it goes to the FYP team. Its
+screenshots showed "TESTNET", "Degrade (Test)", "Demo: Book Sweep" and "DEMO ACCOUNTS", and its text said "test
+environment" throughout. Sarmad's decision: no real money has been traded yet (real-fund execution comes before
+Milestone 3), so the honest and professional term is **sandbox environment** — the exchanges' own sandboxes, with
+sandbox balances and live market order books. The report stays at Milestone 2 scope; later work goes into its
+"upcoming work". The theme branch (Mahnoor + Maham) is not the product and was not touched.
+
+**Found while checking the screens: two displays were hard-coded.** The Login page showed a fixed venue list
+("Binance DISCONNECTED", whatever the truth), a made-up version ("v4.12.3") and node name ("sor-p01"), and a green
+"Connected" dot that never changed. The Dashboard's RAFT card showed three invented nodes with "Simulated for POC"
+although the real cluster has run since Phase 6. Both now show real data: the Login page reads the public
+`/api/health` (each exchange's feed, books synced, the environment; it says "Gateway not reachable" when it isn't),
+and the Dashboard uses the real cluster status (`RaftPanel compact`; with RAFT off it says so).
+
+**Design choices.**
+- *Display only.* Setting values (`EXCHANGE_MODE=testnet`, the venue `mode` field) are unchanged; the screens map
+  them to words in one place (`adapters.ts: environmentLabel / dataFeedLabel / connectionLabel`) and the backend's
+  on-screen messages use one property (`ExchangeAdapter.display_environment`). The exchange's own name for its
+  environment (`environment_name`: testnet / demo) stays for logs.
+- *Technical names for the demonstration controls:* "Inject Latency" is fault injection on our own connection (the
+  exchange and its data are untouched); "Depth Sweep" is the preset that sizes an order to walk several book levels.
+- *Old audit records keep their words* ("demo login", "Gateway started (testnet; …)"): the log is append-only, and
+  rewriting history to look better is exactly what it exists to prevent. New records use the new words.
+
+**Checked.** Type-check, ruff, 487 tests. Live: every page scanned for testnet / demo / test money / fake — none
+left except old audit records; the Login page lists the four exchanges with their real feed state (OKX offline on
+this network: the known DNS issue); the Dashboard shows SANDBOX, Depth Sweep and the real RAFT status.
+
+**Files.** Frontend: `adapters.ts`, `components/AppShell.tsx`, `RaftPanel.tsx`, `NewOrderModal.tsx` (comments),
+`shared.tsx` (comment), `mockData.ts`, `pages/Login.tsx`, `Dashboard.tsx`, `VenueHealth.tsx`, `MarketData.tsx`,
+`KillSwitch.tsx`, `Wallet.tsx`, `Automation.tsx`, `Arbitrage.tsx`, `services/api.ts`. Backend: `exchanges/base.py`,
+`ccxt_venue.py`, `coinbase/adapter.py`, `registry.py`, `services/venue_monitor/coherence.py`, `gateway/main.py`,
+`routers/auth.py`, `routers/venues.py`, `services/automation/engine.py`, `fund.py`, `lab.py`, `services/wallet/pnl.py`,
+`shared/models/arbitrage.py`; test `test_api/test_logins.py`. Docs: supervisor corrected to Sir Shamaail Jafri
+(CLAUDE.md, project-info/README.md).

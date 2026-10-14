@@ -10,7 +10,7 @@
 
 Apna Exchange (codename DEIRCP) is a distributed, real-time platform designed to monitor and analyze FIX protocol-based order flows across multiple fragmented trading venues. The system continuously evaluates venue health, detects execution anomalies such as delayed fills and partial executions, and predicts execution risk before orders are placed. It enforces automated control actions including venue blacklisting, order throttling, and kill switch activation to prevent financial losses. A RAFT consensus mechanism ensures consistent and fault-tolerant risk decisions across distributed platform nodes.
 
-This is a Final Year Project (FYP) for Group CS14 at Usman Institute of Technology (UITU), supervised by Sir Usman Javed and Miss Shiza.
+This is a Final Year Project (FYP) for Group CS14 at Usman Institute of Technology (UITU), supervised by Sir Shamaail Jafri.
 
 ---
 

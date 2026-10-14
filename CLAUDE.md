@@ -13,7 +13,7 @@
 |---|---|
 | Name | **ApnaSOR** — Apna Exchange's Smart Order Router (formerly DEIRCP) |
 | Group | CS14 — Usman Institute of Technology (UITU), Final Year Project, 4 members |
-| Supervisors | Sir Usman Javed, Miss Shiza |
+| Supervisor | Sir Shamaail Jafri |
 | Domain | Crypto trading infrastructure: smart order routing, pre-trade risk, execution algos |
 | Repo | https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange (**private**). **Since 2026-10-07 `feature/crypto-pivot` (the default branch) is the ONE working branch for everyone** — backend and frontend, **one person at a time** (a relay; Sarmad decides who). `feature/backend-v2` / `feature/frontend-v2` are retired; `theme/liquid-glass` keeps Mahnoor + Maham's redesign as a theme, not the product |
 
