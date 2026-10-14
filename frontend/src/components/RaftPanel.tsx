@@ -22,9 +22,10 @@ function fmtIndex(i: number | null | undefined): string {
 /**
  * Live state of the 3-node RAFT cluster that replicates the kill switch, risk
  * limits and venue blacklist (GET /api/consensus/status). Real data only: with
- * RAFT off it says so instead of showing nodes.
+ * RAFT off it says so instead of showing nodes. `compact` = one row per node
+ * (the Dashboard); otherwise the full panel (Kill Switch & Alerts).
  */
-export function RaftPanel({ style }: { style?: React.CSSProperties }) {
+export function RaftPanel({ style, compact = false }: { style?: React.CSSProperties; compact?: boolean }) {
   const status         = useDataStore((s) => s.consensus)
   const fetchConsensus = useDataStore((s) => s.fetchConsensus)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +51,46 @@ export function RaftPanel({ style }: { style?: React.CSSProperties }) {
   })
   const label: React.CSSProperties = { color: C.dim, fontSize: F.xs }
   const value: React.CSSProperties = { color: C.text, fontSize: F.sm, fontVariantNumeric: 'tabular-nums' }
+
+  if (compact) {
+    return (
+      <Card style={style}>
+        <CardTitle>RAFT CONSENSUS NODES</CardTitle>
+        {!status ? (
+          <div style={{ padding: 10, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : 'Loading…'}</div>
+        ) : !status.enabled ? (
+          <div style={{ fontSize: F.sm, color: C.muted, lineHeight: 1.5 }}>{status.message}</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {nodes.map((n) => {
+              const role = roleStyle(n)
+              return (
+                <div key={n.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 10px', background: C.surface, borderRadius: 4,
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: n.reachable ? C.green : C.red, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: F.sm }}>Node {n.id}</span>
+                  <span style={chip(role.color)}>{role.label}</span>
+                  <span style={{ fontSize: F.xs, color: C.dim, fontVariantNumeric: 'tabular-nums' }}>
+                    {n.reachable ? `term ${n.term ?? '—'} · ${fmtIndex(n.commit_index)}` : '—'}
+                  </span>
+                </div>
+              )
+            })}
+            <div style={{ fontSize: F.xs, color: status.majority_reachable ? C.dim : C.red, textAlign: 'center', marginTop: 2 }}>
+              {status.majority_reachable
+                ? `Majority up · ${reachable} of ${nodes.length} nodes${status.signed ? ' · messages signed' : ''}`
+                : `No majority · ${reachable} of ${nodes.length} nodes up`}
+            </div>
+          </div>
+        )}
+        {error && status && (
+          <div style={{ marginTop: 6, fontSize: F.xs, color: C.red, textAlign: 'center' }}>Can't read the cluster status — showing the last one</div>
+        )}
+      </Card>
+    )
+  }
 
   return (
     <Card style={style}>

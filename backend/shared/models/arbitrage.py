@@ -82,7 +82,7 @@ class ArbStatus(BaseModel):
     summary: str
     note: str = Field(
         default="Detector only: ApnaSOR never trades these edges. Prices are the real market; "
-                "'fundable' uses our testnet/demo balances.",
+                "'fundable' uses our sandbox balances.",
     )
 
 

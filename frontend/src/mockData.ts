@@ -1,10 +1,5 @@
 // Static cosmetic data only — real data comes from the dataStore via the API.
-import type { Venue, Order, Position, TokenBucket, RiskCheck, Alert, CircuitBreaker } from './types'
-
-// Skeleton venue shown before the first API response arrives.
-export const MOCK_VENUES: Venue[] = [
-  { id: 1, name: 'Binance', protocol: 'WS+REST', status: 'Disconnected', latencyEma: 0, p99: 0, fillRate: 0, rejectRate: 0, ordersToday: 0, circuitBreaker: 'OK' },
-]
+import type { Order, Position, TokenBucket, RiskCheck, Alert, CircuitBreaker } from './types'
 
 export const MOCK_ORDERS: Order[] = []
 export const MOCK_POSITIONS: Position[] = []
@@ -27,9 +22,9 @@ export const MOCK_CIRCUIT_BREAKERS: CircuitBreaker[] = []
 
 export const BOOT_LINES = [
   '[boot] apnasor gateway initializing…',
-  '[net]  exchange adapters: binance (ws+rest)',
-  '[md]   local order books: snapshot + diff-stream sync',
-  '[risk] pre-trade checks armed',
+  '[net]  exchange adapters: websocket market data + rest execution',
+  '[md]   local order books: snapshot + update-chain sync',
+  '[risk] pre-trade checks and kill switch armed',
   '[auth] awaiting operator credentials',
 ]
 

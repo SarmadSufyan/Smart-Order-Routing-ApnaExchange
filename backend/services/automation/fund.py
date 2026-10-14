@@ -197,7 +197,7 @@ class AutomationFund:
             if free and qty > free.get(asset, 0.0) + 1e-9 and (qty - free.get(asset, 0.0)) * (self.mark(asset) or 0) > CENT:
                 warnings.append(
                     f"The fund holds {qty:,.8g} {asset} but the exchanges show only {free.get(asset, 0.0):,.8g} free "
-                    "(a teammate on the shared testnet keys, a testnet reset, or an order in flight): bots trading "
+                    "(a teammate on the shared sandbox keys, a sandbox reset, or an order in flight): bots trading "
                     f"{asset} can be refused by the exchange")
         return FundView(
             mode=self.state.mode, allocated_usdt=round(self.state.allocated_usdt, 8),

@@ -128,7 +128,7 @@ class ExchangeAdapter(ABC):
         if not self.execution_available:
             return f"{self.name}: execution not available"
         if not self.has_credentials:
-            return f"no {self.name} {self.environment_name} API keys configured"
+            return f"no {self.name} {self.display_environment} API keys configured"
         return None
 
     @property
@@ -218,9 +218,15 @@ class ExchangeAdapter(ABC):
         return self.mode
 
     @property
+    def display_environment(self) -> str:
+        """How the execution environment is named on screen: the exchange's sandbox, or mainnet."""
+        return "sandbox" if self.mode == "testnet" else self.mode
+
+    @property
     def display_label(self) -> str:
-        execution = self.environment_name if self.execution_available else "no execution"
-        return f"data: {self.data_mode} · exec: {execution}"
+        execution = self.display_environment if self.execution_available else "no execution"
+        data = "live market" if self.data_mode == "mainnet" else self.data_mode
+        return f"data: {data} · exec: {execution}"
 
     # ── demo control ────────────────────────────────────────────────
     # A real exchange can't be forced into a degraded state, so for demos

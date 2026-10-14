@@ -91,7 +91,7 @@ function FundCard({ fund, onChange }: { fund: FundView | null; onChange: () => v
             hint={Object.entries(fund.coins).map(([a, q]) => `${fmtQty(q)} ${a}`).join(', ') || 'none'} />
           <Stat name="VALUE NOW" value={fund.value_usdt === null ? '—' : fmtUsd(fund.value_usdt)} />
           <Stat name="P&L (REAL-MARKET FEES)" value={fmtPnl(fund.pnl_market_usdt, 4)} color={pnlColor(fund.pnl_market_usdt)}
-            hint={`Fees as the test exchanges charged them: ${fmtPnl(fund.pnl_usdt, 4)}. Binance's spot testnet charges no fees, so results are shown at each exchange's real taker fee.`} />
+            hint={`Fees as the sandbox environments charged them: ${fmtPnl(fund.pnl_usdt, 4)}. Binance's sandbox charges no fees, so results are shown at each exchange's real taker fee.`} />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 10 }}>
           <div style={{ width: 140 }}><Num name="AMOUNT (USDT)" value={amount} set={setAmount} min={0} /></div>
@@ -172,7 +172,7 @@ function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => v
           Every few minutes it reads the research forecast for the next hour, the trade planner's ATR bracket and what our
           own practice trades showed, and proposes a bracketed buy with its reasons. <b>Ask me</b>: nothing happens until you
           approve. <b>Auto</b>: it approves itself within its limits — {mainnet ? <span style={{ color: C.orange }}>not
-          allowed with real money</span> : 'testnet only'}.
+          allowed with real money</span> : 'sandbox only'}.
         </div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
           {SYMBOLS.map((s) => {
@@ -181,7 +181,7 @@ function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => v
           })}
           <span style={{ width: 12 }} />
           <button style={pill(adv.mode === 'ASK')} onClick={() => setAdv({ ...adv, mode: 'ASK' })}>Ask me</button>
-          <button style={pill(adv.mode === 'AUTO')} disabled={mainnet} onClick={() => setAdv({ ...adv, mode: 'AUTO' })}>Auto (testnet)</button>
+          <button style={pill(adv.mode === 'AUTO')} disabled={mainnet} onClick={() => setAdv({ ...adv, mode: 'AUTO' })}>Auto (sandbox)</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 8 }}>
           <Num name="BUDGET (USDT)" value={adv.budget_usdt} set={(v) => setAdv({ ...adv, budget_usdt: v })} />
@@ -296,7 +296,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
         <Stat name="CASH" value={fmtUsd(bot.pocket?.cash_usdt ?? 0)} />
         <Stat name="VALUE NOW" value={bot.value_usdt === null ? '—' : fmtUsd(bot.value_usdt)} />
         <Stat name="P&L (REAL FEES)" value={fmtPnl(bot.pnl_market_usdt, 4)} color={(bot.pnl_market_usdt ?? 0) >= 0 ? C.green : C.red}
-          hint={`As charged on the test exchange: ${fmtPnl(bot.pnl_usdt, 4)}; closed: ${fmtPnl(bot.pocket?.realized_market_usdt, 4)}`} />
+          hint={`As charged in the sandbox: ${fmtPnl(bot.pnl_usdt, 4)}; closed: ${fmtPnl(bot.pocket?.realized_market_usdt, 4)}`} />
         <Stat name={bot.kind === 'CYCLE' ? 'CYCLES DONE' : 'WON / STOPPED / TIMED OUT'}
           value={bot.kind === 'CYCLE' ? s.lots_closed : `${s.wins} / ${s.losses} / ${s.timeouts}`} />
         <Stat name="OPEN" value={`${open.length} lot(s)`} />
@@ -326,7 +326,7 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
   const [error, setError] = useState<string | null>(null)
   if (!lab) return <Card><CardTitle>PRACTICE LAB</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
   const start = async (name: string, budget: number) => {
-    if (!window.confirm(`Start this lab experiment? It moves ${fmtUsd(budget)} of test money from the wallet into the automation fund and starts its bots.`)) return
+    if (!window.confirm(`Start this lab experiment? It moves ${fmtUsd(budget)} of sandbox funds from the wallet into the automation fund and starts its bots.`)) return
     setBusy(name); setError(null)
     try { await api.startLabPreset(name); onStarted() } catch (e) { setError((e as Error).message) }
     setBusy(null)
@@ -342,14 +342,14 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
       </div>
 
       {lab.enabled && <>
-        <div style={label}>EXPERIMENTS (TESTNET)</div>
+        <div style={label}>EXPERIMENTS (SANDBOX)</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8, marginBottom: 12 }}>
           {lab.presets.map((p) => (
             <div key={p.name} style={{ ...tile, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ fontSize: F.sm, fontWeight: 700, color: C.text }}>{p.title}</div>
               <div style={{ fontSize: F.xs, color: C.muted, lineHeight: 1.45, flex: 1 }}>{p.description}</div>
               <button disabled={busy !== null} onClick={() => start(p.name, p.budget_usdt)} style={button(C.purple, busy === p.name)}>
-                {busy === p.name ? 'Starting…' : `Start (${fmtUsd(p.budget_usdt, 0)} test money)`}
+                {busy === p.name ? 'Starting…' : `Start (${fmtUsd(p.budget_usdt, 0)} sandbox funds)`}
               </button>
             </div>
           ))}

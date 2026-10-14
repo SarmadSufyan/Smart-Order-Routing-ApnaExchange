@@ -310,7 +310,7 @@ class PnLService:
                     ))
             rec.status = worst
             if worst == "BREAK":
-                rec.note = ("Exchange balances changed outside ApnaSOR (testnet reset, manual trade "
+                rec.note = ("Exchange balances changed outside ApnaSOR (sandbox reset, manual trade "
                             "or deposit). Accept the exchange balances to start a new baseline.")
             elif worst == "PENDING":
                 rec.note = "A recent fill is still settling into the exchange balance."

@@ -80,7 +80,7 @@ async def degrade_venue(venue_id: str, user: Annotated[User, Depends(get_current
     """
     _, adapter = _require_venue(venue_id)
     adapter.set_degraded(True)
-    await audit("venue_degraded", f"{venue_id}: artificial latency added by {user.username} (demo control)",
+    await audit("venue_degraded", f"{venue_id}: artificial latency added by {user.username} (fault injection)",
                 actor=user.username, venue_id=venue_id)
     return {"venue_id": venue_id, "degraded": True}
 

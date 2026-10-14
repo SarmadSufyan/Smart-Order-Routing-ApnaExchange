@@ -41,6 +41,24 @@ export function fmtRate(v: UiVenue, rate: number): string {
   return v.hasOrders ? `${rate}%` : '—'
 }
 
+/** How an execution environment is named on screen. testnet = the exchange's own sandbox environment (sandbox
+ *  balances, the exchange's order handling); mainnet = real funds. */
+export function environmentLabel(mode: string | null | undefined): string {
+  if (mode === 'testnet') return 'sandbox'
+  return mode || '—'
+}
+
+/** Where a venue's order book comes from, on screen. */
+export function dataFeedLabel(dataMode: string | null | undefined): string {
+  return dataMode === 'mainnet' ? 'live market' : environmentLabel(dataMode)
+}
+
+/** One line per venue: where its order book comes from and where its orders execute. */
+export function connectionLabel(v: VenueHealth): string {
+  const exec = v.execution_available === false ? 'none (data only)' : environmentLabel(v.mode)
+  return `data: ${dataFeedLabel(v.data_mode)} · exec: ${exec}`
+}
+
 export function isVenueTradable(v: VenueHealth): boolean {
   return v.trading_enabled ?? false
 }
@@ -52,7 +70,7 @@ export function backendVenueToUi(v: VenueHealth): UiVenue {
     id: VENUE_NUMERIC_ID[v.venue_id] ?? 0,
     name: v.name || VENUE_NAMES[v.venue_id] || v.venue_id,
     shortName: v.venue_id,
-    protocol: v.cloud || 'WS+REST',
+    protocol: connectionLabel(v),
     status,
     // Real measured percentiles — no derived/estimated numbers.
     latencyEma: round1(v.latency_p50_ms || v.latency_ms || 0),

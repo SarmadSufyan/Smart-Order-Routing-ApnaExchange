@@ -56,7 +56,7 @@ async def login(body: LoginRequest, request: Request):
         )
 
     demo = user.username in demo_logins()
-    await audit("login", f"{user.username} logged in" + (" (demo login)" if demo else ""),
+    await audit("login", f"{user.username} logged in" + (" (sandbox login)" if demo else ""),
                 actor=user.username, payload={"client": client, "demo_login": demo})
     return TokenResponse(
         access_token=create_access_token(user),
@@ -76,7 +76,7 @@ async def get_demo_logins():
     users = demo_logins()
     return DemoLoginsResponse(
         demo_logins=users,
-        note=("Demo logins: password = user name, testnet only. Real passwords: scripts/hash_password.py."
+        note=("Sandbox logins: password = user name, sandbox only. Real passwords: scripts/hash_password.py."
               if users else "Every user needs a real password on this gateway."),
     )
 

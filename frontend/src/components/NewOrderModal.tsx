@@ -28,11 +28,11 @@ interface ValidationErrors {
 interface NewOrderModalProps {
   open:    boolean
   onClose: () => void
-  /** Pre-fill the form (for the Demo Liquidity Sweep button). */
+  /** Pre-fill the form (for the Depth Sweep preset). */
   initialSymbol?: string
   initialSide?: OrderSide
   initialQty?: string
-  /** Custom label shown above the form (e.g. "DEMO: Liquidity Sweep"). */
+  /** Custom label shown above the form (e.g. "DEPTH SWEEP — …"). */
   banner?: string
 }
 

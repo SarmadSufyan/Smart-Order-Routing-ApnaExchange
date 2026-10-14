@@ -77,8 +77,8 @@ def _gate(settings) -> ExchangeAdapter:
 
 EXCHANGE_CATALOG: dict[str, ExchangeSpec] = {
     "binance": ExchangeSpec("V1", "Binance", phase=1, factory=_binance),
-    "coinbase": ExchangeSpec("V2", "Coinbase", phase=2, factory=_coinbase, note="data-only: no real testnet"),
-    "kraken": ExchangeSpec("V3", "Kraken", phase=3, note="no spot testnet exists (futures demo only)"),
+    "coinbase": ExchangeSpec("V2", "Coinbase", phase=2, factory=_coinbase, note="data-only: no usable sandbox"),
+    "kraken": ExchangeSpec("V3", "Kraken", phase=3, note="no spot sandbox exists (futures only)"),
     "bybit": ExchangeSpec("V4", "Bybit", phase=3, factory=_bybit),
     "okx": ExchangeSpec("V5", "OKX", phase=3, factory=_okx),
     "gate": ExchangeSpec("V6", "Gate", phase=3, factory=_gate),

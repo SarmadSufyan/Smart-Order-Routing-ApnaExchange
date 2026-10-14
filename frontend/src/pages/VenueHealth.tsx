@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle, ConnDot } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
-import { backendVenueToUi, fmtRate, LATENCY_WARN_MS } from '../adapters'
+import { backendVenueToUi, fmtRate, LATENCY_WARN_MS, connectionLabel, dataFeedLabel } from '../adapters'
 
 function fmtMs(ms: number): string {
   if (!ms) return '—'
@@ -55,9 +55,10 @@ export function VenueHealth() {
     <div>
       <div style={{ fontSize: F.lg, color: C.text, marginBottom: 4 }}>Venue Connectivity</div>
       <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 14 }}>
-        Order books: {backendVenues[0]?.data_mode ?? '—'} feeds · orders execute on {backendVenues[0]?.mode ?? '—'}.
-        Latency = measured REST round-trip. “Degrade (Test)” adds artificial latency to our
-        connection so the health monitor can be demonstrated on a real venue.
+        Order books: {dataFeedLabel(backendVenues[0]?.data_mode)} feeds · orders execute in{' '}
+        {backendVenues[0]?.mode === 'mainnet' ? 'mainnet (real funds)' : "each exchange's sandbox environment"}.
+        Latency = measured REST round-trip. “Inject Latency” adds a fixed delay to our own connection to that exchange
+        (fault injection), so the health monitor's response can be observed on a live venue; the exchange is not affected.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 14, marginBottom: 14 }}>
@@ -112,7 +113,7 @@ export function VenueHealth() {
                   {b.execution_coherence && Object.keys(b.execution_coherence).length > 0 && (
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 4 }}>
-                        Execution book vs real market
+                        {b.mode === 'mainnet' ? 'Execution book' : 'Sandbox book'} vs live market
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {Object.entries(b.execution_coherence).map(([sym, st]) => {
@@ -180,7 +181,7 @@ export function VenueHealth() {
                           opacity: busy === v.backend.venue_id ? 0.5 : 1,
                         }}
                       >
-                        {busy === v.backend.venue_id ? '…' : 'Degrade (Test)'}
+                        {busy === v.backend.venue_id ? '…' : 'Inject Latency'}
                       </button>
                     )}
                     <button
@@ -255,7 +256,7 @@ export function VenueHealth() {
             {venues.map((v) => (
               <tr key={v.id} style={{ borderBottom: `1px solid ${C.border}40` }}>
                 <td style={{ padding: '8px', fontWeight: 600 }}>{v.name}</td>
-                <td style={{ padding: '8px', color: C.muted }}>{v.backend.cloud}</td>
+                <td style={{ padding: '8px', color: C.muted }}>{connectionLabel(v.backend)}</td>
                 <td style={{ padding: '8px' }}><ConnDot status={v.status} /></td>
                 <td style={{ padding: '8px', color: v.latencyEma > LATENCY_WARN_MS ? C.orange : C.text }}>{fmtMs(v.latencyEma)}</td>
                 <td style={{ padding: '8px' }}>{((v.backend.health_score ?? 0) * 100).toFixed(0)}%</td>

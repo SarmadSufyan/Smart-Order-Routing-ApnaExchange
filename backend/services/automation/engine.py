@@ -212,7 +212,7 @@ class AutomationEngine:
         if self._risk.kill_switch.is_active:
             raise BotRejectedError("Kill switch is active — no new bots")
         if lab and not self.lab.enabled:
-            raise BotRejectedError("Lab bots run on testnet only")
+            raise BotRejectedError("Lab bots run in the sandbox only")
         for s in symbols:
             if s not in self._symbols:
                 raise BotRejectedError(f"Unsupported symbol {s}. Tradable: {', '.join(self._symbols)}")
@@ -257,7 +257,7 @@ class AutomationEngine:
 
     async def create_advisor(self, params: AdvisorParams, user: str) -> BotState:
         if params.mode == AdvisorMode.AUTO and self._mode != "testnet":
-            raise BotRejectedError("Auto-approve is testnet only (decided 2026-10-08): with real money every trade "
+            raise BotRejectedError("Auto-approve is sandbox only (decided 2026-10-08): with real money every trade "
                                    "waits for your approval — use mode ASK")
         if self._research is None:
             raise BotRejectedError("The advisor needs the research service, which isn't running")
@@ -291,7 +291,7 @@ class AutomationEngine:
     async def start_preset(self, name: str, user: str) -> list[BotState]:
         """A lab experiment: move its budget from the wallet into the fund, start its bots (testnet only)."""
         if not self.lab.enabled:
-            raise BotRejectedError("Lab experiments run on testnet only")
+            raise BotRejectedError("Lab experiments run in the sandbox only")
         preset = PRESETS.get(name)
         if preset is None:
             raise BotRejectedError(f"Unknown lab preset {name}. Presets: {', '.join(PRESETS)}")
@@ -330,7 +330,7 @@ class AutomationEngine:
         if self._risk.kill_switch.is_active:
             raise BotRejectedError("Kill switch is active — release it before resuming")
         if bot.lab and not self.lab.enabled:
-            raise BotRejectedError("Lab bots run on testnet only")
+            raise BotRejectedError("Lab bots run in the sandbox only")
         if bot.kind == BotKind.CYCLE:
             self._check_cycle_allowed()
         bot.stats.consecutive_rejections = 0

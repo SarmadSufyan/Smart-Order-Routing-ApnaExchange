@@ -84,7 +84,7 @@ class CoherenceMonitor:
             return None
         adapter = self._registry.get(venue_id)
         name = adapter.name if adapter else venue_id
-        env = adapter.environment_name if adapter else "execution"
+        env = adapter.display_environment if adapter else "execution"
         if st.status is CoherenceStatus.DIVERGED:
             return (f"{name} {env} book is {st.divergence_bps:+.0f} bps from the real market "
                     f"(limit ±{self._threshold:g} bps) - fills would not be real-market prices")

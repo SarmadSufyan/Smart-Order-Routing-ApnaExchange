@@ -763,6 +763,19 @@ export interface BackendRiskStatus {
   real_money_ceilings?: RiskCeilings | null
 }
 
+/** GET /api/health (no login needed): the gateway's environment and each exchange's feed. */
+export interface GatewayHealth {
+  status: string
+  exchange_mode: string             // testnet | mainnet
+  exchanges: Record<string, {
+    name: string
+    mode: string
+    feed_connected: boolean
+    books_synced: string            // e.g. "5/5"
+    trading_enabled: boolean        // API keys configured
+  }>
+}
+
 /** Real-money hard caps from .env (MAINNET_MAX_*): no limit in force is above them. */
 export interface RiskCeilings {
   max_order_notional: number
@@ -953,7 +966,7 @@ export const api = {
   // every user has a real password, always empty on mainnet. No login needed.
   getDemoLogins: () => request<{ demo_logins: string[]; note: string }>('/api/auth/demo-logins'),
 
-  health: () => request<Record<string, unknown>>('/api/health'),
+  health: () => request<GatewayHealth>('/api/health'),  // public: the Login page reads it before anyone logs in
 
   getVenues: () => request<{ venues: VenueHealth[] }>('/api/venues/'),
 

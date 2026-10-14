@@ -166,7 +166,7 @@ class LoginRouteTest(unittest.TestCase):
         self.assertEqual(r.json()["demo_logins"], ["trader1", "risk_mgr"])
         r = self.client.post("/api/auth/login", json={"username": "trader1", "password": "trader1"})
         self.assertEqual(r.status_code, 200)
-        self.assertIn("(demo login)", self.audits[-1]["summary"])
+        self.assertIn("(sandbox login)", self.audits[-1]["summary"])
 
 
 if __name__ == "__main__":

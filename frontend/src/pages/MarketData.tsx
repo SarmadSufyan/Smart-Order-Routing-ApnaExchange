@@ -3,7 +3,7 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { api, NBBO, VenueQuote } from '../services/api'
 import { useDataStore } from '../stores/dataStore'
-import { venueName } from '../adapters'
+import { venueName, dataFeedLabel } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtSize, spreadBps } from '../format'
 
@@ -94,8 +94,10 @@ export function MarketData() {
         <div>
           <div style={{ fontSize: F.lg, color: C.text }}>Market Data Aggregation</div>
           <div style={{ fontSize: F.xs, color: C.dim, marginTop: 2 }}>
-            Local order books kept in sync from each exchange's {venues[0]?.data_mode ?? ''} WebSocket feed
-            {venues[0]?.mode ? ` · orders execute on ${venues[0].mode}` : ''}
+            Local order books kept in sync from each exchange's {dataFeedLabel(venues[0]?.data_mode)} WebSocket feed
+            {venues[0]?.mode
+              ? ` · orders execute in ${venues[0].mode === 'mainnet' ? 'mainnet (real funds)' : 'exchange sandbox environments'}`
+              : ''}
             {venues.some((v) => v.execution_available === false) ? ' · DATA ONLY venues count in the NBBO but receive no orders' : ''}
           </div>
         </div>

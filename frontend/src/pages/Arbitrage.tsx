@@ -329,7 +329,7 @@ export function Arbitrage() {
             </div>
             <div style={{ marginTop: 10, fontSize: F.xs, color: C.dim, lineHeight: 1.5 }}>
               Net = gross gap minus both taker fees. Red means paying the fees would turn the gap into a loss.
-              "We could fund" uses our testnet/demo balances: the USDT on the buy exchange and the coins on the sell
+              "We could fund" uses our sandbox balances: the USDT on the buy exchange and the coins on the sell
               exchange.
             </div>
           </Card>

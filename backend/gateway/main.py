@@ -158,7 +158,8 @@ async def lifespan(app: FastAPI):
     caps = svc.risk_engine.ceilings
     await record_audit(
         "gateway_started",
-        f"Gateway started ({settings.exchange_mode}; venues {', '.join(settings.enabled_exchange_list)})"
+        f"Gateway started ({'sandbox' if settings.exchange_mode == 'testnet' else settings.exchange_mode}; "
+        f"venues {', '.join(settings.enabled_exchange_list)})"
         + (f" — REAL MONEY, hard caps: ${caps.max_order_notional:,.2f} per order, "
            f"${caps.max_algo_notional_usdt:,.2f} per algo, ${caps.max_notional_exposure:,.2f} exposure, "
            f"loss limit ${caps.max_trading_loss_usdt:,.2f}; an exchange trades only once it confirms the key "

@@ -43,7 +43,7 @@ export function AppShell() {
 
   // Narrow screens: below 900 px the sidebar becomes a slide-in menu (☰) so
   // pages get the full width; below 600 px the top bar drops its labels.
-  // The TESTNET badge and the KILL SWITCH button stay visible at every width.
+  // The environment badge and the KILL SWITCH button stay visible at every width.
   const isPhone   = useMediaQuery(MQ.phone)
   const isDrawer  = useMediaQuery(MQ.narrow)
   const isCompact = useMediaQuery(MQ.compact)
@@ -168,7 +168,7 @@ export function AppShell() {
           {!isPhone && <span style={{ fontSize: F.md, fontWeight: 600 }}>ApnaSOR</span>}
           {exchangeMode && (
             <span
-              title={exchangeMode === 'mainnet' ? 'Orders use REAL funds' : 'Exchange testnet — fake funds, real order books'}
+              title={exchangeMode === 'mainnet' ? 'Orders use REAL funds' : 'Orders execute in the exchanges\' sandbox environments; order books are live market data'}
               style={{
                 borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
                 background: tint(exchangeMode === 'mainnet' ? C.red : C.orange, 16),
@@ -177,7 +177,7 @@ export function AppShell() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {exchangeMode === 'mainnet' ? 'MAINNET · REAL FUNDS' : 'TESTNET'}
+              {exchangeMode === 'mainnet' ? 'MAINNET · REAL FUNDS' : 'SANDBOX'}
             </span>
           )}
           {SERVER_LABEL && (

@@ -450,7 +450,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
         if rules is None or self._client is None:
             return reject(f"{symbol} is not tradable on {self.name}")
         if not self.has_credentials:
-            return reject(f"no {self.name} {self.environment_name} API keys configured - trading disabled")
+            return reject(f"no {self.name} {self.display_environment} API keys configured - trading disabled")
 
         qty = floor_to_step(quantity, rules.amount_step)
         if qty < rules.min_amount:

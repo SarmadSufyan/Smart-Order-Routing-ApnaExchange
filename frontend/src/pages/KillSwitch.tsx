@@ -3,7 +3,7 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { RaftPanel } from '../components/RaftPanel'
 import { useDataStore } from '../stores/dataStore'
-import { isVenueBlacklisted, LATENCY_WARN_MS } from '../adapters'
+import { isVenueBlacklisted, LATENCY_WARN_MS, connectionLabel } from '../adapters'
 
 type Alert = {
   sev: 'Critical' | 'Warning' | 'Info'
@@ -309,7 +309,7 @@ export function KillSwitch() {
                 {blacklisted.map((v) => (
                   <tr key={v.venue_id} style={{ ...tr, background: tint(C.orange, 3) }}>
                     <td style={{ padding: '7px 6px', color: C.orange }}>{v.name}</td>
-                    <td style={{ padding: '7px 6px', color: C.muted }}>{v.cloud}</td>
+                    <td style={{ padding: '7px 6px', color: C.muted }}>{connectionLabel(v)}</td>
                     <td style={{ padding: '7px 6px', textAlign: 'right', color: C.muted }}>{((v.health_score ?? 0) * 100).toFixed(0)}%</td>
                     <td style={{ padding: '7px 6px', textAlign: 'right', color: C.red }}>BLACKLISTED</td>
                   </tr>

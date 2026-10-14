@@ -41,8 +41,8 @@ REST_BASE = "https://api.coinbase.com/api/v3/brokerage"
 CHANNELS = ("level2", "ticker", "heartbeats")
 
 NO_TESTNET_NOTE = (
-    "Coinbase has no real testnet (its sandbox only returns mocked responses) - "
-    "market data only until mainnet execution (Phase 8)"
+    "Coinbase offers no usable sandbox (its sandbox only returns mocked responses) - "
+    "market data only until mainnet execution"
 )
 
 

@@ -130,7 +130,7 @@ export function useRealMoney(): boolean {
   return useDataStore((s) => s.venues.some((v) => v.mode === 'mainnet'))
 }
 
-/** On real money, a one-click action that spends money asks first; on testnet it just runs. */
+/** On real money, a one-click action that spends money asks first; in the sandbox it just runs. */
 export function confirmRealMoney(realMoney: boolean, what: string): boolean {
   return !realMoney || window.confirm(`REAL MONEY: ${what}\n\nThis uses real funds on the exchange. Continue?`)
 }

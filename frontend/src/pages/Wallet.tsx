@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { C, F, tint } from '../theme'
+import { environmentLabel } from '../adapters'
 import { Card, CardTitle } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
@@ -152,7 +153,7 @@ export function Wallet() {
           <div style={statSub}>
             USDT ·{' '}
             <span style={{ color: isMainnet ? C.red : C.orange, fontWeight: 600 }}>
-              {isMainnet ? 'REAL funds' : `${(wallet?.mode || '—').toUpperCase()} — no real money`}
+              {isMainnet ? 'REAL funds' : `${environmentLabel(wallet?.mode).toUpperCase()} balances`}
             </span>
           </div>
         </Card>
@@ -277,7 +278,7 @@ export function Wallet() {
 
             {hiddenAssets > 0 && (
               <div style={{ marginTop: 10, fontSize: F.xs, color: C.dim }}>
-                ⓘ {hiddenAssets} other non-zero balance{hiddenAssets === 1 ? '' : 's'} (test tokens outside the
+                ⓘ {hiddenAssets} other non-zero balance{hiddenAssets === 1 ? '' : 's'} (sandbox tokens outside the
                 trading universe) are hidden and excluded from the total.
               </div>
             )}
@@ -326,7 +327,7 @@ export function Wallet() {
               </div>
             )}
             <div style={{ marginTop: 10, fontSize: F.xs, color: C.dim, lineHeight: 1.6 }}>
-              Average-cost accounting per exchange. Testnet coins have no purchase price, so each exchange's
+              Average-cost accounting per exchange. Sandbox coins have no purchase price, so each exchange's
               balances are marked at our mid price when first read (the <i>opening balances</i>); every fill
               since then is applied on top. Total = realized + unrealized − fees. Trading P&L is what
               ApnaSOR's orders added compared with simply holding the opening balances.
@@ -441,7 +442,7 @@ export function Wallet() {
                         fontSize: F.xs, padding: '1px 6px', borderRadius: 3,
                         background: tint(v.mode === 'mainnet' ? C.red : C.orange, 14),
                         color: v.mode === 'mainnet' ? C.red : C.orange,
-                      }}>{v.mode.toUpperCase()}</span>
+                      }}>{environmentLabel(v.mode).toUpperCase()}</span>
                     </div>
                     {v.error ? (
                       <div style={{ fontSize: F.xs, color: C.red, marginTop: 4 }}>{v.error}</div>

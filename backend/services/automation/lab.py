@@ -389,12 +389,12 @@ class PracticeLab:
             counts[s.kind.value] += 1
         return LabReport(
             mode=self._mode, enabled=self.enabled,
-            note=("Everything here comes from our own bots' orders on the exchanges' test environments — fake money, "
-                  "real exchange systems. Profits are shown at real-market fees. Test fills are not real-market fills "
-                  "(Bybit's demo tracks the market closely; Binance's spot testnet has its own book), so treat costs "
-                  "as indicative. Each number says how many samples it rests on."
+            note=("Everything here comes from our own bots' orders in the exchanges' sandbox environments — sandbox "
+                  "balances, the exchanges' own order handling. Profits are shown at real-market fees. Sandbox fills are "
+                  "not real-market fills (Bybit's sandbox tracks the market closely; Binance's has its own book), so "
+                  "treat costs as indicative. Each number says how many samples it rests on."
                   if self._mode == "testnet" else
-                  "Real-money samples. Lab experiments (presets) run on testnet only."),
+                  "Real-money samples. Lab experiments (presets) run in the sandbox only."),
             samples=dict(counts), costs=cost_table(samples), scoreboard=scoreboard, advisor=advisor,
             comparisons=comparisons, models=self._models[1], presets=self.presets(),
         )

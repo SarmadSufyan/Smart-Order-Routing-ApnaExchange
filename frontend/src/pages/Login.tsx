@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
-import { BOOT_LINES, MOCK_VENUES } from '../mockData'
+import { BOOT_LINES } from '../mockData'
 import { useAuthStore } from '../stores/authStore'
 import { api, API_BASE, SERVER_LABEL } from '../services/api'
+import type { GatewayHealth } from '../services/api'
+import { environmentLabel } from '../adapters'
 
-// Shown only for users the gateway says still have the demo login
-// (GET /api/auth/demo-logins) — none on a machine with real passwords.
+// Quick sign-in, shown only for users the gateway says still accept the sandbox login
+// (password = user name; GET /api/auth/demo-logins) — none on a machine with real passwords.
 const DEMO_ACCOUNTS = [
   { user: 'admin',    pass: 'admin',    role: 'ADMIN'        },
   { user: 'trader1',  pass: 'trader1',  role: 'TRADER'       },
@@ -24,6 +26,20 @@ export function Login() {
   const [demoUsers, setDemoUsers] = useState<string[]>([])
   const [bootIdx, setBootIdx] = useState(0)
   const [clock, setClock]     = useState('')
+  const [health, setHealth]   = useState<GatewayHealth | null>(null)
+  const [reachable, setReachable] = useState<boolean | null>(null)
+
+  // The gateway's public health check: each exchange's feed and the environment, before anyone logs in.
+  useEffect(() => {
+    let stopped = false
+    const load = () => api.health()
+      .then((h) => { if (!stopped) { setHealth(h); setReachable(true) } })
+      .catch(() => { if (!stopped) setReachable(false) })
+    load()
+    const t = setInterval(load, 5000)
+    return () => { stopped = true; clearInterval(t) }
+  }, [])
+  const exchanges = Object.entries(health?.exchanges ?? {})
 
   useEffect(() => {
     // The gateway may still be starting when this page opens: ask again until it answers.
@@ -85,7 +101,6 @@ export function Login() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ color: C.accent, fontSize: 18 }}></span>
           <span style={{ fontSize: F.md, letterSpacing: '.08em' }}>SOR // COMMAND CENTER</span>
-          <span style={{ marginLeft: 'auto', fontSize: F.xs, color: C.dim }}>v4.12.3</span>
         </div>
 
         <div>
@@ -112,20 +127,23 @@ export function Login() {
             // VENUE GATEWAYS
           </div>
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
-            {MOCK_VENUES.map((v) => {
-              const dotColor = v.status === 'Connected' ? C.green : v.status === 'Degraded' ? C.orange : C.red
-              const label = v.status === 'Connected' ? 'OK' : v.status.toUpperCase()
+            {exchanges.length === 0 ? (
+              <div style={{ padding: '6px 12px', background: C.surface, fontSize: F.sm, color: reachable === false ? C.red : C.muted }}>
+                {reachable === false ? 'Gateway not reachable' : 'Connecting…'}
+              </div>
+            ) : exchanges.map(([vid, x]) => {
+              const dotColor = x.feed_connected ? C.green : C.red
               return (
-                <div key={v.id} style={{
+                <div key={vid} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '6px 12px', borderBottom: `1px solid ${C.border2}`,
                   background: C.surface, fontSize: F.sm,
                 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
-                  <span style={{ width: 90 }}>{v.name}</span>
-                  <span style={{ color: dotColor }}>{label}</span>
+                  <span style={{ width: 90 }}>{x.name}</span>
+                  <span style={{ color: dotColor }}>{x.feed_connected ? 'CONNECTED' : 'OFFLINE'}</span>
                   <span style={{ marginLeft: 'auto', color: C.muted }}>
-                    {v.latencyEma > 0 ? `${v.latencyEma}ms` : '—'}
+                    {x.books_synced} books · {x.trading_enabled ? `exec: ${environmentLabel(x.mode)}` : 'market data only'}
                   </span>
                 </div>
               )
@@ -134,8 +152,8 @@ export function Login() {
         </div>
 
         <div style={{ display: 'flex', gap: 16, fontSize: F.xs, color: C.dim }}>
-          <span>REGION local</span>
-          <span>NODE sor-p01</span>
+          <span>ENV {health ? environmentLabel(health.exchange_mode).toUpperCase() : '—'}</span>
+          <span>GATEWAY {new URL(API_BASE).host}</span>
           <span style={{ marginLeft: 'auto', color: C.muted }}>{clock}</span>
         </div>
       </div>
@@ -203,7 +221,7 @@ export function Login() {
             {demoAccounts.length > 0 && <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
                 <div style={{ flex: 1, height: 1, background: C.border }} />
-                <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>DEMO ACCOUNTS</span>
+                <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>SANDBOX QUICK SIGN-IN</span>
                 <div style={{ flex: 1, height: 1, background: C.border }} />
               </div>
 
@@ -234,8 +252,8 @@ export function Login() {
           }}>
             <span>© 2026 APNASOR · APNA EXCHANGE</span>
             <span>
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: C.green, marginRight: 4 }} />
-              {SERVER_LABEL ? `${SERVER_LABEL} · ` : ''}Connected to {new URL(API_BASE).host}
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: reachable === false ? C.red : C.green, marginRight: 4 }} />
+              {SERVER_LABEL ? `${SERVER_LABEL} · ` : ''}{reachable === false ? 'Not reachable:' : 'Connected to'} {new URL(API_BASE).host}
             </span>
           </div>
         </div>

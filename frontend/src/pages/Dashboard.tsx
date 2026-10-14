@@ -3,18 +3,13 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle, ConnDot, StateBadge, ArcGauge, Sparkline, fmtAge } from '../components/shared'
 import { NewOrderModal } from '../components/NewOrderModal'
 import { OrderProofModal } from '../components/OrderProofModal'
+import { RaftPanel } from '../components/RaftPanel'
 import { useDataStore } from '../stores/dataStore'
 import { backendOrderToUi, backendVenueToUi, fmtRate, LATENCY_WARN_MS } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtQty, spreadBps } from '../format'
 
-const RAFT_NODES = [
-  { id: 'node-01', role: 'LEADER',      healthy: true,  hb: '45ms' },
-  { id: 'node-02', role: 'FOLLOWER',    healthy: true,  hb: '47ms' },
-  { id: 'node-03', role: 'FOLLOWER',    healthy: true,  hb: '52ms' },
-]
-
-// Demo "book sweep" order size: big enough to walk past the best level on a
+// Depth-sweep preset: an order big enough to walk past the best level on a
 // thin book, small enough to stay under the default $10k per-order limit.
 const DEMO_NOTIONAL_USD = 4_000
 
@@ -32,7 +27,7 @@ export function Dashboard() {
     ? backendOrders.find((o) => o.id === selectedOrderId) ?? null
     : null
 
-  // Demo: pick the symbol whose best ask holds the LEAST value, then size the
+  // Depth sweep: pick the symbol whose best ask holds the LEAST value, then size the
   // order at ~$4k so it has the best chance of walking several price levels.
   function pickDemo(): { symbol: string; qty: string } {
     let best: { symbol: string; topValue: number; ask: number } | null = null
@@ -90,7 +85,7 @@ export function Dashboard() {
             onMouseLeave={(e) => (e.currentTarget.style.background = tint(C.orange, 10))}
             title="Pre-fills a ~$4k order on the thinnest book so the SOR walks several price levels"
           >
-            ⚡ Demo: Book Sweep
+            ⚡ Depth Sweep
           </button>
           <button
             onClick={() => { setDemoMode(false); setShowOrderModal(true) }}
@@ -290,32 +285,7 @@ export function Dashboard() {
             </span>
           </Card>
 
-          <Card>
-            <CardTitle>RAFT CONSENSUS NODES</CardTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {RAFT_NODES.map((n) => (
-                <div key={n.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 10px', background: C.surface, borderRadius: 4,
-                }}>
-                  <ConnDot status={n.healthy ? 'Connected' : 'Disconnected'} />
-                  <span style={{ flex: 1, fontSize: F.sm }}>{n.id}</span>
-                  <span style={{
-                    fontSize: F.xs, padding: '1px 7px', borderRadius: 3,
-                    background: n.role === 'LEADER' ? tint(C.blue, 14) : C.surface2,
-                    color:      n.role === 'LEADER' ? C.blue      : C.muted,
-                    border: n.role === 'FOLLOWER' ? `1px solid ${C.border}` : undefined,
-                  }}>
-                    {n.role}
-                  </span>
-                  <span style={{ fontSize: F.xs, color: n.healthy ? C.dim : C.red }}>{n.hb}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontSize: F.xs, color: C.dim, marginTop: 8, textAlign: 'center' }}>
-              ⓘ Simulated for POC — real RAFT cluster lands in M3
-            </div>
-          </Card>
+          <RaftPanel compact />
         </div>
 
       </div>
@@ -327,7 +297,7 @@ export function Dashboard() {
         initialSide="BUY"
         initialQty={demoMode ? demo.qty : ''}
         banner={demoMode
-          ? `DEMO — ~$${DEMO_NOTIONAL_USD.toLocaleString()} of ${demo.symbol} on the thinnest book. The SOR walks the consolidated book; with 2+ exchanges connected it splits across venues.`
+          ? `DEPTH SWEEP — ~$${DEMO_NOTIONAL_USD.toLocaleString()} of ${demo.symbol} on the thinnest book. The SOR walks the consolidated book; with 2+ exchanges connected it splits across venues.`
           : undefined}
       />
 
