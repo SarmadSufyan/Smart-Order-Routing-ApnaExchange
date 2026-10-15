@@ -4,10 +4,15 @@ One REFERENCE market per coin — Binance's real (mainnet) market, the deepest; 
 if Binance can't be reached — so a chart, a backtest and a forecast all read the same series.
 (The execution algorithms use a different view: all exchanges' 1-minute volume summed.)
 
-    timeframe   kept           why
-    1m          5,000 candles  ~3.5 days: the next-minute forecast and intraday backtests
-    1h          5,000 candles  ~7 months: the next-hour forecast
-    1d          1,500 candles  ~4 years: the next-day forecast
+    timeframe   kept            why
+    1m           5,000 candles  ~3.5 days: the next-minute forecast and intraday backtests
+    1h          43,800 candles  5 years: backtests and the technique study (the next-hour model trains on the
+                                newest 5,000)
+    1d           3,000 candles  ~8 years, or since the coin was listed: the same for days (the model: 1,500)
+
+The newest candles come first, so forecasts work within a minute; the older years are fetched
+afterwards in the background (``backfill``), and a store from an earlier version is extended the same
+way.
 
 Only CLOSED candles are stored (the one still forming would change). The store also keeps the
 live forecast log — every forecast the service issued and, once its candle closed, what happened —
@@ -30,7 +35,7 @@ from backend.shared.utils.logger import get_logger
 logger = get_logger("research_candles")
 
 TIMEFRAME_MS = {"1m": 60_000, "1h": 3_600_000, "1d": 86_400_000}
-HISTORY_BARS = {"1m": 5_000, "1h": 5_000, "1d": 1_500}
+HISTORY_BARS = {"1m": 5_000, "1h": 43_800, "1d": 3_000}
 SYNC_EVERY_S = {"1m": 20.0, "1h": 60.0, "1d": 600.0}
 PREFERRED_SOURCES = ("V1", "V4", "V6", "V5")
 PAGE = 1_000
@@ -162,6 +167,7 @@ class CandleSync:
         self._status: dict[tuple[str, str], dict] = {}
         self._listeners = []
         self._task: asyncio.Task | None = None
+        self._backfill_task: asyncio.Task | None = None
         self._running = False
         self.ready = asyncio.Event()
 
@@ -183,15 +189,18 @@ class CandleSync:
 
     async def stop(self) -> None:
         self._running = False
-        if self._task:
-            self._task.cancel()
-            await asyncio.gather(self._task, return_exceptions=True)
+        for task in (self._task, self._backfill_task):
+            if task:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
 
     async def _run(self) -> None:
         # First fill: the long timeframes first (few requests), so every page has something soon.
         for tf in ("1d", "1h", "1m"):
             await asyncio.gather(*(self.sync(s, tf) for s in self._symbols), return_exceptions=True)
         self.ready.set()
+        # Then the older years, beside the regular loop so the newest candles keep arriving meanwhile.
+        self._backfill_task = asyncio.create_task(self._backfill_all(), name="candle-backfill")
         last_run = {tf: self._clock() for tf in TIMEFRAME_MS}
         while self._running:
             await asyncio.sleep(5)
@@ -203,6 +212,49 @@ class CandleSync:
                 if now - last_run[tf] >= (min(every, 20.0) if behind else every):
                     last_run[tf] = now
                     await asyncio.gather(*(self.sync(s, tf) for s in self._symbols), return_exceptions=True)
+
+    async def _backfill_all(self) -> None:
+        for tf in ("1d", "1h"):
+            for symbol in self._symbols:  # one coin at a time: a few hundred requests in all, kept gentle
+                try:
+                    await self.backfill(symbol, tf)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 — older history is a bonus; retried at the next start
+                    logger.warning("candle_backfill_failed", symbol=symbol, timeframe=tf, error=str(exc)[:160])
+
+    async def backfill(self, symbol: str, timeframe: str) -> int:
+        """Fetch OLDER candles until the store reaches back ``history_bars``; returns how many were added.
+
+        Only from the exchange the stored series came from, so one series never mixes two markets. An
+        exchange lists a coin from its launch: asking for earlier simply starts the answer later.
+        """
+        tf_ms = TIMEFRAME_MS[timeframe]
+        _n, first, _last, source = await asyncio.to_thread(self._store.info, symbol, timeframe)
+        if not first:
+            return 0  # nothing stored yet: the regular sync fills the newest part first
+        now_ms = int(self._clock() * 1000)
+        want_from = now_ms - now_ms % tf_ms - self._history[timeframe] * tf_ms
+        if first <= want_from + tf_ms:
+            return 0
+        adapter = self._registry.get(source) if source else next(self._adapters(symbol), None)
+        if adapter is None:
+            return 0
+        added, cursor = 0, want_from
+        while cursor < first and self._running:
+            candles = await asyncio.wait_for(
+                adapter.fetch_candles(symbol, timeframe, since_ms=cursor, limit=PAGE), timeout=30)
+            rows = [(c.ts_ms, c.open, c.high, c.low, c.close, c.volume) for c in candles if cursor <= c.ts_ms < first]
+            if not rows:
+                break  # nothing older on this exchange
+            await asyncio.to_thread(self._store.upsert, symbol, timeframe, rows, adapter.venue_id)
+            added += len(rows)
+            cursor = rows[-1][0] + tf_ms
+        if added:
+            n, first, last_ts, _src = await asyncio.to_thread(self._store.info, symbol, timeframe)
+            self._status.setdefault((symbol, timeframe), {}).update(bars=n, first_ts=first, last_ts=last_ts)
+            logger.info("candle_backfill_done", symbol=symbol, timeframe=timeframe, added=added, bars=n)
+        return added
 
     def _adapters(self, symbol: str):
         # Not filtered by ``adapter.symbols``: that list fills only once the exchange's markets have

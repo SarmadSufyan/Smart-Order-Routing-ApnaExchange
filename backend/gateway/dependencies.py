@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
-from backend.services.agents import Copilot, build_llm_client
+from backend.services.agents import Analyst, Copilot, build_llm_client
 from backend.services.algos import AlgoEngine
 from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
@@ -218,6 +218,14 @@ def init_services() -> Services:
         order_entry, order_manager, aggregator, routing_engine, registry, risk_engine, wallet_service, fund, lab,
         settings.symbol_list, research=research, store=store, mode=settings.exchange_mode, market_fee_bps=fees,
         protection_bps=settings.child_price_protection_bps, cycle_bots_on_real_money=settings.mainnet_cycle_bots,
+    )
+    # The copilot's analyst: research, techniques, forecasts, trade plans, wallet, risk, bots — read-only.
+    # The language model only words what it computed; every action still goes through a confirm.
+    copilot.attach(
+        analyst=Analyst(research, aggregator, wallet_service, risk_engine, settings.symbol_list, venues=venue_monitor,
+                        risk_monitor=risk_monitor, arbitrage=arbitrage, automation=automation,
+                        mode=settings.exchange_mode, max_suggest_usdt=settings.copilot_max_suggest_usdt),
+        automation=automation, mode=settings.exchange_mode, auto_max_usdt=settings.copilot_auto_max_usdt,
     )
 
     _services = Services(

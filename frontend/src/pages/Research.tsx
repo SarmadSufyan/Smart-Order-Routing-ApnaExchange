@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle } from '../components/shared'
 import { EquityChart, ResearchChart } from '../components/ResearchChart'
-import { fmtPrice, fmtQty, fmtUsd } from '../format'
+import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { SYMBOLS } from '../mockData'
 import { api } from '../services/api'
 import type {
   BacktestResponse, BacktestRule, BookSignals, ForecastResponse, HorizonForecast, ResearchChart as ChartData,
-  ResearchTf, ScoreboardRow, TradePlanResponse,
+  ResearchTf, ScoreboardRow, TechniqueStudy, TradePlanResponse,
 } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 
@@ -22,6 +22,8 @@ const RULES: { id: BacktestRule; label: string; hint: string; params: Record<str
   { id: 'rsi_reversion', label: 'RSI reversion', hint: 'Buy when RSI is oversold, sell when overbought (mean reversion).', params: { period: 14, buy_below: 30, sell_above: 70 } },
   { id: 'bollinger', label: 'Bollinger bands', hint: 'Reversion: buy under the lower band, sell at the middle. Breakout: the opposite.', params: { period: 20, k: 2, mode: 'reversion' } },
   { id: 'macd_cross', label: 'MACD cross', hint: 'In while MACD is above its signal line (momentum).', params: {} },
+  { id: 'momentum', label: 'Time-series momentum', hint: 'In while the price is above where it was one lookback ago (Moskowitz, Ooi & Pedersen).', params: { lookback: 168 } },
+  { id: 'donchian_breakout', label: 'Channel breakout (Turtle)', hint: 'Buy a close above the recent high, sell below the shorter recent low.', params: { period: 48, exit_period: 24 } },
   { id: 'model', label: 'Forecast model', hint: 'In while the out-of-sample forecast says P(up) > threshold.', params: { threshold: 0.55 } },
 ]
 
@@ -95,6 +97,84 @@ function ForecastCard({ f }: { f: HorizonForecast }) {
           </div>
         ))}
       </>}
+    </Card>
+  )
+}
+
+const day = (ts: number) => new Date(ts).toISOString().slice(0, 10)
+
+/** Every classic technique on the coin's whole history (years of candles): what worked after fees, what each says now. */
+function TechniquesCard({ symbol }: { symbol: string }) {
+  const [tf, setTf] = useState<ResearchTf>('1h')
+  const [study, setStudy] = useState<TechniqueStudy | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    setStudy(null)
+    setError(null)
+    api.researchTechniques(symbol, tf)
+      .then((s) => { if (live) setStudy(s) })
+      .catch((e) => { if (live) setError((e as Error).message) })
+    return () => { live = false }
+  }, [symbol, tf])
+  const verdictColor = (v: string) => (v === 'worked' ? C.green : v === 'mixed' ? C.orange : C.dim)
+  const tab = (on: boolean): React.CSSProperties => ({
+    padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: F.xs, fontWeight: 700,
+    border: `1px solid ${on ? C.blue : C.border}`, background: on ? tint(C.blue, 14) : C.surface, color: on ? C.blue : C.muted,
+  })
+  const th: React.CSSProperties = { padding: '6px 8px', fontSize: F.xs, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}` }
+  const td: React.CSSProperties = { padding: '6px 8px', borderBottom: `1px solid ${C.border}40` }
+  return (
+    <Card style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <CardTitle>TRADING TECHNIQUES ON {symbol} — WHAT WORKED AFTER FEES, WHAT EACH SAYS NOW</CardTitle>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          {(['1h', '1d'] as ResearchTf[]).map((x) => (
+            <button key={x} onClick={() => setTf(x)} style={tab(x === tf)}>{x === '1h' ? 'Hourly' : 'Daily'}</button>
+          ))}
+        </div>
+      </div>
+      {error ? <div style={{ fontSize: F.sm, color: C.red }}>{error}</div>
+        : !study ? <div style={{ fontSize: F.sm, color: C.dim }}>Testing every technique on the full history…</div>
+        : <>
+          <div style={{ fontSize: F.xs, color: C.muted, marginBottom: 8, lineHeight: 1.6 }}>
+            {study.bars.toLocaleString()} {tf === '1h' ? 'hourly' : 'daily'} candles, {day(study.from_ts)} to {day(study.to_ts)};
+            recent period from {day(study.recent_from_ts)}. Simply holding {symbol.split('/')[0]}: {fmtPct(study.hold.full.total_return)} over
+            the whole period, {fmtPct(study.hold.recent.total_return)} recently. Every trade pays {study.fee_bps} bps fee
+            + {study.slippage_bps} bps slippage.
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
+              <thead>
+                <tr>
+                  {['Technique', 'Family', 'Says now', 'Whole period', 'Recent', 'Sharpe', 'Trades', 'Verdict'].map((h, i) => (
+                    <th key={h} style={{ ...th, textAlign: i < 3 || i === 7 ? 'left' : 'right' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {study.techniques.map((r) => (
+                  <tr key={r.key} title={`${r.idea}. ${r.why}`}>
+                    <td style={{ ...td, color: C.text, fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ ...td, color: C.muted }}>{r.family}</td>
+                    <td style={{ ...td, color: r.signal === 'in' ? C.green : C.muted, fontWeight: 700 }}>
+                      {r.signal === 'in' ? 'IN' : 'OUT'}{r.fresh ? ' (new)' : ''}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', color: r.full.total_return >= 0 ? C.green : C.red }}>{fmtPct(r.full.total_return)}</td>
+                    <td style={{ ...td, textAlign: 'right', color: r.recent.total_return >= 0 ? C.green : C.red }}>{fmtPct(r.recent.total_return)}</td>
+                    <td style={{ ...td, textAlign: 'right', color: C.muted }}>{r.full.sharpe?.toFixed(2) ?? '—'}</td>
+                    <td style={{ ...td, textAlign: 'right', color: C.muted }}>{r.full.trades}</td>
+                    <td style={{ ...td, color: verdictColor(r.verdict), fontWeight: 700 }}>{r.verdict}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: F.xs, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>
+            "worked" = beat simply holding on risk-adjusted return over the whole period and recently, and made money recently.
+            {' '}{study.note}
+          </div>
+        </>}
     </Card>
   )
 }
@@ -267,6 +347,8 @@ export function Research() {
           </Card>
         </div>
       </div>
+
+      <TechniquesCard symbol={symbol} />
 
       {/* Backtest + trade plan */}
       <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, marginBottom: 12 }}>

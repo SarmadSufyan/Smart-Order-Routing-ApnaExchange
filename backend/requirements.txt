@@ -28,3 +28,6 @@ numpy==2.4.4
 # === Planned — not imported yet, kept so install stays one-shot ===
 # redis[hiredis]            # cross-process state + pub/sub (Phase 2+)
 # asyncpg / sqlalchemy      # TimescaleDB audit log (Phase 4)
+
+# Claude for the copilot (LLM_PROVIDER=claude); imported only when chosen
+anthropic==1.14.0

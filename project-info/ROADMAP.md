@@ -50,6 +50,18 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
 
+### Copilot 2 — the assistant before real money: ✅ 2026-10-15
+
+Sarmad (2026-10-15): before Phase D, the copilot must do what it is asked, use the research, suggest with reasons
+and apply trading techniques; research must use history from the internet. Decisions: Gemini **and** Claude,
+switchable; **Auto on the sandbox only**. [`COPILOT_GUIDE.md`](COPILOT_GUIDE.md).
+
+- [x] ✦ COPILOT drawer on every page: questions answered from live facts, coin analysis, orders, every execution algorithm, bots — each action confirmed; a quick analysis without any AI key.
+- [x] The analyst: pure rules on worked techniques, forecasts with an edge and the bracket's record → BUY / NO TRADE / REDUCE with reasons.
+- [x] The model fills a form and words facts — never decides, never adds numbers; code fallback when it fails.
+- [x] Auto: orders / algos ≤ `COPILOT_AUTO_MAX_USDT`, no warnings, sandbox only, never bots.
+- [ ] **Sarmad:** an AI key in `.env` (`GEMINI_API_KEY`, free) and a live chat check — the model path is unit-tested only.
+
 ### D — Real money: "done" means — rails ✅ 2026-10-12, first real orders next
 
 - [x] Mainnet keys for every exchange in `.env` (read only when `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`), never copied to the lab server.
@@ -96,6 +108,7 @@ manual trading; a **practice lab** that trades continuously on testnet and learn
 - [x] Live track record: each closed candle → a forecast written down → scored when the next candle closes.
 - [x] Backtester (next-open execution, fees, slippage, long only; 6 rules incl. the model, out-of-sample only) and a trade planner (ATR stop/target, fixed-fractional size, half-Kelly cap, the exact bracket replayed on history vs its break-even win rate).
 - [x] Research & Forecasts page; live on real data (journal 2026-10-08).
+- [x] 2026-10-15: **5 years of hourly, ~8 years of daily** candles (background backfill from the exchanges' public data); **technique study** — six classic techniques with textbook settings vs holding, after fees, whole history and recently (`research/techniques.py`); 8 backtest rules (+ momentum, channel breakout).
 
 ### A — All algorithms: "done" means
 

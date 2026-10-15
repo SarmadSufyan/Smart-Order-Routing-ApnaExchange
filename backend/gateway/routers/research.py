@@ -33,7 +33,7 @@ class BacktestRequest(BaseModel):
     timeframe: Timeframe = "1h"
     strategy: Literal["buy_hold", "sma_cross", "rsi_reversion", "bollinger", "macd_cross", "model"] = "sma_cross"
     params: dict = Field(default_factory=dict, examples=[{"fast": 20, "slow": 50}])
-    bars: int = Field(5_000, ge=300, le=5_000, description="How many past candles to test on")
+    bars: int = Field(5_000, ge=300, le=50_000, description="How many past candles to test on (up to 5 years of hours)")
     capital: float = Field(1_000, gt=0)
     fee_bps: float | None = Field(None, ge=0, le=100, description="Default: the reference exchange's taker fee")
     slippage_bps: float | None = Field(None, ge=0, le=100)
@@ -79,6 +79,13 @@ async def chart(user: Annotated[User, Depends(get_current_user)], symbol: str = 
 async def orderbook(user: Annotated[User, Depends(get_current_user)], symbol: str = Query(...)):
     """Live order-book signals: imbalance near the price, microprice, depth, spread."""
     return await _call(_research().orderbook(symbol))
+
+
+@router.get("/techniques")
+async def technique_study(user: Annotated[User, Depends(get_current_user)], symbol: str = Query(...),
+                          timeframe: Timeframe = "1h"):
+    """Every classic technique on the coin's whole stored history: what worked after fees, what each says now."""
+    return await _call(_research().techniques(symbol, timeframe))
 
 
 @router.post("/backtest")

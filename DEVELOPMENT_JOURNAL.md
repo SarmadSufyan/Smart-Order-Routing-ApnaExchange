@@ -1939,3 +1939,81 @@ this network: the known DNS issue); the Dashboard shows SANDBOX, Depth Sweep and
 `routers/auth.py`, `routers/venues.py`, `services/automation/engine.py`, `fund.py`, `lab.py`, `services/wallet/pnl.py`,
 `shared/models/arbitrage.py`; test `test_api/test_logins.py`. Docs: supervisor corrected to Sir Shamaail Jafri
 (CLAUDE.md, project-info/README.md).
+
+---
+
+## 2026-10-15 — Copilot 2: an assistant with an analyst; years of history; a technique study
+
+**What.** Before joining real exchanges with real money (Phase D), Sarmad asked whether the copilot is ready:
+does it do what it is asked, learn from the research, suggest things intelligently, apply trading techniques —
+and can research use historical data from the internet and predict from it. Checked honestly, the answer was
+*partly*: the copilot (2026-10-04) turned one sentence into a market order or a TWAP and nothing else — no
+questions, no analysis, no other algorithm, no bots, no screen (Mahnoor's drawer stayed on the retired branch);
+research held ~7 months of hours and ~4 years of days. Built:
+
+1. **Deep history.** `HISTORY_BARS` 1h 5,000 → **43,800 (5 years)**, 1d 1,500 → **3,000 (~8 years)**, from the
+   exchanges' public candles (no key). The newest candles still come first so forecasts work within a minute;
+   `CandleSync.backfill` then walks back in time, one coin at a time, in the background. Live: ~90 s for all five
+   coins, 43,799 hours and 3,000 days each (BTC daily from 2018).
+2. **Technique study** (`research/techniques.py`). Six textbook techniques — MA trend, time-series momentum
+   (Moskowitz–Ooi–Pedersen), MACD, channel breakout (Donchian / Turtles), RSI and Bollinger reversion — run through
+   the existing backtester (next-open fills, fee + slippage) on the whole history and the recent period, judged
+   against simply holding on Sharpe after costs: worked / mixed / didn't work / too few trades, plus what each says
+   now. Two rules added to the backtester for it (`momentum`, `donchian_breakout`).
+3. **The analyst** (`agents/analyst.py`). Pure rules turn the evidence into BUY / NO TRADE / REDUCE: a technique
+   counts only if it *worked*, a forecast only with a proven edge, the stop/target bracket by its record after
+   fees. BUY needs score ≥ 2, a working technique saying "in" and a bracket that isn't a loser; confidence is never
+   "high". It also gathers the facts for every question topic (market, portfolio, risk, research, techniques,
+   arbitrage, bots, system).
+4. **Copilot 2** (`agents/copilot.py`, rewritten). The model fills a strict form (now: order, TWAP, any algorithm,
+   analyse, question, start a bot); code builds the action or gathers the facts; for answers a second call words
+   the facts under strict rules (no numbers of its own, never upgrade the verdict) — and if the model fails, code
+   words them. A short memory (4 turns) makes follow-ups work. Every action still waits for Confirm, then goes
+   through `OrderEntry` / the algo engine / the bots.
+5. **Model switchable** (Sarmad: "both"). Gemini stays the free default; Claude through the official SDK
+   (`anthropic==1.14.0`, structured JSON output, a refusal fallback). **Auto, sandbox only** (Sarmad's choice): a
+   proposed order or algorithm ≤ $50 with no warnings runs without the click; never real money, never bots.
+6. **Screens.** The ✦ COPILOT drawer on every page (conversation kept while moving between pages; a quick analysis
+   with no AI key at all); the Research page's technique table (hourly / daily).
+
+**Why these choices.**
+- *The language model never decides.* It reads the request and words the result; the verdict comes from pure,
+  tested rules on our own measurements. A model that "predicts" would be unverifiable and the panel would ask how
+  we know it is right; our rules can be replayed and every number traced.
+- *Textbook settings, all techniques shown.* Tuning parameters per coin would fit the past; showing only winners
+  would be cherry-picking. Six fixed rules, losers included, and "worked" must hold over the whole history *and*
+  recently.
+- *Forecasts still train on the newest window* (5,000 hours / 1,500 days): five-year-old market regimes would
+  dilute a model meant for the next hour; the long history serves the technique study and backtests.
+- *Analysis without the model.* The verdict and its reasons don't need a language model, so the quick analysis
+  works with no key, and a failed model call never loses the answer.
+- *Auto limited to the sandbox and small amounts.* Sandbox practice benefits from fewer clicks; real money keeps a
+  person on every action (rule 2), and bots move money into the fund, so they always ask.
+
+**Found while building.**
+- *The machine's environment already had `CLAUDE_EFFORT=xhigh` and `ANTHROPIC_BASE_URL`* (set by developer
+  tools). Settings named `CLAUDE_*` would have picked them up — `xhigh` broke the settings at start — and the SDK
+  would have followed the base URL. Fixed: our settings are `COPILOT_CLAUDE_*`, and the client pins
+  `https://api.anthropic.com`.
+- *The lab server installs from `requirements.lock`*, which doesn't list the new SDK: it is imported only when
+  `LLM_PROVIDER=claude`, and the one test that needs it is skipped where it isn't installed.
+
+**Results on real data (2026-10-15).** BTC hourly, 5 years: every technique lost after 0.12 % per trade (MACD
+−97.5 % over 1,655 trades; MA trend −68.5 %; holding +33.8 %). BTC daily, ~8 years: the MA trend worked; momentum,
+MACD, breakout mixed; RSI and Bollinger reversion didn't work. The analyst on BTC: **NO TRADE** — the working daily
+trend (+1) is cancelled by the hourly bracket (−1: 32 % wins on 4,898 past hours vs 45 % needed); no forecast edge.
+The honest lesson again: fees decide, and the tool says "no" when the evidence says no.
+
+**Verified.** 42 new tests (529): technique verdicts and study on synthetic series, backfill with a stand-in
+exchange, analyst rules (BUY / NO TRADE / REDUCE, caps, confidence), the Claude client against a stand-in SDK
+(request shape, schema conversion, refusals, error messages without the key), copilot 2 (answers, analysis, every
+algorithm, bots, fallback wording, memory, Auto only in the sandbox and under the cap). Live: backfill, technique
+table, quick analysis in the drawer. **Not verified live: the chat with a model** — no AI key on this laptop.
+
+**Files.** Backend: `services/research/backtest.py`, `techniques.py` (new), `candles.py`, `service.py`;
+`services/agents/analyst.py` (new), `llm.py`, `copilot.py`, `__init__.py`; `shared/models/copilot.py`;
+`gateway/config.py`, `dependencies.py`, `routers/copilot.py`, `routers/research.py`; `requirements.txt`;
+`.env.example`. Tests: `test_research/test_techniques.py`, `test_copilot/test_analyst.py`, `test_claude.py`,
+`test_copilot_v2.py`. Frontend: `components/CopilotPanel.tsx` (new), `AppShell.tsx`, `pages/Research.tsx`,
+`services/api.ts`, `format.ts`. Docs: `project-info/COPILOT_GUIDE.md` (new), `RESEARCH_GUIDE.md`, `CLAUDE.md`,
+`PROGRESS.md`, `ROADMAP.md`.

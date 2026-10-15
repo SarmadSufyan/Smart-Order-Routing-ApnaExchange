@@ -18,7 +18,8 @@ import numpy as np
 from backend.shared.utils.logger import get_logger
 
 from . import backtest as bt
-from .candles import TIMEFRAME_MS, CandleStore, CandleSync
+from . import techniques
+from .candles import HISTORY_BARS, TIMEFRAME_MS, CandleStore, CandleSync
 from .indicators import atr, bollinger, ewma_vol, log_returns, macd, rsi, sma
 from .model import (
     WARMUP,
@@ -91,6 +92,7 @@ class ResearchService:
         # The practice lab's measured slippage (bps, orders) per coin, once it has enough of our own orders.
         self._measured: Callable[[str], tuple[float, int] | None] | None = None
         self._models: dict[tuple[str, str], ModelState] = {}
+        self._studies: dict[tuple[str, str], tuple[tuple, dict]] = {}  # technique studies by their candles
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     def set_cost_source(self, measured: Callable[[str], tuple[float, int] | None] | None) -> None:
@@ -387,7 +389,7 @@ class ResearchService:
         symbol = self._check_symbol(symbol)
         if strategy not in bt.STRATEGIES:
             raise ResearchUnavailableError(f"Unknown rule {strategy}; one of {', '.join(bt.STRATEGIES)}")
-        data = await self._load(symbol, tf, max(MIN_BARS, min(bars, MODEL_BARS[tf])))
+        data = await self._load(symbol, tf, max(MIN_BARS, min(bars, HISTORY_BARS[tf])))
         fee = self._fee_bps if fee_bps is None else fee_bps
         slip, slip_source = self._slippage(symbol) if slippage_bps is None else (slippage_bps, "set by you")
 
@@ -409,6 +411,23 @@ class ResearchService:
                              "on every trade. Past results don't predict future ones.")}
 
         return await asyncio.to_thread(run)
+
+    async def techniques(self, symbol: str, tf: str) -> dict:
+        """Every classic technique on this coin's whole stored history: what worked, what each says now."""
+        symbol = self._check_symbol(symbol)
+        if tf not in TIMEFRAME_MS:
+            raise ResearchUnavailableError(f"Unknown timeframe {tf}; one of {', '.join(TIMEFRAME_MS)}")
+        data = await self._load(symbol, tf, HISTORY_BARS[tf], minimum=techniques.WARMUP + 100)
+        key = (symbol, tf, int(data["ts"][-1]), len(data["ts"]))
+        if (hit := self._studies.get((symbol, tf))) and hit[0] == key:
+            return hit[1]  # same candles as last time: the study can't have changed
+        slip, slip_source = self._slippage(symbol)
+        out = await asyncio.to_thread(techniques.study, data["ts"], data["open"], data["close"], tf,
+                                      self._fee_bps, slip)
+        out = {"symbol": symbol, "timeframe": tf, "fee_bps": self._fee_bps, "slippage_bps": slip,
+               "slippage_source": slip_source, **out}
+        self._studies[(symbol, tf)] = (key, out)
+        return out
 
     async def trade_plan(self, symbol: str, tf: str, equity: float, risk_pct: float, k_atr: float, rr: float,
                          max_bars: int) -> dict:

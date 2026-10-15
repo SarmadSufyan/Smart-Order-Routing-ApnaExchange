@@ -180,10 +180,20 @@ class Settings(BaseSettings):
     # ─── LLM copilot ──────────────────────────────────────────────
     # The model only turns a sentence into order parameters; it never sees
     # exchange keys and never submits anything. "off" disables the copilot.
-    llm_provider: Literal["gemini", "off"] = "gemini"
+    llm_provider: Literal["gemini", "claude", "off"] = "gemini"
     gemini_api_key: SecretStr | None = None  # free key from Google AI Studio
     gemini_model: str = "gemini-3.1-flash-lite"  # fast + on the free tier (2026-10-02)
+    # Claude (paid per use, stronger reasoning): LLM_PROVIDER=claude + your own key from console.anthropic.com.
+    # Own names (COPILOT_CLAUDE_*), not ANTHROPIC_API_KEY / CLAUDE_*: tools on a developer's machine set those
+    # in the environment (found 2026-10-15: CLAUDE_EFFORT=xhigh), and the gateway must not pick them up.
+    copilot_claude_api_key: SecretStr | None = None
+    copilot_claude_model: str = "claude-opus-5-5"
+    copilot_claude_effort: Literal["low", "medium", "high"] = "low"  # reading requests and wording answers
     llm_timeout_s: float = 30.0
+    # Copilot actions. In the SANDBOX an order or algorithm the copilot proposes may run without a click when
+    # the trader turns Auto on and it is at most this big; with real money every action waits for a click.
+    copilot_auto_max_usdt: float = 50.0
+    copilot_max_suggest_usdt: float = 100.0  # the most a copilot trade suggestion is sized to
     copilot_proposal_ttl_s: float = 120.0  # a proposal not confirmed in time expires
     # Confirm refuses if the mid moved further than this since the proposal:
     # the trader agreed to a price, not to whatever the market does next.

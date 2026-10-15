@@ -39,6 +39,13 @@ export function spreadBps(bid: number, ask: number): number {
   return mid > 0 ? ((ask - bid) / mid) * 10_000 : 0
 }
 
+/** A fraction as a signed percent: 0.123 -> +12.3%, -0.05 -> -5.0%. */
+export function fmtPct(v: number | null | undefined, digits = 1): string {
+  if (v === null || v === undefined || !isFinite(v)) return '—'
+  const fixed = (v * 100).toFixed(digits)
+  return (Number(fixed) > 0 ? '+' : '') + (Number(fixed) === 0 ? (0).toFixed(digits) : fixed) + '%'
+}
+
 /** Signed basis points: +0.6 bps / -19.7 bps (1 bps = 0.01%). */
 export function fmtBps(v: number | null | undefined, digits = 1): string {
   if (v === null || v === undefined || !isFinite(v)) return '—'

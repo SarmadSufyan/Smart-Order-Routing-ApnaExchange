@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { ConnDot } from './shared'
+import { CopilotPanel } from './CopilotPanel'
 import { useAuthStore } from '../stores/authStore'
 import { useDataStore } from '../stores/dataStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -48,6 +49,7 @@ export function AppShell() {
   const isDrawer  = useMediaQuery(MQ.narrow)
   const isCompact = useMediaQuery(MQ.compact)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [copilotOpen, setCopilotOpen] = useState(false)
   const { pathname } = useLocation()
 
   // Close the menu after picking a page, and when the screen grows past drawer width.
@@ -214,6 +216,19 @@ export function AppShell() {
 
           {!isDrawer && themeButton}
 
+          {/* The copilot: ask, analyze, propose — every action waits for a confirm */}
+          <button
+            onClick={() => setCopilotOpen((o) => !o)}
+            aria-expanded={copilotOpen}
+            style={{
+              padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
+              border: `1px solid ${C.blue}`, background: copilotOpen ? C.blue : tint(C.blue, 12),
+              color: copilotOpen ? '#fff' : C.blue, fontSize: F.xs, letterSpacing: '.08em', fontWeight: 700, whiteSpace: 'nowrap',
+            }}
+          >
+            ✦ COPILOT
+          </button>
+
           {/* Kill switch button */}
           <button
             onClick={() => navigate('/killswitch')}
@@ -334,6 +349,9 @@ export function AppShell() {
         <main style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: isPhone ? 12 : isDrawer ? 16 : 24, background: C.bg }}>
           <Outlet />
         </main>
+
+        {/* Stays mounted while you move between pages, so the conversation is kept */}
+        <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} top={isDrawer ? 0 : 53} />
 
       </div>
     </div>

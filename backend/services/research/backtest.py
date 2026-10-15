@@ -12,16 +12,23 @@ Rules (each a classic, with the trader who made it famous in the guide):
     bollinger   (period, k, mode)     reversion: buy below the lower band, sell at the middle;
                                       breakout: buy above the upper band, sell below the middle
     macd_cross                        in while MACD > its signal line                      momentum
+    momentum    (lookback)            in while the close is above the close `lookback` bars ago
+                                      (time-series momentum, Moskowitz, Ooi & Pedersen 2012)
+    donchian_breakout (period, exit_period)  buy a close above the highest close of the last `period`
+                                      bars, sell a close below the lowest of the last `exit_period`
+                                      (the Turtle Traders' channel breakout)                breakout
     model       (threshold)           in while the walk-forward forecast says P(up) > threshold
 """
 
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 
 from .indicators import bollinger, macd, max_drawdown, rsi, sma
 
-STRATEGIES = ("buy_hold", "sma_cross", "rsi_reversion", "bollinger", "macd_cross", "model")
+STRATEGIES = ("buy_hold", "sma_cross", "rsi_reversion", "bollinger", "macd_cross", "momentum", "donchian_breakout",
+              "model")
 BARS_PER_YEAR = {"1m": 525_600, "1h": 8_760, "1d": 365}
 
 
@@ -59,6 +66,26 @@ def positions(strategy: str, params: dict, close, probs=None) -> np.ndarray:
                     state = 1.0 if c[i] > upper[i] else 0.0 if c[i] < mid[i] else state
                 else:
                     state = 1.0 if c[i] < lower[i] else 0.0 if c[i] > mid[i] else state
+            pos[i] = state
+    elif strategy == "momentum":
+        lb = int(params.get("lookback", 24))
+        if 0 < lb < n:
+            pos[lb:] = np.where(c[lb:] > c[:-lb], 1.0, 0.0)
+    elif strategy == "donchian_breakout":
+        n_in = int(params.get("period", 20))
+        n_out = int(params.get("exit_period", max(2, n_in // 2)))
+        hi, lo = np.full(n, np.nan), np.full(n, np.nan)
+        if n > n_in:  # hi[i] = highest close of the n_in bars BEFORE i (the channel the close breaks out of)
+            hi[n_in:] = sliding_window_view(c, n_in)[: n - n_in].max(axis=1)
+        if n > n_out:
+            lo[n_out:] = sliding_window_view(c, n_out)[: n - n_out].min(axis=1)
+        state = 0.0
+        for i in range(n):
+            if not np.isnan(hi[i]):
+                if state == 0 and c[i] > hi[i]:
+                    state = 1.0
+                elif state == 1 and not np.isnan(lo[i]) and c[i] < lo[i]:
+                    state = 0.0
             pos[i] = state
     elif strategy == "model":
         if probs is None:

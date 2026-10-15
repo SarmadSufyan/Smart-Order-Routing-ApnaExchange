@@ -330,7 +330,53 @@ export interface BookSignals {
   note?: string
 }
 
-export type BacktestRule = 'buy_hold' | 'sma_cross' | 'rsi_reversion' | 'bollinger' | 'macd_cross' | 'model'
+export type BacktestRule = 'buy_hold' | 'sma_cross' | 'rsi_reversion' | 'bollinger' | 'macd_cross' | 'momentum'
+  | 'donchian_breakout' | 'model'
+
+// ── Technique study (GET /api/research/techniques) ──────────────
+export interface TechniqueStats {
+  total_return: number; buy_hold_return: number; sharpe: number | null; max_drawdown: number
+  trades: number; win_rate: number | null; exposure: number; start_ts: number; end_ts: number
+}
+export interface TechniqueRow {
+  key: string; name: string; family: string; idea: string; strategy: string; params: Record<string, unknown>
+  signal: 'in' | 'out'; fresh: boolean; verdict: 'worked' | 'mixed' | "didn't work" | 'too few trades'; why: string
+  full: TechniqueStats; recent: TechniqueStats
+}
+export interface TechniqueStudy {
+  symbol: string; timeframe: ResearchTf; fee_bps: number; slippage_bps: number; slippage_source: string
+  bars: number; from_ts: number; to_ts: number; recent_from_ts: number
+  hold: { full: TechniqueStats; recent: TechniqueStats }
+  techniques: TechniqueRow[]; worked_in: string[]; worked_out: string[]; note: string
+}
+
+// ── Copilot (/api/copilot/*) ────────────────────────────────────
+export interface CopilotStatus {
+  available: boolean; provider: string; model: string | null; reason: string | null
+  environment: string; auto_allowed: boolean; auto_max_usdt: number; analysis_available: boolean
+}
+export interface AnalysisCard {
+  symbol: string; verdict: 'BUY' | 'NO_TRADE' | 'REDUCE'; confidence: string; score: number; summary: string
+  for: string[]; against: string[]; notes: string[]; disclaimer: string
+  trade: { side: string; quantity?: number; entry?: number; stop?: number; target?: number;
+           notional_usdt?: number; holding_value_usdt?: number } | null
+  techniques?: { name: string; family: string; verdict: string; signal: string; return_full: number;
+                 return_recent: number; why: string }[]
+  hold_return_recent?: number | null
+  study_note?: string | null
+  overview?: { symbol: string; verdict: string; score: number; summary: string }[]
+}
+export type CopilotTurnStatus = 'PROPOSED' | 'ANSWERED' | 'CLARIFY' | 'REFUSED' | 'CONFIRMED' | 'FAILED'
+  | 'CANCELLED' | 'EXPIRED'
+export interface CopilotTurn {
+  id: string; status: CopilotTurnStatus; text: string; message: string
+  kind: 'order' | 'twap' | 'algo' | 'bot' | null
+  answer: string | null; analysis: AnalysisCard | null; topic: string | null
+  warnings: string[]; conversion: string | null; estimated_notional_usdt: number | null
+  expires_at: string | null; auto: boolean; auto_executed: boolean; model: string | null
+  result_message: string | null; result_order_id: string | null; result_algo_id: string | null
+  result_bot_id: string | null
+}
 
 export interface BacktestResponse {
   symbol: string; timeframe: ResearchTf; strategy: BacktestRule; params: Record<string, unknown>
@@ -1066,6 +1112,19 @@ export const api = {
 
   getResearchOrderbook: (symbol: string) =>
     request<BookSignals>(`/api/research/orderbook?symbol=${encodeURIComponent(symbol)}`),
+
+  researchTechniques: (symbol: string, timeframe: ResearchTf) =>
+    request<TechniqueStudy>(`/api/research/techniques?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`),
+
+  copilotStatus: () => request<CopilotStatus>('/api/copilot/status'),
+  copilotPropose: (text: string, auto: boolean) =>
+    request<CopilotTurn>('/api/copilot/propose', { method: 'POST', body: JSON.stringify({ text, auto }) }),
+  copilotConfirm: (proposalId: string) =>
+    request<CopilotTurn>('/api/copilot/confirm', { method: 'POST', body: JSON.stringify({ proposal_id: proposalId }) }),
+  copilotCancel: (proposalId: string) =>
+    request<CopilotTurn>('/api/copilot/cancel', { method: 'POST', body: JSON.stringify({ proposal_id: proposalId }) }),
+  copilotAnalysis: (symbol: string) =>
+    request<AnalysisCard>(`/api/copilot/analysis?symbol=${encodeURIComponent(symbol)}`),
 
   runBacktest: (req: { symbol: string; timeframe: ResearchTf; strategy: BacktestRule; params: Record<string, unknown>;
                        bars?: number; capital?: number; fee_bps?: number | null; slippage_bps?: number | null }) =>
