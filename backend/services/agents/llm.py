@@ -17,8 +17,12 @@ import httpx
 from pydantic import SecretStr
 
 from backend.shared.exceptions import DomainError
+from backend.shared.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_RETRIES = 1  # extra attempts after a timeout or a 5xx answer
 
 
 class LLMError(DomainError):
@@ -26,6 +30,14 @@ class LLMError(DomainError):
 
     def __init__(self, message: str):
         super().__init__(message, "LLM_UNAVAILABLE")
+
+
+class _Retryable(Exception):
+    """A failure worth one more attempt (the service was slow or briefly down)."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
 
 
 class LLMClient(Protocol):
@@ -187,6 +199,18 @@ class GeminiClient:
         self._transport = transport  # tests inject httpx.MockTransport
 
     async def extract_json(self, system: str, user_text: str, schema: dict) -> str:
+        # The free tier now and then stalls or answers 5xx for one request (seen live 2026-10-15: one of
+        # eight requests timed out, the same text answered in 4 s right after) — one retry hides that.
+        for attempt in range(1 + GEMINI_RETRIES):
+            try:
+                return await self._extract_once(system, user_text, schema)
+            except _Retryable as exc:
+                if attempt == GEMINI_RETRIES:
+                    raise LLMError(exc.message) from exc
+                logger.info("gemini_retry", reason=exc.message)
+        raise AssertionError("unreachable")
+
+    async def _extract_once(self, system: str, user_text: str, schema: dict) -> str:
         # The key travels in a header, never in the URL, so it can't end up in
         # an exception message or a log line.
         headers = {"x-goog-api-key": self._key.get_secret_value()}
@@ -195,10 +219,12 @@ class GeminiClient:
                 resp = await client.post(GEMINI_URL.format(model=self.model), headers=headers,
                                          json=gemini_request_body(system, user_text, schema))
         except httpx.TimeoutException as exc:
-            raise LLMError("The AI service took too long to answer — try again") from exc
+            raise _Retryable("The AI service took too long to answer — try again") from exc
         except httpx.HTTPError as exc:
             raise LLMError(f"Could not reach the AI service ({type(exc).__name__})") from exc
 
+        if resp.status_code in (500, 502, 503, 504):
+            raise _Retryable(f"The AI service answered HTTP {resp.status_code}")
         if resp.status_code == 429:
             raise LLMError("The AI service's free-tier limit was reached — try again in a minute")
         if resp.status_code in (401, 403):

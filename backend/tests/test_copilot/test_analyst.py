@@ -2,7 +2,7 @@
 
 import unittest
 
-from backend.services.agents.analyst import MIN_ORDER_USDT, decide
+from backend.services.agents.analyst import MIN_ORDER_USDT, decide, exchange_name
 
 
 def study(worked_in=(), worked_out=()):
@@ -68,6 +68,12 @@ class DecideTest(unittest.TestCase):
         self.assertEqual(d["verdict"], "NO_TRADE")
         self.assertTrue(any("still downloading" in n for n in d["notes"]))
         self.assertIn("not a promise", d["disclaimer"])
+
+
+class ExchangeNameTest(unittest.TestCase):
+    def test_traders_see_exchange_names_not_our_ids(self) -> None:
+        self.assertEqual((exchange_name("V1"), exchange_name("V4")), ("Binance", "Bybit"))
+        self.assertEqual((exchange_name("V9"), exchange_name(None)), ("V9", None))
 
 
 if __name__ == "__main__":

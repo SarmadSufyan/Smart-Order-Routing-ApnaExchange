@@ -18,6 +18,7 @@ Confidence is "low" or "medium", never "high": everything here is a probability 
 ``decide`` is pure (tested directly); ``Analyst`` only gathers its inputs from the running services.
 """
 
+from backend.exchanges.registry import EXCHANGE_CATALOG
 from backend.services.research.service import ResearchUnavailableError
 from backend.shared.models.market_data import split_symbol
 from backend.shared.utils.logger import get_logger
@@ -29,6 +30,12 @@ MIN_ORDER_USDT = 6.0  # under this, no exchange takes the order (Binance / Bybit
 DISCLAIMER = ("A suggestion from rules measured on past data, not a promise or financial advice: prices can move "
               "against any of these signals.")
 TOPICS = ("market", "portfolio", "risk", "research", "techniques", "arbitrage", "bots", "system")
+_EXCHANGE_NAMES = {spec.venue_id: spec.name for spec in EXCHANGE_CATALOG.values()}
+
+
+def exchange_name(venue_id: str | None) -> str | None:
+    """'V4' -> 'Bybit': a trader knows the exchange, not our internal id."""
+    return _EXCHANGE_NAMES.get(venue_id or "", venue_id)
 
 
 def _pct(x: float | None, digits: int = 1) -> str:
@@ -114,9 +121,9 @@ def decide(symbol: str, forecast: dict | None, tech_1h: dict | None, tech_1d: di
         trade = {"side": "SELL", "symbol": symbol, "holding_value_usdt": round(holding_value_usdt, 2)}
 
     summary = {
-        "BUY": f"BUY {base}: {len(pros)} pieces of evidence for, {len(cons)} against (score {score:+d})",
-        "REDUCE": f"REDUCE {base}: the evidence leans against holding it (score {score:+d})",
-        "NO_TRADE": f"No trade in {base} now: the evidence is too thin or mixed (score {score:+d})",
+        "BUY": f"BUY {base}: {len(pros)} pieces of evidence for, {len(cons)} against (evidence {score:+d})",
+        "REDUCE": f"REDUCE {base}: the evidence leans against holding it (evidence {score:+d})",
+        "NO_TRADE": f"No trade in {base} now: the evidence is too thin or mixed (evidence {score:+d})",
     }[verdict]
     return {"symbol": symbol, "verdict": verdict, "confidence": confidence, "score": score, "summary": summary,
             "for": pros, "against": cons, "notes": notes, "trade": trade, "disclaimer": DISCLAIMER}
@@ -215,10 +222,12 @@ class Analyst:
                 if nbbo and nbbo.best_bid and nbbo.best_ask:
                     mid = (nbbo.best_bid + nbbo.best_ask) / 2
                     rows.append({"symbol": s, "mid": round(mid, 6), "best_bid": nbbo.best_bid,
-                                 "best_bid_venue": nbbo.best_bid_venue, "best_ask": nbbo.best_ask,
-                                 "best_ask_venue": nbbo.best_ask_venue,
+                                 "best_bid_exchange": exchange_name(nbbo.best_bid_venue), "best_ask": nbbo.best_ask,
+                                 "best_ask_exchange": exchange_name(nbbo.best_ask_venue),
                                  "spread_bps": round((nbbo.best_ask - nbbo.best_bid) / mid * 1e4, 2)})
-            out = {"quotes": rows}
+            out: dict = {"quotes": rows}
+            if not rows:  # the feeds connect in the first seconds after a start
+                out["note"] = "No live order book yet: the exchanges' feeds are still connecting. Ask again shortly."
             if symbol:
                 book = await self._safe(self._research.orderbook(symbol), "order book")
                 if book and book.get("available"):
@@ -247,7 +256,10 @@ class Analyst:
             return {"forecasts": {s: compact_forecast(await self._safe(self._research.forecast(s), "forecast"))
                                   for s in symbols}}
         if topic == "techniques":
-            return {"studies": {s: compact_study(await self._safe(self._research.techniques(s, "1h"), "techniques"))
+            return {"studies": {s: {"hourly": compact_study(await self._safe(self._research.techniques(s, "1h"),
+                                                                             "techniques 1h")),
+                                    "daily": compact_study(await self._safe(self._research.techniques(s, "1d"),
+                                                                            "techniques 1d"))}
                                 for s in symbols}}
         if topic == "arbitrage" and self._arbitrage is not None:
             st = self._arbitrage.status()

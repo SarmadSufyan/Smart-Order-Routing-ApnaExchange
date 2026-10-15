@@ -33,7 +33,7 @@ function Verdict({ a }: { a: AnalysisCard }) {
     <div style={{ border: `1px solid ${tint(color, 45)}`, borderRadius: 4, padding: 8, marginTop: 8, background: tint(color, 5) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, color, fontSize: F.base }}>{a.verdict.replace('_', ' ')} {a.symbol.split('/')[0]}</span>
-        <span style={{ fontSize: F.xs, color: C.muted }}>confidence {a.confidence} · score {a.score > 0 ? '+' : ''}{a.score}</span>
+        <span style={{ fontSize: F.xs, color: C.muted }}>evidence {a.score > 0 ? '+' : ''}{a.score} · confidence {a.confidence}</span>
       </div>
       {t && t.stop !== undefined && (
         <div style={{ fontSize: F.xs, color: C.text, marginTop: 4 }}>
@@ -164,7 +164,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
         {entries.length === 0 && (
           <div style={{ fontSize: F.sm, color: C.muted, lineHeight: 1.6 }}>
             Ask about a coin, your portfolio, risk, the research or a trading idea; or tell it to trade
-            ({available ? 'it proposes, you confirm' : 'needs an AI key — the quick analysis below works without one'}).
+            ({!status || available ? 'it proposes, you confirm' : 'needs an AI key — the quick analysis below works without one'}).
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
               {EXAMPLES.map((ex) => (
                 <button key={ex} disabled={!available || busy} onClick={() => send(ex)}
@@ -227,7 +227,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
         )}
         <form onSubmit={(ev) => { ev.preventDefault(); send(text) }} style={{ display: 'flex', gap: 6 }}>
           <input value={text} onChange={(ev) => setText(ev.target.value)} disabled={!available || busy} maxLength={500}
-                 placeholder={available ? 'Ask or instruct… e.g. "should I buy SOL?"' : 'Add an AI key in .env to chat'}
+                 placeholder={!status ? 'Connecting…' : available ? 'Ask or instruct… e.g. "should I buy SOL?"' : 'Add an AI key in .env to chat'}
                  style={{ flex: 1, padding: '8px 10px', borderRadius: 4, background: C.bg, border: `1px solid ${C.border}`,
                           color: C.text, fontFamily: 'inherit', fontSize: F.sm, outline: 'none' }} />
           <button type="submit" disabled={!available || busy || !text.trim()} style={button(C.blue)}>{busy ? '…' : 'Send'}</button>

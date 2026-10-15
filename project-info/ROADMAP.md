@@ -60,7 +60,7 @@ switchable; **Auto on the sandbox only**. [`COPILOT_GUIDE.md`](COPILOT_GUIDE.md)
 - [x] The analyst: pure rules on worked techniques, forecasts with an edge and the bracket's record → BUY / NO TRADE / REDUCE with reasons.
 - [x] The model fills a form and words facts — never decides, never adds numbers; code fallback when it fails.
 - [x] Auto: orders / algos ≤ `COPILOT_AUTO_MAX_USDT`, no warnings, sandbox only, never bots.
-- [ ] **Sarmad:** an AI key in `.env` (`GEMINI_API_KEY`, free) and a live chat check — the model path is unit-tested only.
+- [x] Live chat check with Gemini (2026-10-15): ~20 requests across every kind; wording fixes (pre-formatted facts, exchange names), one retry on a timeout. Claude: unit-tested only.
 
 ### D — Real money: "done" means — rails ✅ 2026-10-12, first real orders next
 

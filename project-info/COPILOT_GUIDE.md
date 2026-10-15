@@ -1,8 +1,10 @@
 # Copilot — guide
 
-> **Status (2026-10-15):** built and tested (529 backend tests). The model-free quick analysis is verified live on
-> real data. The chat needs an AI key in `.env` (Gemini free, or Claude paid); no key existed on the development
-> laptop, so the language-model path is verified with unit tests and the SDK's own request types.
+> **Status (2026-10-15):** built, tested (534 backend tests) and **checked live with Gemini** (`gemini-3.1-flash-lite`,
+> free tier): prices, portfolio, risk, techniques, arbitrage, coin analyses and follow-ups answered from the live
+> facts; orders, TWAP, VWAP, implementation shortfall, POV, iceberg and a profit-cycle bot proposed correctly
+> (also from Roman Urdu); an "ignore your rules" request still waited for Confirm. The chat needs an AI key in
+> `.env` (Gemini free, or Claude paid). Claude is verified with unit tests only (no key on the laptop).
 
 ## 1. What it does, in one line each
 
@@ -62,6 +64,14 @@ Forecasts** page.
   which lost on 4,898 past hours (32% wins vs 45% needed after fees); neither forecast has a proven edge.
 
 That is the point of the design: it says "no" when the evidence says no.
+
+**The live chat check (Gemini, 2026-10-15)** found wording problems, fixed in code rather than with more
+instructions: the model quoted raw numbers ("4.9473690999999995 BNB", a return of "-0.493302" that was really
+−49.3 %), internal exchange ids ("V4") and called real-market prices "sandbox data". Now the facts reach the model
+**already formatted** (`readable_facts`: $ prices, % returns, exchange names) with the environment spelled out
+("only orders and balances are sandbox"); "score" reaches it as "evidence_points" (it had written "a confidence
+score of −2"). One request in about twenty timed out on the free tier: the client now retries once after a
+timeout or a 5xx (not after a refused key). Answers take 2–20 s.
 
 ## 4. History from the internet
 

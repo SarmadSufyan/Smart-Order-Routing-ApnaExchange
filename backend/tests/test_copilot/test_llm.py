@@ -80,6 +80,31 @@ class GeminiClientTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(LLMError, "Could not reach"):
             await client(down).extract_json("RULES", "hi", {})
 
+    async def test_one_retry_after_a_timeout_or_a_5xx_but_not_after_a_4xx(self) -> None:
+        for first in ("timeout", 503):
+            with self.subTest(first=first):
+                calls: list[int] = []
+
+                def flaky(request, first=first, calls=calls):
+                    calls.append(1)
+                    if len(calls) == 1:
+                        if first == "timeout":
+                            raise httpx.ReadTimeout("slow", request=request)
+                        return httpx.Response(first, json={})
+                    return httpx.Response(200, json=ok('{"a": 1}'))
+
+                self.assertEqual(await client(flaky).extract_json("RULES", "hi", {}), '{"a": 1}')
+                self.assertEqual(len(calls), 2)
+        calls = []
+
+        def refused(request):
+            calls.append(1)
+            return httpx.Response(401, json={})
+
+        with self.assertRaises(LLMError):
+            await client(refused).extract_json("RULES", "hi", {})
+        self.assertEqual(len(calls), 1)  # a refused key won't change on a second try
+
     def test_key_never_appears_in_the_client_repr(self) -> None:
         c = GeminiClient(SecretStr(KEY), "m")
         self.assertNotIn(KEY, repr(vars(c)))

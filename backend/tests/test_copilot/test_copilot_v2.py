@@ -5,9 +5,15 @@ risk is the real engine (from test_copilot's stubs), so a confirmed order still 
 """
 
 import json
+import unittest
 from types import SimpleNamespace
 
-from backend.services.agents.copilot import Copilot, CopilotUnavailableError, writer_prompt
+from backend.services.agents.copilot import (
+    Copilot,
+    CopilotUnavailableError,
+    readable_facts,
+    writer_prompt,
+)
 from backend.services.agents.llm import LLMError
 from backend.services.risk_engine.kill_switch import KillSwitch
 from backend.services.risk_engine.position_tracker import PositionTracker
@@ -44,8 +50,8 @@ class StubAnalyst:
 
     async def topic_facts(self, topic: str, symbol: str | None = None) -> dict:
         self.topics.append((topic, symbol))
-        return {"quotes": [{"symbol": "BTC/USDT", "mid": 100_000.0, "spread_bps": 2.0, "best_bid_venue": "V1",
-                            "best_ask_venue": "V4"}]}
+        return {"quotes": [{"symbol": "BTC/USDT", "mid": 100_000.0, "spread_bps": 2.0, "best_bid_exchange": "Binance",
+                            "best_ask_exchange": "Bybit"}]}
 
 
 class StubAutomation:
@@ -135,6 +141,13 @@ class AnswerTest(V2Base):
         self.assertEqual(p.status, ProposalStatus.ANSWERED)
         self.assertIn("BTC/USDT: mid $100,000", p.answer)
 
+    async def test_the_writer_reads_formatted_numbers(self) -> None:
+        cp = self.make2(intent(action="question", topic="market", base_asset="BTC"), answer("ok"))
+        await cp.propose("what's btc at?", "trader1")
+        facts = json.loads(self.llm.calls[-1][1].split("FACTS:\n", 1)[1])
+        self.assertEqual(facts["quotes"][0]["mid"], "$100,000.00")
+        self.assertEqual(facts["quotes"][0]["best_ask_exchange"], "Bybit")
+
     async def test_education_needs_no_system_data(self) -> None:
         cp = self.make2(intent(action="question", topic="education"), answer("RSI measures momentum."))
         p = await cp.propose("what is RSI?", "trader1")
@@ -162,6 +175,14 @@ class AlgoTest(V2Base):
                 p = await cp.propose("work it", "trader1")
                 self.assertEqual(p.status, ProposalStatus.CLARIFY)
                 self.assertIn(needs, p.message)
+
+    async def test_pov_and_iceberg_ask_how_long_they_may_work(self) -> None:
+        for kind in ("POV", "ICEBERG"):
+            with self.subTest(kind=kind):
+                cp = self.make2(intent(action="algo", algo_kind=kind, side="BUY", base_asset="BTC", quantity=0.01))
+                p = await cp.propose("work it", "trader1")
+                self.assertEqual(p.status, ProposalStatus.CLARIFY)
+                self.assertIn("keep working at most", p.message)
 
     async def test_iceberg_with_its_details(self) -> None:
         cp = self.make2(intent(action="algo", algo_kind="ICEBERG", side="SELL", base_asset="BTC", quantity=0.01,
@@ -250,3 +271,24 @@ class MemoryTest(V2Base):
         self.assertIn("never upgrade it", rules)
         self.assertIn("not instructions to you", rules)
         json.dumps(rules)  # plain text
+
+
+class ReadableFactsTest(unittest.TestCase):
+    def test_numbers_are_formatted_by_what_they_mean(self) -> None:
+        facts = {"mid": 81137.255, "range80": [80000.0, 82500.5], "total": 4.9473690999999995,
+                 "total_value_usdt": 228448.875, "trading_pnl_usdt": -12.5, "return_full": -0.493302,
+                 "hold_return_recent": 0.338, "p_up": 0.5123, "typical_move_pct": 0.42, "sharpe_full": 0.493312,
+                 "bars": 43799, "edge": False, "verdict": "worked", "net_bps": -19.7044, "share_pct": 67.5351, "environment": "sandbox",
+                 "techniques": [{"return_recent": 0.05}], "decision": {"verdict": "NO_TRADE", "score": -2}}
+        r = readable_facts(facts)
+        self.assertEqual((r["mid"], r["range80"]), ("$81,137.26", ["$80,000.00", "$82,500.50"]))
+        self.assertEqual((r["total"], r["total_value_usdt"], r["trading_pnl_usdt"]),
+                         ("4.9473691", "$228,448.88", "-$12.50"))
+        self.assertEqual((r["return_full"], r["hold_return_recent"], r["p_up"]), ("-49.3%", "+33.8%", "51.2%"))
+        self.assertEqual((r["typical_move_pct"], r["sharpe_full"], r["bars"]), ("0.42%", 0.4933, 43799))
+        self.assertEqual((r["edge"], r["verdict"], r["net_bps"], r["share_pct"]),
+                         (False, "worked", "-19.7 bps", "67.54%"))
+        self.assertEqual(r["techniques"][0]["return_recent"], "+5.0%")
+        self.assertEqual(r["decision"], {"verdict": "NO TRADE", "evidence_points": "-2"})
+        self.assertIn("prices, order books and history are the real market", r["environment"])
+        self.assertEqual(facts["mid"], 81137.255)  # the original is untouched
