@@ -2,6 +2,9 @@
 
 > **Status (2026-10-12):** the **safety rails are built and tested** (this guide's part 2). No real order has been
 > placed yet: that step is Sarmad's (part 5), with his own keys and a small amount.
+> **2026-10-15: the plan changed — real money gets its own server with a fixed IP, keys locked to it, and nothing
+> real on the laptop.** The stages, the walls between sandbox and real money and what Sarmad does are in
+> [`PHASE_D_PLAN.md`](PHASE_D_PLAN.md); parts 3–5 below are rewritten around the server in its stage D1-11.
 > Read with: [`ROADMAP.md`](ROADMAP.md) *Full product* D, [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md) (logins),
 > [`EXCHANGE_API_KEY_SECURITY.md`](EXCHANGE_API_KEY_SECURITY.md) (how keys are stored).
 

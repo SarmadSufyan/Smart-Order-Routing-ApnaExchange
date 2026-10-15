@@ -2035,3 +2035,47 @@ after a timeout or a 5xx, never after a refused key or the free-tier limit. Also
 it keep working at most", and the drawer says "Connecting…" instead of "Add an AI key" while its status loads.
 5 new tests (534). Files: `agents/copilot.py`, `analyst.py`, `llm.py`, `components/CopilotPanel.tsx`, tests
 `test_copilot_v2.py`, `test_analyst.py`, `test_llm.py`; docs `COPILOT_GUIDE.md`, `PROGRESS.md`, `ROADMAP.md`, `CLAUDE.md`.
+
+---
+
+## 2026-10-15 (evening) — The lab after 3 days, and the Phase D plan
+
+**The lab, read live.** Sarmad fixed the lab server's SSH rule (his IP had changed); `deploy.py status` and a
+`backup-pull` worked again. Server: healthy, 0 errors in 24 h, all 8 bots running. After 3.2 days (BTC −1.3 %,
+ETH −4.7%): the six profit-cycle bots sold 147 lots, **every one at its target** (+$9.0 at real-market fees; on BTC
+the 1 % target earned most, +$2.22), but they hold coins bought on the way down — all three ETH bots are full (10
+lots each) and waiting, ≈ −$19 at today's prices. The exploring advisor: 65 trades, 6 targets, 47 stops, 12 time-outs,
+−$8.07 — what the trade planner predicted (expected −0.22 R; 9 % wins vs 42 % needed). The strict advisor traded
+nothing, correctly. Executions: 562, slippage −0.2 bps on average (Binance +0.3, Bybit −0.7); 85 target sells found no
+buyer at the target (by design), 3 Bybit price-band refusals. Overall ≈ −$18 on $1,700. Lesson: the cycle bot does
+what it promises (every completed cycle beats its fees) and nothing more — a falling coin locks its budget. Sarmad:
+let the lab run another week (≈ 2026-10-22).
+
+**The Phase D plan** ([`project-info/PHASE_D_PLAN.md`](project-info/PHASE_D_PLAN.md)). Sarmad asked for real money
+to be fully separate from the sandbox, with every experiment finished in the sandbox first; IP is not a constraint
+(he offered proxies or a cloud server with a fixed IP).
+
+*Design choices.*
+- **A separate real-money server with a fixed IP** (AWS Elastic IP), not the laptop. It makes the separation
+  physical (sandbox on the laptop and the lab server, real money only there), and it lets every real key be
+  **locked to that IP** — the strongest single protection: a leaked key is useless elsewhere. It also removes the
+  home-IP problem that broke SSH twice. Bybit's 90-day expiry of keys without an IP binding goes away too.
+- **No proxies for real money.** A third-party proxy sees where the traffic goes, and an exchange can freeze an
+  account whose calls come from a country it doesn't serve; a server in a served region, checked read-only first, is
+  both safer and honest.
+- **Promotion, not copies:** one codebase; a commit reaches the real-money server only after ≥ 3 days on the lab
+  server with CI ✅, or with a typed reason that is audited.
+- **Tested empty first:** the real-money server is installed in a rehearsal (sandbox) mode and must pass a full
+  checklist before any real key exists; `go-live` is a separate, deliberate command.
+- **Keys never touch the laptop:** typed into a hidden prompt, written straight to the server's owner-only `.env`.
+- **The gateway enforces the IP lock** on real money (a new rule): a key without an IP list gets no orders — the same
+  "ask the exchange, trust its answer" approach as the trade-only check.
+- **Alerts on the phone with a stop button:** Telegram (free, no inbound port); `/stop` only ever *engages* the kill
+  switch (tightening is always safe; releasing needs the screen) — the same asymmetry as RAFT's tighten/loosen rule.
+- **AI off on real money at first:** the copilot would send real balances to an outside AI; the free Gemini tier
+  may use data to improve its products. The quick analysis needs no AI.
+- **Bots only on evidence:** the advisor stays off real money; at most the BTC 1 % cycle bot with $30 after the lab's
+  verdict.
+
+*Pending:* Sarmad's decisions A1–A7 (server, exchanges, starting money, alerts, copilot, bots, the M3 date).
+*Files:* `project-info/PHASE_D_PLAN.md` (new); links in `ROADMAP.md`, `REAL_MONEY_GUIDE.md`, `CLAUDE.md`; `PROGRESS.md`.

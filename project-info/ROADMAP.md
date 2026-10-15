@@ -64,6 +64,11 @@ switchable; **Auto on the sandbox only**. [`COPILOT_GUIDE.md`](COPILOT_GUIDE.md)
 
 ### D — Real money: "done" means — rails ✅ 2026-10-12, first real orders next
 
+**2026-10-15: the full plan is [`PHASE_D_PLAN.md`](PHASE_D_PLAN.md)** — a separate real-money server with a fixed IP
+(keys locked to it), stages D0 (decisions, accounts) → D1 (build + test in the sandbox) → D2 (the server tested
+empty) → D3 (real keys, read-only check) → D4 (first real orders) → D5 (more exchanges, caps ladder) → D6 (bots, only
+if the lab proves them) → D7 (operations, M3 evidence). Sarmad's decisions A1–A7 are pending there.
+
 - [x] Mainnet keys for every exchange in `.env` (read only when `EXCHANGE_MODE=mainnet` + `ALLOW_MAINNET=true`), never copied to the lab server.
 - [x] **A venue trades real money only with a key its exchange confirms can trade spot and can't withdraw** — asked at start and every 10 min, blocked until the exchange answers (`exchanges/key_permissions.py`; Binance, Bybit, OKX, Gate).
 - [x] **Hard caps** in `.env` (`MAINNET_MAX_*`: per order, per algo, exposure, loss limit): no limit in force is above them, a change past one is refused (also before RAFT replication), the loss limit can't be off (`risk_engine/ceilings.py`).
