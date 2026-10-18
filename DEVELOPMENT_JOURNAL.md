@@ -2079,3 +2079,43 @@ to be fully separate from the sandbox, with every experiment finished in the san
 
 *Pending:* Sarmad's decisions A1–A7 (server, exchanges, starting money, alerts, copilot, bots, the M3 date).
 *Files:* `project-info/PHASE_D_PLAN.md` (new); links in `ROADMAP.md`, `REAL_MONEY_GUIDE.md`, `CLAUDE.md`; `PROGRESS.md`.
+
+---
+
+## 2026-10-18 — The real-money server, created empty (AWS Zurich, Maham's account)
+
+**What.** Sarmad gave Fizza Phase D §5 C item 2: create the real-money server in the AWS console. She made it in
+**Maham's AWS account** (Maham has the credits), signed in as an IAM user Maham created for her with EC2 access only.
+In Zurich (`eu-central-2`, zone `eu-central-2b`): instance `apnasor-real` (`i-030b4aa1557f802f8`), t4g.small, Ubuntu
+Server 24.04 LTS arm64, 20 GiB gp3, termination protection on, credit specification Standard; Elastic IP
+`16.18.141.32` allocated and attached; security group `apnasor-real-ssh` (`sg-0332c00dd6014d57a`) with two inbound
+rules only — SSH from Sarmad's home IP (/32) and SSH from the EC2 Instance Connect prefix list — and the default
+outbound rule (the server must reach the exchanges). It runs with 3/3 status checks passed and holds nothing: no code,
+no keys. SSH is not tested yet: only Sarmad's IP may connect.
+
+*Choices.*
+- **Not the lab key.** Sarmad had sent `apnasor-lab.pem`, the lab server's private key. It was not used: one key would
+  then open both the sandbox server and the real-money server, and that key already exists on two laptops. (It
+  couldn't be imported either: *Import key pair* takes the public half.)
+- **The key pair was made by AWS.** The plan's preferred way — Sarmad makes the key on his laptop and sends only the
+  public line — had to wait for him, so AWS created an ED25519 pair instead. The `.pem` was downloaded once to Fizza's
+  laptop (kept outside the repo) and goes to Sarmad by hand (USB, or a 7-Zip AES file with the password said on a
+  call); she deletes her copy after his first login. Because it passed through another laptop, Sarmad replaces it
+  with a key made on his own laptop before any real key goes on (before D3).
+- **The SSH rule names Sarmad's IP**, not the wizard's "My IP" (that would have been Fizza's). The Instance Connect
+  rule is the spare door for when his home IP changes; both need a login to Maham's account, so Sarmad gets his own.
+- **Disk not encrypted** — an optional extra, left off.
+
+*Found on the way.*
+- A root sign-in to Maham's account from Fizza's laptop failed; the working path was an IAM user that Maham created.
+- Switching the image to 64-bit (Arm) pops up "some of your current settings will be changed": it resets the wizard's
+  security group and storage, so choose the image and architecture first. The wizard again offered Ubuntu 26.04 first.
+- The Elastic IP page showed a red `describePublicIpv4Pools` error for the EC2-only login. Harmless: Amazon's pool
+  still allocated the address.
+- The instance list doesn't refresh itself: after the Elastic IP was attached (AWS confirmed it) the list still showed
+  the old automatic address until refreshed.
+
+*Open:* Sarmad's SSH test, then his own key before D3; his IAM login in Maham's account and the removal of Fizza's;
+Maham's root MFA and a $25 budget alert; Maham's credits and Free-plan end date (the server lives as long as her
+account); Stop until D2 (≈ $6/month, same IP) or keep running (≈ $0.70/day).
+*Files:* docs only — `project-info/PHASE_D_PLAN.md` (§1, §5 C, §15 A1), `PROGRESS.md`, this journal.

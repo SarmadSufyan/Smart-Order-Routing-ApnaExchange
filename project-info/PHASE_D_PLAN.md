@@ -31,6 +31,7 @@ widen one step at a time: more exchanges, higher limits, and bots only if the la
 | Fees | ⚠️ public base rate (0.10 %) | the account's real rate is not read yet |
 | Bots | ⏳ lab verdict pending | cycle bots: every sale profitable, but the held coins carry the price risk; the advisor lost as the research predicted (2026-10-15: −$18 on $1,700 overall). Lab runs until about 2026-10-22 |
 | Copilot | ✅ works (Gemini) | asks before every action; Auto is sandbox-only |
+| Real-money server | ✅ created 2026-10-18, **empty** | Maham's AWS account, Zurich: `apnasor-real`, Elastic IP `16.18.141.32`; nothing installed, no keys — §5 C |
 | Real orders | ❌ none yet | Sarmad places the first ones (stage D4) |
 
 ---
@@ -218,6 +219,19 @@ prompts yourself.
    bot one message so it can find your chat.
 
 ### C. AWS (console — at D2, about 10 minutes, I'll give click-by-click steps then)
+
+> **Item 2 done 2026-10-18 by Fizza, ahead of D2, in Maham's AWS account** (her credits), signed in as an IAM user
+> Maham made for her (EC2 only). Instance `apnasor-real` (`i-030b4aa1557f802f8`), Zurich `eu-central-2b`, t4g.small,
+> Ubuntu 24.04 arm64, 20 GiB gp3 (not encrypted), termination protection on, credit specification Standard;
+> **Elastic IP `16.18.141.32`** attached; security group `apnasor-real-ssh` (`sg-0332c00dd6014d57a`): inbound SSH from
+> Sarmad's home IP (/32) and from the EC2 Instance Connect prefix list only, outbound default. Key pair `apnasor-real`
+> (ED25519) **made by AWS**: the `.pem` was downloaded to Fizza's laptop and goes to Sarmad by hand; she deletes her
+> copy once his login works. Running, 3/3 status checks, **empty**. SSH not tested yet (only Sarmad's IP may connect).
+> **Still open:** (a) Sarmad: the SSH test, then **replace the key with one made on his own laptop before D3** (this
+> one passed through another laptop); (b) Maham: an IAM login for Sarmad (EC2, MFA) so he can change the SSH rule when
+> his IP changes, then remove Fizza's; MFA on her root login (item 1 applies to her account); a $25 budget alert;
+> (c) the server lives as long as Maham's account: her credits and Free-plan end date replace the dates in item 3 for
+> this server. Running ≈ $0.70/day; **Stop** (not Terminate) until D2 ≈ $6/month, same IP.
 1. **MFA on your AWS login** (the account will hold a machine with real keys).
 2. Launch the real-money instance (`apnasor-real`, Zurich, t4g.small, Ubuntu 24.04, its own key pair
    `apnasor-real.pem`), **allocate an Elastic IP** and attach it, security group: SSH from *My IP* + the EC2 Instance
@@ -348,7 +362,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 
 | # | Decision | Answer | Date |
 |---|---|---|---|
-| A1 | Where real money runs | — | — |
+| A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C) | 2026-10-18 |
 | A2 | Exchanges and order | — | — |
 | A3 | Starting money | — | — |
 | A4 | Alerts | — | — |
