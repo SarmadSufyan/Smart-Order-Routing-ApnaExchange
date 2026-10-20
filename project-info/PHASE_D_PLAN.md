@@ -298,6 +298,10 @@ If the gateway refuses a key, **make a new key** with the right settings — nev
 - Renew keys every 3 months, and **delete them on the exchange** the day we stop.
 - Teammates never get real keys or the real server's access; they work on the sandbox. For the panel demo, the
   laptop opens the real-money screen through the tunnel.
+- **The AWS account is Maham's** (decision A1, for her credits). Whoever administers an AWS account can control its
+  machines, so: Sarmad gets **his own login** in that account (EC2, with MFA); Maham's main login has MFA; **Fizza's
+  login is removed** once Sarmad's works; nobody else opens the instance; a budget alert watches the cost. The damage
+  stays bounded either way: the keys can't withdraw, they work only from this server, and the caps hold.
 - Logins on the real-money screen: real passwords only (scrypt hashes on the server), audited.
 
 ---
@@ -362,7 +366,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 
 | # | Decision | Answer | Date |
 |---|---|---|---|
-| A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C) | 2026-10-18 |
+| A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C). **Confirmed by Sarmad 2026-10-20**: the real system in Maham's account, the sandbox bots stay on the lab server in his account; access rules in §10 | 2026-10-18 / 2026-10-20 |
 | A2 | Exchanges and order | — | — |
 | A3 | Starting money | — | — |
 | A4 | Alerts | — | — |
