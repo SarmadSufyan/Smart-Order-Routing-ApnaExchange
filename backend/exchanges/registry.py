@@ -39,6 +39,8 @@ def _ccxt_venue_kwargs(settings, exchange_id: str, venue_id: str, name: str) -> 
         "data_mode": settings.market_data_mode,
         "symbols": settings.symbol_list,
         "credentials": settings.exchange_credentials(exchange_id),
+        # Real money only (the check runs on mainnet): strict unless .env says otherwise.
+        "require_ip_lock": getattr(settings, "mainnet_require_ip_lock", True),
     }
 
 

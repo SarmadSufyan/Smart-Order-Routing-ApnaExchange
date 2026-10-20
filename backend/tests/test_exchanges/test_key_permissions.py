@@ -103,6 +103,31 @@ class ParserTest(unittest.TestCase):
         self.assertTrue(key_note(ok, None).startswith("Trade-only key confirmed"))
         self.assertEqual(key_note(ok, "the key can WITHDRAW"), "the key can WITHDRAW")
 
+    def test_the_real_money_server_requires_an_ip_locked_key(self) -> None:
+        unlocked, locked = parse_binance(BINANCE), parse_binance({**BINANCE, "ipRestrict": True})
+        self.assertIsNone(real_money_problem(unlocked, "Binance"))  # the rule is opt-in for the pure check...
+        self.assertIn("isn't locked to an IP", real_money_problem(unlocked, "Binance", require_ip_lock=True))
+        self.assertIsNone(real_money_problem(locked, "Binance", require_ip_lock=True))
+        unknown = {k: v for k, v in BINANCE.items() if k != "ipRestrict"}
+        self.assertIn("couldn't be confirmed", real_money_problem(parse_binance(unknown), "Binance", True))
+        # Withdrawal is still checked first: an IP lock never makes a withdrawing key acceptable
+        self.assertIn("WITHDRAW", real_money_problem(parse_binance({**BINANCE, "enableWithdrawals": True,
+                                                                     "ipRestrict": True}), "Binance", True))
+        for parsed in (parse_bybit(bybit(ips=["203.0.113.7"])), parse_gate(gate(ips=["203.0.113.7"]), "K")):
+            self.assertIsNone(real_money_problem(parsed, "X", True))
+        self.assertIn("listed IP addresses", key_note(locked, None))
+
+    def test_the_gateway_is_strict_unless_env_says_otherwise(self) -> None:
+        from types import SimpleNamespace
+
+        from backend.exchanges.registry import _ccxt_venue_kwargs
+
+        base = dict(exchange_mode="mainnet", market_data_mode="mainnet", symbol_list=["BTC/USDT"],
+                    exchange_credentials=lambda _e: None)
+        self.assertTrue(_ccxt_venue_kwargs(SimpleNamespace(**base), "binance", "V1", "Binance")["require_ip_lock"])
+        relaxed = SimpleNamespace(**base, mainnet_require_ip_lock=False)
+        self.assertFalse(_ccxt_venue_kwargs(relaxed, "binance", "V1", "Binance")["require_ip_lock"])
+
 
 class PermsClient:
     """The four exchanges' permission endpoints, answering from a script."""
@@ -140,9 +165,9 @@ class Venue(CcxtVenueAdapter):
         return None
 
 
-def venue(mode: str, answers: list) -> Venue:
+def venue(mode: str, answers: list, require_ip_lock: bool = False) -> Venue:
     v = Venue(venue_id="V1", name="Binance", mode=mode, symbols=["BTC/USDT"],
-              credentials={"apiKey": "K", "secret": "S"})
+              credentials={"apiKey": "K", "secret": "S"}, require_ip_lock=require_ip_lock)
     v._client = PermsClient(answers)
     return v
 
@@ -178,6 +203,14 @@ class AdapterTest(unittest.IsolatedAsyncioTestCase):
         await v._check_key_permissions()  # a failed re-check keeps the verdict
         self.assertFalse(v.can_trade)
         await v._check_key_permissions()  # the owner made a trade-only key
+        self.assertTrue(v.can_trade)
+
+    async def test_an_unlocked_key_gets_no_orders_on_the_real_money_server(self) -> None:
+        v = venue("mainnet", [BINANCE, {**BINANCE, "ipRestrict": True}], require_ip_lock=True)
+        await v._check_key_permissions()
+        self.assertFalse(v.can_trade)
+        self.assertIn("isn't locked to an IP", v.execution_note)
+        await v._check_key_permissions()  # the owner locked the key to the server's IP
         self.assertTrue(v.can_trade)
 
     async def test_a_confirmed_key_stays_usable_through_a_failed_recheck(self) -> None:

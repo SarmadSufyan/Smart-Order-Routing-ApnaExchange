@@ -140,6 +140,16 @@ class ExchangeAdapter(ABC):
         """Real money: what the exchange says our API key may do (None where it isn't checked)."""
         return None
 
+    @property
+    def account_taker_fee_bps(self) -> float | None:
+        """Real money: the taker fee the exchange reports for our account (None = not read; the public rate applies)."""
+        return None
+
+    @property
+    def fee_note(self) -> str | None:
+        """Real money: the account's own fee, in one line for the venue page."""
+        return None
+
     # ── lifecycle ───────────────────────────────────────────────────
     @abstractmethod
     async def start(self) -> None:

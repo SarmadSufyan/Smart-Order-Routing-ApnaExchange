@@ -44,6 +44,7 @@ from backend.exchanges.base import (
     SymbolRules,
     TickerStats,
 )
+from backend.exchanges.fees import account_fee_note, fetch_account_taker_bps
 from backend.exchanges.key_permissions import (
     KeyPermissions,
     fetch_key_permissions,
@@ -68,6 +69,8 @@ _PERMISSION_RE = re.compile(r"permission|not allowed to trade|trading (?:is )?(?
 # exchange's website), and how soon after a failed ask (until then the venue stays blocked).
 KEY_RECHECK_S = 600.0
 KEY_RETRY_S = 30.0
+FEE_RECHECK_S = 6 * 3600.0  # an account's fee tier changes rarely (VIP levels are recomputed daily)
+FEE_RETRY_S = 300.0
 
 
 def venue_client_id(child_order_id: str) -> str:
@@ -122,8 +125,10 @@ class CcxtVenueAdapter(ExchangeAdapter):
         symbols: list[str],
         credentials: dict[str, str] | None,
         data_mode: str | None = None,
+        require_ip_lock: bool = False,
     ) -> None:
         super().__init__(venue_id=venue_id, name=name, mode=mode, data_mode=data_mode)
+        self._require_ip_lock = require_ip_lock  # real money: the key must be locked to this server's IP
         self._requested_symbols = list(symbols)
         self._credentials = credentials
         self._client: Any = None  # execution + account (has keys)
@@ -147,6 +152,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
         self._key_problem: str | None = (
             "checking with the exchange that the API key can't withdraw" if self.key_check_required else None
         )
+        self._account_taker_bps: float | None = None  # real money: the fee our account pays, as reported
         # The public data client loads its markets on first use (Gate's list takes
         # ~15 s): shared and shielded, so a caller's timeout never restarts it.
         self._history_markets: asyncio.Task | None = None
@@ -182,6 +188,36 @@ class CcxtVenueAdapter(ExchangeAdapter):
             return None
         return key_note(self._key_permissions, self._key_problem)
 
+    @property
+    def account_taker_fee_bps(self) -> float | None:
+        return self._account_taker_bps
+
+    @property
+    def fee_note(self) -> str | None:
+        return account_fee_note(self._account_taker_bps, self.name)
+
+    async def _watch_account_fee(self) -> None:
+        """Real money: read the account's own taker fee (read-only), again every few hours."""
+        while self._running:
+            answered = await self._check_account_fee()
+            await asyncio.sleep(FEE_RECHECK_S if answered else FEE_RETRY_S)
+
+    async def _check_account_fee(self) -> bool:
+        """Ask once. False = no usable answer: the last rate (or the public one) stays in use."""
+        try:
+            bps = await fetch_account_taker_bps(self._client, list(self._rules) or self._requested_symbols)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the public rate stays in use
+            logger.warning("account_fee_check_failed", venue_id=self.venue_id, error=short_error(exc))
+            return False
+        if bps is None:
+            return False
+        if bps != self._account_taker_bps:
+            logger.info("account_fee_read", venue_id=self.venue_id, taker_bps=bps)
+        self._account_taker_bps = bps
+        return True
+
     async def _watch_key_permissions(self) -> None:
         """Real money: trade only with a key the exchange confirms can't withdraw; asked again every 10 min."""
         while self._running:
@@ -197,7 +233,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
         except Exception as exc:  # noqa: BLE001 — no answer settles nothing
             logger.warning("key_permissions_check_failed", venue_id=self.venue_id, error=short_error(exc))
             return False
-        problem = real_money_problem(perms, self.name)
+        problem = real_money_problem(perms, self.name, self._require_ip_lock)
         if problem != self._key_problem:
             if problem:
                 logger.error("key_refused_for_real_money", venue_id=self.venue_id, reason=problem)
@@ -278,6 +314,7 @@ class CcxtVenueAdapter(ExchangeAdapter):
         await self._verify_credentials()
         if self.key_check_required:
             self._spawn(self._watch_key_permissions(), f"{self.venue_id}-key-permissions")
+            self._spawn(self._watch_account_fee(), f"{self.venue_id}-account-fee")
         await self._run_feed()
 
     @abstractmethod

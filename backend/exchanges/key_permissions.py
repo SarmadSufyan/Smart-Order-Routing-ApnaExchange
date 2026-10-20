@@ -18,6 +18,10 @@ Each parser is a pure function over the exchange's JSON:
 
 Anything a parser doesn't recognise is ``None`` ("the answer didn't say"), and ``None`` is never good enough
 for real money.
+
+The real-money server also requires each key to be **IP-locked** (``MAINNET_REQUIRE_IP_LOCK``, on by default):
+the exchange accepts the key only from that server's fixed address, so a copied key is useless anywhere else
+(Phase D plan, wall 3). The answer that settles it is the exchange's own IP list, read by the same parsers.
 """
 
 from dataclasses import dataclass
@@ -130,8 +134,9 @@ async def fetch_key_permissions(client: Any, exchange_id: str, api_key: str) -> 
     return None
 
 
-def real_money_problem(perms: KeyPermissions | None, exchange: str) -> str | None:
-    """Why this key may not trade real money, or None when it may (trade spot: yes, withdraw: no)."""
+def real_money_problem(perms: KeyPermissions | None, exchange: str, require_ip_lock: bool = False) -> str | None:
+    """Why this key may not trade real money, or None when it may (trade spot: yes, withdraw: no, and — when
+    ``require_ip_lock`` — accepted only from listed IP addresses)."""
     if perms is None:
         return f"{exchange} can't tell us what the API key may do, so it gets no real-money orders"
     if perms.can_withdraw is True:
@@ -142,6 +147,10 @@ def real_money_problem(perms: KeyPermissions | None, exchange: str) -> str | Non
                 f"make a key with withdrawals off and nothing but read + spot trade")
     if perms.can_trade_spot is not True:
         return f"the {exchange} API key can't trade spot ({perms.summary}) - enable spot trading on the key"
+    if require_ip_lock and perms.ip_restricted is not True:
+        how = "isn't locked to an IP address" if perms.ip_restricted is False else "couldn't be confirmed as IP-locked"
+        return (f"the {exchange} API key {how} - on {exchange}, restrict the key to this server's fixed IP "
+                f"(or set MAINNET_REQUIRE_IP_LOCK=false in .env, which the Phase D plan advises against)")
     return None
 
 
@@ -151,7 +160,7 @@ def key_warnings(perms: KeyPermissions | None) -> list[str]:
         return []
     warnings = []
     if perms.ip_restricted is False:
-        warnings.append("not limited to your IP address (recommended if your IP is fixed)")
+        warnings.append("not limited to an IP address (the real-money server requires it: MAINNET_REQUIRE_IP_LOCK)")
     if perms.expires:
         warnings.append(f"the exchange disables this key on {perms.expires}")
     return warnings
@@ -163,4 +172,6 @@ def key_note(perms: KeyPermissions | None, problem: str | None) -> str | None:
         return problem
     if perms is None:
         return None
-    return "; ".join(["Trade-only key confirmed by the exchange (no withdrawals)", *key_warnings(perms)])
+    verdict = "Trade-only key confirmed by the exchange (no withdrawals"
+    verdict += ", accepted only from listed IP addresses)" if perms.ip_restricted else ")"
+    return "; ".join([verdict, *key_warnings(perms)])

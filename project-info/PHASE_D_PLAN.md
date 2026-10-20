@@ -1,6 +1,6 @@
 # Phase D — real money: the plan
 
-> **Status (2026-10-15): proposed, waiting for Sarmad's decisions (§5 A).** Once decided, each decision is written
+> **Status (2026-10-20): decided (A1–A6; A7 the M3 date still open) — D1 in progress.** Each decision is written
 > into §15 and this status line changes to *decided*. This file is the knowledge base for Phase D: what we build,
 > in which order, what Sarmad does, and when each step is finished. Details that already exist live in
 > [`REAL_MONEY_GUIDE.md`](REAL_MONEY_GUIDE.md) (the safety rails), [`LAB_SERVER_GUIDE.md`](LAB_SERVER_GUIDE.md)
@@ -107,8 +107,8 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 | D1-1 | **Real-money server kit** (`deploy/real-server/`, reusing the lab kit): set up the machine, install a release, roll back, status, logs, backups, tunnel; *rehearsal* mode (sandbox keys) and a deliberate *go-live* command | unit tests + CI deploys it to a clean Ubuntu machine (like the lab kit) |
 | D1-2 | **Promotion gate** in its `release`: only a commit that has run ≥ 3 days on the lab server and has CI ✅ (or a typed reason, audited) | tested against fake histories |
 | D1-3 | **`keys` command**: hidden prompt per key → straight into the server's `.env`, owner-only; shows only the last 4 characters | tested with dummy keys on the test machine |
-| D1-4 | **IP-lock rule** (`MAINNET_REQUIRE_IP_LOCK=true`): on real money, a key without an IP list gets no orders, with the reason on screen | unit tests on each exchange's recorded answer (Binance `ipRestrict`, Bybit `ips`, OKX `ip`, Gate's IP list) |
-| D1-5 | **Your account's real fees** (`fetch_trading_fees`): routing, bots and P&L use the rate you actually pay (VIP level, BNB discount); the Venues page shows it next to the public rate | unit tests with recorded answers; confirmed at D3 with the real keys |
+| D1-4 ✅ 10-20 | **IP-lock rule** (`MAINNET_REQUIRE_IP_LOCK=true`): on real money, a key without an IP list gets no orders, with the reason on screen | unit tests on each exchange's recorded answer (Binance `ipRestrict`, Bybit `ips`, OKX `ip`, Gate's IP list) |
+| D1-5 ✅ 10-20 | **Your account's real fees** (`fetch_trading_fees`): routing, bots and P&L use the rate you actually pay (VIP level, BNB discount); the Venues page shows it next to the public rate | unit tests with recorded answers; confirmed at D3 with the real keys |
 | D1-6 | **Alerts on your phone (Telegram)**: gateway started/stopped or down, kill switch on/off, loss limit hit, each real fill, an order an exchange refused, a key problem, a reconciliation BREAK, a daily summary. **`/stop` from your phone engages the kill switch** (stopping only — releasing it needs the screen); only your chat is obeyed; audited | tested on the lab server first (sandbox) |
 | D1-7 | **Real-money screen mode**: `npm --prefix frontend run dev:real-server` → `localhost:5190`, red REAL MONEY SERVER label, its own tunnel port | checked in the browser against the rehearsal server |
 | D1-8 | **Monthly records export** (CSV: orders, fills, fees, P&L) for your own records | unit tests |
@@ -367,11 +367,11 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 | # | Decision | Answer | Date |
 |---|---|---|---|
 | A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C). **Confirmed by Sarmad 2026-10-20**: the real system in Maham's account, the sandbox bots stay on the lab server in his account; access rules in §10 | 2026-10-18 / 2026-10-20 |
-| A2 | Exchanges and order | — | — |
-| A3 | Starting money | — | — |
-| A4 | Alerts | — | — |
-| A5 | Copilot on real money | — | — |
-| A6 | Bots on real money | — | — |
+| A2 | Exchanges and order | Binance + Bybit first; OKX third (after its sandbox works); Gate fourth with $5 orders (Sarmad: all recommended) | 2026-10-20 |
+| A3 | Starting money | ~$50 USDT on each of Binance and Bybit; caps at step 1 | 2026-10-20 |
+| A4 | Alerts | Telegram, with `/stop` (engage only) from the phone | 2026-10-20 |
+| A5 | Copilot on real money | AI off at first (`LLM_PROVIDER=off` on the real server; the quick analysis still works) | 2026-10-20 |
+| A6 | Bots on real money | none until the lab's verdict; then at most the BTC 1 % cycle bot with $30 | 2026-10-20 |
 | A7 | M3 date | — | — |
 | — | Lab extended run | until ≈ 2026-10-22, or until Sarmad stops it; no release to the lab before then | 2026-10-15 |
 | — | Sandbox and real money fully separate (own server, own keys, own records) | yes (Sarmad) | 2026-10-15 |

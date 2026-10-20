@@ -90,6 +90,7 @@ class VenueHealthMonitor:
                 trading_enabled=adapter.can_trade,
                 execution_note=adapter.execution_note,
                 key_note=getattr(adapter, "key_note", None),
+                fee_note=getattr(adapter, "fee_note", None),
             )
             self._metrics[vid] = VenueMetrics()
 
@@ -272,6 +273,7 @@ class VenueHealthMonitor:
         health.trading_enabled = adapter.can_trade
         health.execution_note = adapter.execution_note
         health.key_note = getattr(adapter, "key_note", None)  # real money only
+        health.fee_note = getattr(adapter, "fee_note", None)  # real money only
         if self._coherence is not None and adapter.execution_available:
             health.execution_coherence = self._coherence.venue_states(vid)
 

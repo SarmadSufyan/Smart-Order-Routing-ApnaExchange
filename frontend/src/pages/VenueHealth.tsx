@@ -146,6 +146,11 @@ export function VenueHealth() {
                       🔒 {b.key_note}
                     </div>
                   )}
+                  {b.fee_note && (
+                    <div style={{ fontSize: F.xs, color: C.muted, marginBottom: 10, lineHeight: 1.4 }}>
+                      {b.fee_note}
+                    </div>
+                  )}
                   {!v.canTrade && b.execution_note && (
                     <div style={{
                       fontSize: F.xs, color: C.muted, background: C.surface, borderRadius: 3,

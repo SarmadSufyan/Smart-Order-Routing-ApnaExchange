@@ -39,6 +39,8 @@ IOC children. Only the keys, the database and the safety rails below change.
 | **Every money action is confirmed on screen** | the order ticket and the algo form have a red *REAL MONEY* tick box (the button stays locked until it is ticked, and changing the order clears it); approving an advisor's trade and *Sell open lots now* ask first | `components/shared.tsx: RealMoneyCheck, confirmRealMoney` |
 | **Bots** | profit-cycle bots trade without asking, so on real money they are **off** until you set `MAINNET_CYCLE_BOTS=true` (after reading the practice lab's verdict). The advisor works but **always asks** (auto-approve is refused). Lab bots never run on real money | `automation/engine.py` |
 | **Separate records** | real money has its own database (`data/apnasor-mainnet.db`) and its own login-signing key; testnet history never mixes in | `config.py` |
+| **Key locked to the server's IP** | on real money a key the exchange doesn't report as IP-locked gets no orders (`MAINNET_REQUIRE_IP_LOCK=true`, the default; Binance `ipRestrict`, Bybit `ips`, OKX `ip`, Gate `ip_whitelist`) | `key_permissions.py: real_money_problem` |
+| **Your own fee rate** | on real money each exchange is asked for the account's taker fee (at start, then every 6 h); routing, the bots and the lab use it instead of the public rate; the Venues page and `check_exchange_keys.py --mode mainnet` show it | `exchanges/fees.py`, `LiveFees` |
 | **Never on the lab server** | the server's install refuses `EXCHANGE_MODE=mainnet`, and `deploy.py env` never copies a mainnet key | `deploy/lab-server/` |
 
 What the exchange is asked, per exchange (checked against each one's API documentation):
@@ -140,9 +142,9 @@ database.
   caps, the IP binding and the small balance are what bound that.
 - **The bot fund on one exchange account is a bookkeeping separation** (ApnaSOR's gate), not a physical one. A
   sub-account per fund would make it physical (a later Phase D step).
-- **Fees:** the router uses each exchange's public base-tier taker fee (Binance 0.10 %, Bybit 0.10 %). Your
-  account's real rate (VIP level, a BNB discount) can be lower; the exchange's fill report, which is recorded,
-  is the truth.
+- **Fees:** on real money the router and the bots use the taker fee the exchange reports for your account (VIP
+  level included); until it has answered, the public base tier (Binance 0.10 %, Bybit 0.10 %). A BNB discount
+  isn't in that answer; the exchange's fill report, which is recorded, stays the truth for what was paid.
 - **Testnet results don't carry over one-for-one:** real books have different queues and fills; the first real
   orders are a measurement, not a demo of profit. Nothing here promises profit.
 - **Gate's permission reading is strict** (a writable wallet area counts as "may withdraw"), so a Gate key may be

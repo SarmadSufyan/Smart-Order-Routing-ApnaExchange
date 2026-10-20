@@ -29,6 +29,7 @@ spot testnet book is its own); every number says how many samples it rests on.
 import asyncio
 import math
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -256,13 +257,13 @@ def outcome_model(samples: list[LabSample], kind: LabSampleKind, now: datetime) 
 
 # ── the service ─────────────────────────────────────────────────────
 class PracticeLab:
-    def __init__(self, store, research, volatility, aggregator, mode: str, market_fee_bps: dict[str, float]) -> None:
+    def __init__(self, store, research, volatility, aggregator, mode: str, market_fee_bps: Mapping[str, float]) -> None:
         self._store = store
         self._research = research
         self._volatility = volatility
         self._aggregator = aggregator
         self._mode = mode
-        self._fees = dict(market_fee_bps)
+        self._fees = market_fee_bps  # live on real money: not copied
         self._samples: dict[str, LabSample] = {}
         self._feature_cache: dict[str, tuple[float, dict]] = {}
         self._models: tuple[float, list[dict]] | None = None

@@ -23,6 +23,7 @@ Each loop (every ``check_interval_s``):
 
 import asyncio
 import math
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -74,7 +75,7 @@ class BotRejectedError(DomainError):
 class AutomationEngine:
     def __init__(self, entry, order_manager, aggregator, router, registry, risk_engine, wallet,
                  fund: AutomationFund, lab: PracticeLab, symbols: list[str], research=None, store=None,
-                 mode: str = "testnet", market_fee_bps: dict[str, float] | None = None,
+                 mode: str = "testnet", market_fee_bps: Mapping[str, float] | None = None,
                  protection_bps: float = 50.0, cycle_bots_on_real_money: bool = False) -> None:
         self._entry = entry
         self._orders = order_manager
@@ -92,7 +93,7 @@ class AutomationEngine:
         # A profit-cycle bot trades without asking: on real money only once the owner has turned it on
         # (MAINNET_CYCLE_BOTS, after reading the practice lab's verdict).
         self._cycle_real = cycle_bots_on_real_money
-        self._fees = dict(market_fee_bps or {})
+        self._fees = market_fee_bps if market_fee_bps is not None else {}  # live on real money: not copied
         self._protection = protection_bps / 1e4
         self._bots: dict[str, BotState] = {}
         self._tasks: dict[str, asyncio.Task] = {}

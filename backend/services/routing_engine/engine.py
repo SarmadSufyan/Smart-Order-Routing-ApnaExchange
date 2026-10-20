@@ -26,7 +26,7 @@ read balances but not trade failed every order whose best price was on OKX.
 import asyncio
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 
 from backend.exchanges.base import ExecutionResult
@@ -100,7 +100,7 @@ class RoutingEngine:
         wallet=None,
         trading_block_s: float = 600.0,
         clock: Callable[[], float] = time.monotonic,
-        taker_fees_bps: dict[str, float] | None = None,
+        taker_fees_bps: Mapping[str, float] | None = None,
         sweep_band_bps: float = DEFAULT_BAND_BPS,
     ) -> None:
         self._aggregator = market_data_aggregator
@@ -118,7 +118,8 @@ class RoutingEngine:
         self._clock = clock
         self._trade_blocks: dict[str, tuple[str, float]] = {}  # venue -> (reason, resume at clock time)
         self._strategies = build_strategies(sweep_band_bps)
-        self._fees = dict(taker_fees_bps or {})
+        # Held, not copied: on real money the table is live (the account's own fee once an exchange reports it).
+        self._fees = taker_fees_bps if taker_fees_bps is not None else {}
         # (requested, filled) of our recent IOC children per venue: smart routing's reliability measure
         self._fill_window: dict[str, deque[tuple[float, float]]] = {}
         self._orders_routed_today = 0

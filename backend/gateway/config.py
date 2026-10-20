@@ -144,6 +144,9 @@ class Settings(BaseSettings):
     # Profit-cycle bots trade without asking. On real money they stay off until the owner has read the
     # practice lab's verdict and turns them on here. (The advisor always asks on real money.)
     mainnet_cycle_bots: bool = False
+    # Each real key must be locked to this server's IP on the exchange (the exchange's own answer decides):
+    # a copied key is then useless anywhere else. Off only for a key you knowingly use without an IP list.
+    mainnet_require_ip_lock: bool = True
 
     # ─── Lab server (unattended practice lab, testnet only) ───────
     # After a restart (crash, reboot, a new release) resume the LAB bots that were running when the

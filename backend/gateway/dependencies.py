@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from backend.exchanges.fees import LiveFees
 from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
@@ -134,6 +135,10 @@ def init_services() -> Services:
     pnl_service = PnLService(
         registry, wallet_service, order_manager, position_tracker, store=store, mode=settings.exchange_mode,
     )
+    # Taker fees per venue: the public base tier, replaced by the account's own rate once an exchange reports
+    # it (real money only). One live view shared by the router, the bots and the lab.
+    live_fees = LiveFees(parse_fee_schedule(settings.arb_taker_fees_bps),
+                         lambda vid: getattr(registry.get(vid), "account_taker_fee_bps", None))
     routing_engine = RoutingEngine(
         market_data_aggregator=aggregator,
         market_data_collector=collector,
@@ -146,8 +151,8 @@ def init_services() -> Services:
         coherence=coherence,
         wallet=wallet_service,  # per-venue balances cap each venue's slice
         trading_block_s=settings.trading_block_cooldown_s,
-        # Venues are ranked by price + taker fee (the same table the arbitrage detector uses).
-        taker_fees_bps=parse_fee_schedule(settings.arb_taker_fees_bps),
+        # Venues are ranked by price + taker fee (the public table, or the account's own rate on real money).
+        taker_fees_bps=live_fees,
         sweep_band_bps=settings.sweep_band_bps,
     )
     # The one way to change the kill switch, limits and venue blacklist —
@@ -199,7 +204,7 @@ def init_services() -> Services:
 
     # Research (Phase B): reference-market candle history, forecasts with a live track record,
     # backtests, trade plans. Read-only: it has no order entry.
-    fees = parse_fee_schedule(settings.arb_taker_fees_bps)
+    fees = live_fees
     candle_store = CandleStore(settings.resolved_market_history_path)
     research = ResearchService(
         candle_store, CandleSync(registry, candle_store, settings.symbol_list), collector, aggregator,

@@ -94,6 +94,7 @@ export interface VenueHealth {
   trading_enabled?: boolean       // execution available AND API keys present
   execution_note?: string | null  // why the venue can't trade, if it can't
   key_note?: string | null        // real money: the exchange's verdict on our API key (trade-only?)
+  fee_note?: string | null        // real money: the account's own taker fee, as the exchange reports it
   // Per symbol: does the venue's execution (testnet) book track the real market?
   execution_coherence?: Record<string, CoherenceState>
 }
