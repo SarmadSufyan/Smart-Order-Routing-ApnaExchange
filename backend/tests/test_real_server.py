@@ -109,6 +109,12 @@ class KeyWriterTest(unittest.TestCase):
         if os.name != "nt":
             self.assertEqual(self.keys.stat().st_mode & 0o777, 0o600)
 
+    def test_the_phone_alerts_token_and_chat_are_accepted(self) -> None:
+        out = self.write("TELEGRAM_BOT_TOKEN=123456:AAbbCCdd\nTELEGRAM_CHAT_ID=-1001234\n")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.stored(), {"TELEGRAM_BOT_TOKEN": "123456:AAbbCCdd", "TELEGRAM_CHAT_ID": "-1001234"})
+        self.assertNotIn("AAbb", out.stdout)
+
     def test_only_exchange_keys_and_plain_values(self) -> None:
         self.assertNotEqual(self.write("PATH=/tmp\n").returncode, 0)
         self.assertNotEqual(self.write("BINANCE_MAINNET_API_KEY=has space\n").returncode, 0)

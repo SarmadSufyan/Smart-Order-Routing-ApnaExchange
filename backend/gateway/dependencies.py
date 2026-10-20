@@ -5,6 +5,7 @@ from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.agents import Analyst, Copilot, build_llm_client
+from backend.services.alerts import TelegramAlerts
 from backend.services.algos import AlgoEngine
 from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
@@ -60,6 +61,7 @@ class Services:
     risk_controls: RiskControls
     arbitrage: ArbitrageDetector
     automation: AutomationEngine
+    alerts: TelegramAlerts | None = None
 
 
 _services: Services | None = None
@@ -261,8 +263,39 @@ def init_services() -> Services:
         risk_controls=risk_controls,
         arbitrage=arbitrage,
         automation=automation,
+        alerts=_build_alerts(risk_controls, risk_engine, risk_monitor, wallet_service, venue_monitor, algo_engine,
+                             automation),
     )
     return _services
+
+
+def _build_alerts(risk_controls, risk_engine, risk_monitor, wallet, venue_monitor, algo_engine,
+                  automation) -> TelegramAlerts | None:
+    """The phone alerts, when a Telegram bot and chat are configured."""
+    token = settings.telegram_bot_token.get_secret_value().strip() if settings.telegram_bot_token else ""
+    if not token or not settings.telegram_chat_id.strip():
+        return None
+
+    def running(items) -> int:
+        return sum(1 for x in items if str(getattr(x.status, "value", x.status)) == "RUNNING")
+
+    async def status() -> str:
+        ks = risk_engine.kill_switch.get_state()
+        state = risk_monitor.state
+        pnl = state.trading_pnl if state is not None else None
+        trading = [h.name for h in venue_monitor.get_all_health() if h.trading_enabled]
+        where = "REAL MONEY" if settings.is_real_money else "Sandbox"
+        return "\n".join([
+            f"{where} - exchanges trading: {', '.join(trading) or 'none'}",
+            f"Kill switch: {'ENGAGED - ' + (ks.reason or '') if ks.active else 'off'}",
+            f"Trading P&L: {'unknown' if pnl is None else f'{pnl:+,.2f} USDT'}",
+            f"Balances: {wallet.get_snapshot().total_value_usdt:,.2f} USDT",
+            f"Running: {running(algo_engine.list())} algos, {running(automation.list())} bots",
+        ])
+
+    return TelegramAlerts(token, settings.telegram_chat_id, real_money=settings.is_real_money,
+                          engage_kill_switch=risk_controls.engage_kill_switch, status=status,
+                          summary_hour_utc=settings.alerts_summary_hour_utc)
 
 
 def get_services() -> Services:

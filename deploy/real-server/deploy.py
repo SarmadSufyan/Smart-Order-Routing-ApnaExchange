@@ -7,6 +7,7 @@
     python deploy/real-server/deploy.py status | logs | tunnel | backup-pull | ssh | rollback
     python deploy/real-server/deploy.py keys                  # D3: type the REAL keys (hidden) -> the server only
     python deploy/real-server/deploy.py check-keys            # D3: what the exchanges say about them (read-only)
+    python deploy/real-server/deploy.py telegram              # phone alerts and /stop (token hidden -> the server)
     python deploy/real-server/deploy.py go-live               # D4: real money on (asks you to type REAL MONEY)
     python deploy/real-server/deploy.py release [--ref <commit>] [--reason "..."] [--test]
 
@@ -432,6 +433,49 @@ def cmd_keys(args) -> None:
     print("\nNext (read-only, nothing is traded):  deploy.py check-keys")
 
 
+def find_telegram_chat(token: str) -> tuple[str, str]:
+    """The chat that last wrote to the bot: (chat id, who). The owner sends the bot one message first."""
+    import httpx
+
+    try:
+        reply = httpx.post(f"https://api.telegram.org/bot{token}/getUpdates", json={"timeout": 0}, timeout=20).json()
+    except httpx.HTTPError as exc:  # never print the URL: the token is in it
+        fail(f"could not reach Telegram ({type(exc).__name__})")
+    if not reply.get("ok"):
+        fail("Telegram refused the token - copy it again from @BotFather")
+    chats = [u["message"]["chat"] for u in reply.get("result", []) if u.get("message", {}).get("chat")]
+    if not chats:
+        fail("the bot has no message yet - open your bot in Telegram, send it any message, then run this again")
+    chat = chats[-1]
+    who = chat.get("username") or chat.get("first_name") or chat.get("title") or "?"
+    return str(chat["id"]), who
+
+
+def cmd_telegram(args) -> None:
+    """Phone alerts: the bot token (hidden) and your chat go to the server's root-only keys.env."""
+    import httpx
+
+    cfg = load_config()
+    print("Phone alerts (Telegram). Make a bot with @BotFather (/newbot), send your bot one message, then paste\n"
+          "the bot's token here (hidden; it goes to the server only).\n")
+    token = getpass.getpass("Bot token: ").strip()
+    if not token:
+        fail("empty - nothing was sent")
+    chat, who = find_telegram_chat(token)
+    if input(f"Alerts will go to the Telegram chat of {who} (id {chat}). Right? [y/N] ").strip().lower() != "y":
+        fail("not confirmed - nothing was sent")
+    remote(cfg, f"rm -rf {KIT} && mkdir -p {KIT}/deploy && cp -r {BASE}/current/deploy/real-server {KIT}/deploy/")
+    send_keys(cfg, [f"TELEGRAM_BOT_TOKEN={token}", f"TELEGRAM_CHAT_ID={chat}"])
+    remote(cfg, "sudo systemctl restart apnasor-real")
+    try:
+        httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", timeout=20,
+                   json={"chat_id": chat, "text": "ApnaSOR: phone alerts connected. /status for a summary, "
+                                                  "/stop to engage the kill switch."})
+    except httpx.HTTPError as exc:
+        print(f"note: the test message didn't go out ({type(exc).__name__}); the gateway will try at its start")
+    print("done: the gateway restarted with alerts on - your phone gets 'Gateway started' in a minute.")
+
+
 def cmd_check_keys(args) -> None:
     """What the exchanges say about the real keys - from the server's own address (read-only)."""
     remote(load_config(), f"cd {BASE}/current && sudo bash -c 'source deploy/lab-server/versions.env; "
@@ -557,6 +601,7 @@ def main() -> None:
     p = sub.add_parser("keys", help="type the REAL keys (hidden) - straight to the server")
     p.add_argument("--exchanges", **exchanges)
     sub.add_parser("check-keys", help="what the exchanges say about the real keys (read-only)")
+    sub.add_parser("telegram", help="phone alerts: the bot token (hidden) and your chat -> the server")
     p = sub.add_parser("go-live", help="turn real money on (removes the sandbox keys)")
     p.add_argument("--exchanges", **exchanges)
     p = sub.add_parser("release", help="put a commit on the server (the promotion gate when live)")
@@ -574,7 +619,7 @@ def main() -> None:
     sub.add_parser("ssh", help="a shell on the server")
     args = parser.parse_args()
     {"init": cmd_init, "replace-ssh-key": cmd_replace_ssh_key, "passwords": cmd_passwords, "setup": cmd_setup,
-     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "go-live": cmd_go_live,
+     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "telegram": cmd_telegram, "go-live": cmd_go_live,
      "release": cmd_release, "rollback": cmd_rollback, "status": cmd_status, "logs": cmd_logs,
      "tunnel": cmd_tunnel, "backup-pull": cmd_backup_pull, "ssh": cmd_ssh}[args.command](args)
 

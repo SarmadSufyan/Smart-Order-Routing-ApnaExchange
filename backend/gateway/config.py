@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -197,6 +197,14 @@ class Settings(BaseSettings):
     # the trader turns Auto on and it is at most this big; with real money every action waits for a click.
     copilot_auto_max_usdt: float = 50.0
     copilot_max_suggest_usdt: float = 100.0  # the most a copilot trade suggestion is sized to
+
+    # ─── Alerts on the phone (Telegram; Phase D plan D1-6) ────────
+    # A bot made with @BotFather and the one chat it reports to and obeys (/stop engages the kill switch;
+    # releasing it needs the screen). Both empty = no alerts. On the real-money server they live in the root-only
+    # keys.env (deploy/real-server/deploy.py telegram).
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str = ""
+    alerts_summary_hour_utc: int = Field(default=3, ge=0, le=23)  # 03:00 UTC = 08:00 in Pakistan
     copilot_proposal_ttl_s: float = 120.0  # a proposal not confirmed in time expires
     # Confirm refuses if the mid moved further than this since the proposal:
     # the trader agreed to a price, not to whatever the market does next.

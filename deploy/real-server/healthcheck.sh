@@ -18,4 +18,16 @@ if (( n >= 3 )); then
   echo "restarting apnasor-real after $n failed health checks in a row"
   rm -f "$FAILS"
   systemctl restart apnasor-real
+  # Tell the phone (the gateway can't: it is the one that is stuck). The token travels in curl's config on stdin,
+  # never on a command line.
+  if [[ -f /opt/apnasor/shared/keys.env ]]; then
+    # shellcheck disable=SC1091
+    set -a; . /opt/apnasor/shared/keys.env; set +a
+    if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+      printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$TELEGRAM_BOT_TOKEN" \
+        | curl -fsS --max-time 20 --config - --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+            --data-urlencode "text=⚠️ The real-money gateway stopped answering for 15 minutes and was restarted." \
+            -o /dev/null || echo "the phone alert didn't go out"
+    fi
+  fi
 fi

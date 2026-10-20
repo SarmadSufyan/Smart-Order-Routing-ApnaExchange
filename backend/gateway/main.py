@@ -127,6 +127,8 @@ async def lifespan(app: FastAPI):
     await svc.research.open_store()
     await restore_state(svc)
     svc.audit_recorder.start()
+    if svc.alerts is not None:
+        svc.alerts.subscribe()  # before "gateway started" is recorded, so the phone hears it
     svc.pnl_service.start()
     await svc.algo_engine.load()  # after the recorder: interrupted algos are paused, and that is audited
     svc.algo_engine.start()
@@ -178,7 +180,7 @@ async def lifespan(app: FastAPI):
     await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
                   svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.arbitrage,
-                  svc.research)
+                  svc.research, *([svc.alerts] if svc.alerts is not None else []))
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 

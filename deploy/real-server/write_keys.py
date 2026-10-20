@@ -4,7 +4,8 @@
 
 The keys arrive on stdin (never on a command line, where `ps` would show them), are merged into keys.env (other
 keys stay), and the file is written owner-only for root: the gateway receives them through systemd's
-EnvironmentFile, and not even the service user can read the file. Only exchange key names are accepted.
+EnvironmentFile, and not even the service user can read the file. Only exchange key names (and the phone
+alerts' Telegram token and chat) are accepted.
 Prints names and the last 4 characters, never a whole key. Standard library only (the system's python3).
 """
 
@@ -13,7 +14,7 @@ import re
 import sys
 import tempfile
 
-NAME = re.compile(r"^(BINANCE|BYBIT|OKX|GATE)_(TESTNET|MAINNET)_API_(KEY|SECRET|PASSPHRASE)$")
+NAME = re.compile(r"^((BINANCE|BYBIT|OKX|GATE)_(TESTNET|MAINNET)_API_(KEY|SECRET|PASSPHRASE)|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)$")
 
 
 def read(path: str) -> dict[str, str]:
@@ -40,7 +41,7 @@ def main() -> None:
         if not sep:
             continue
         if not NAME.match(name):
-            sys.exit(f"refused: {name!r} is not an exchange key name")
+            sys.exit(f"refused: {name!r} is not an exchange key (or Telegram) name")
         value = value.strip()
         if not value or "'" in value or any(c.isspace() for c in value):
             sys.exit(f"refused: the value for {name} is empty or has a space or a quote")
