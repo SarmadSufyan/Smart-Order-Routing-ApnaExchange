@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE?: string
   /** Set when the page shows another machine's gateway (the lab server): a badge names it. */
   readonly VITE_SERVER_LABEL?: string
+  /** "danger" = the badge is red (the real-money server); otherwise blue. */
+  readonly VITE_SERVER_TONE?: string
 }
 
 interface ImportMeta {

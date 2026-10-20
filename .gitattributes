@@ -3,3 +3,4 @@
 # shell script fails on Linux with "$'\r': command not found".
 *.sh text eol=lf
 deploy/lab-server/** text eol=lf
+deploy/real-server/** text eol=lf

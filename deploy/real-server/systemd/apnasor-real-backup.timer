@@ -1,0 +1,9 @@
+[Unit]
+Description=ApnaSOR real-money server: database backup every day at 22:30 UTC (03:30 in Pakistan)
+
+[Timer]
+OnCalendar=*-*-* 22:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

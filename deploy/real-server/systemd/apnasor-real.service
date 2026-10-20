@@ -1,0 +1,41 @@
+[Unit]
+Description=ApnaSOR real-money server: the gateway (real exchange keys once live; sandbox keys in rehearsal)
+Documentation=file:///opt/apnasor/current/project-info/PHASE_D_PLAN.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+User=apnasor
+Group=apnasor
+WorkingDirectory=/opt/apnasor/current
+Environment=PYTHONUNBUFFERED=1
+# The exchange keys: read by systemd (as root) from a root-only file and handed to the gateway's environment.
+# The service user can't read the file itself; the settings in .env (real.env) carry no key.
+EnvironmentFile=-/opt/apnasor/shared/keys.env
+# Only on this machine (127.0.0.1): the laptop reaches it through an SSH tunnel, nobody else at all.
+ExecStart=/opt/apnasor/current/.venv/bin/python -m uvicorn backend.gateway.main:app --host 127.0.0.1 --port 8000 --loop asyncio --no-access-log
+# Stop like Ctrl+C: algos and bots pause (nothing resumes by itself on real money), an order that is at an exchange
+# finishes, the databases close. After 90 s systemd would kill it.
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=90
+Restart=always
+RestartSec=10
+MemoryHigh=1G
+MemoryMax=1400M
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/apnasor/shared/data /opt/apnasor/shared/backups
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

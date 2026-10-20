@@ -1,0 +1,140 @@
+# The real-money server kit (deploy/real-server), tested end to end on a clean Ubuntu 24.04 machine with systemd -
+# the same system as the AWS server. The runner plays both parts: "the laptop" runs deploy.py, and "the server" is
+# this machine, reached over SSH as `ubuntu` (as on EC2). It proves, with dummy keys and no money anywhere:
+#   the login key swap, rehearsal (sandbox keys), keys typed into the hidden prompt reaching only the root-only
+#   keys.env, go-live (sandbox keys removed, mainnet settings, the safety check), the promotion gate refusing a
+#   release on a live server unless a reason is given, the rollback and a backup pulled to "the laptop".
+# The exchanges are not reached from here (GitHub's machines are in the US: Binance 451, Bybit 403), so the gateway
+# runs without trading; `deploy.py check-keys` proves the real keys from the real server.
+
+name: Real-money server kit
+
+on:
+  push:
+    branches: [feature/crypto-pivot]
+    paths:
+      - deploy/real-server/**
+      - deploy/lab-server/setup.sh
+      - deploy/lab-server/versions.env
+      - deploy/lab-server/requirements.lock
+      - scripts/backup_databases.py
+      - scripts/check_exchange_keys.py
+      - backend/requirements.txt
+      - .github/workflows/real-server-kit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-server-kit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    name: Rehearsal, go-live and the gate on a clean Ubuntu 24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DEPLOY: python deploy/real-server/deploy.py
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: "The laptop side: Python packages and a .env with dummy SANDBOX keys only"
+        run: |
+          pip install -r backend/requirements.txt
+          printf '%s\n' BINANCE_TESTNET_API_KEY=ci-dummy BINANCE_TESTNET_API_SECRET=ci-dummy \
+            BYBIT_TESTNET_API_KEY=ci-dummy BYBIT_TESTNET_API_SECRET=ci-dummy > .env
+
+      - name: "The server side: an 'ubuntu' user with password-less sudo, reachable over SSH"
+        run: |
+          sudo useradd --create-home --shell /bin/bash --groups adm ubuntu
+          echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-ubuntu >/dev/null
+          ssh-keygen -q -t ed25519 -N "" -f ~/.ssh/aws_made
+          sudo install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.ssh
+          sudo install -o ubuntu -g ubuntu -m 600 ~/.ssh/aws_made.pub /home/ubuntu/.ssh/authorized_keys
+          sudo apt-get install -y -q openssh-server >/dev/null
+          sudo systemctl start ssh
+
+      - name: deploy.py init, then replace-ssh-key (the AWS-made key stops working)
+        run: |
+          $DEPLOY init --host 127.0.0.1 --key ~/.ssh/aws_made
+          $DEPLOY replace-ssh-key
+          if ssh -i ~/.ssh/aws_made -o IdentitiesOnly=yes -o BatchMode=yes ubuntu@127.0.0.1 true; then
+            echo "the old key still opens the server"; exit 1
+          fi
+          grep -q apnasor-real-ed25519 data/real-server/server.json
+
+      - name: deploy.py passwords (typed into the hidden prompt)
+        run: |
+          printf '%s\n' admin-ci-password-1 admin-ci-password-1 riskmgr-ci-password-2 riskmgr-ci-password-2 \
+            trader-ci-password-3 trader-ci-password-3 | $DEPLOY passwords
+          test "$(grep -c '^AUTH_PASSWORD_HASH_' data/real-server/logins.env)" = 3
+
+      - name: deploy.py setup --test (rehearsal - sandbox keys, unit tests on the server)
+        run: $DEPLOY setup --test
+
+      - name: Rehearsal runs as designed - keys root-only, settings without keys, gateway on 127.0.0.1 only
+        run: |
+          systemctl is-active apnasor-real
+          test "$(systemctl show -p User --value apnasor-real)" = apnasor
+          test "$(sudo stat -c '%U %a' /opt/apnasor/shared/keys.env)" = "root 600"
+          test "$(sudo stat -c '%U %a' /opt/apnasor/shared/real.env)" = "apnasor 600"
+          if sudo -u apnasor cat /opt/apnasor/shared/keys.env 2>/dev/null; then echo "the service user can read the keys file"; exit 1; fi
+          if sudo grep -q _API_ /opt/apnasor/shared/real.env; then echo "a key reached the settings file"; exit 1; fi
+          sudo grep -q "^BINANCE_TESTNET_API_KEY=" /opt/apnasor/shared/keys.env
+          sudo grep -q "^EXCHANGE_MODE='testnet'" /opt/apnasor/shared/real.env
+          test ! -e /opt/apnasor/shared/live
+          curl -fsS http://127.0.0.1:8000/api/health | python -c 'import json,sys; assert json.load(sys.stdin)["exchange_mode"] == "testnet"'
+          if curl -fsS --max-time 3 "http://$(hostname -I | awk '{print $1}'):8000/api/health"; then
+            echo "the gateway answers on the network - it must listen on 127.0.0.1 only"; exit 1
+          fi
+          $DEPLOY status
+
+      - name: "D3: deploy.py keys - real keys typed into the hidden prompt reach the server only"
+        run: |
+          printf '%s\n' binance-real-key-AAAA binance-real-secret-BBBB bybit-real-key-CCCC bybit-real-secret-DDDD \
+            | $DEPLOY keys 2>&1 | tee keys.out
+          if grep -q "binance-real" keys.out; then echo "a whole key was printed"; exit 1; fi
+          sudo grep -q "^BINANCE_MAINNET_API_KEY='binance-real-key-AAAA'" /opt/apnasor/shared/keys.env
+          if grep -rq "binance-real-key" data/ .env; then echo "a real key was saved on the laptop"; exit 1; fi
+          sudo grep -q "^EXCHANGE_MODE='testnet'" /opt/apnasor/shared/real.env   # staged, not used yet
+
+      - name: "D4: deploy.py go-live - sandbox keys removed, mainnet, the safety check"
+        run: |
+          echo "REAL MONEY" | $DEPLOY go-live
+          test -e /opt/apnasor/shared/live
+          if sudo grep -q _TESTNET_ /opt/apnasor/shared/keys.env; then echo "sandbox keys left on a live server"; exit 1; fi
+          sudo grep -q "^EXCHANGE_MODE='mainnet'" /opt/apnasor/shared/real.env
+          sudo grep -q "^ALLOW_MAINNET='true'" /opt/apnasor/shared/real.env
+          curl -fsS http://127.0.0.1:8000/api/health | python -c 'import json,sys; assert json.load(sys.stdin)["exchange_mode"] == "mainnet"'
+          grep -q "GO LIVE: real money on" /opt/apnasor/shared/releases.log
+          $DEPLOY status
+
+      - name: The gate refuses a release on a live server - unless a reason is written down
+        run: |
+          before="$(readlink -f /opt/apnasor/current)"
+          git -c user.name=ci -c user.email=ci@example.invalid commit -q --allow-empty -m "ci: a second release"
+          if $DEPLOY release; then echo "an untested commit reached a live server"; exit 1; fi
+          test "$(readlink -f /opt/apnasor/current)" = "$before"
+          $DEPLOY release --reason "CI: the gate's override path"
+          test "$(readlink -f /opt/apnasor/current)" != "$before"
+          grep -q "OVERRIDE: CI: the gate's override path" /opt/apnasor/shared/releases.log
+
+      - name: deploy.py rollback, backup-pull
+        run: |
+          first="$(basename "$(readlink -f /opt/apnasor/previous)")"
+          $DEPLOY rollback
+          test "$(basename "$(readlink -f /opt/apnasor/current)")" = "$first"
+          $DEPLOY backup-pull
+          ls data/real-server/backups/*/
+
+      - name: The gateway's log
+        if: always()
+        run: sudo journalctl -u apnasor-real -n 80 --no-pager -o cat | cut -c1-250

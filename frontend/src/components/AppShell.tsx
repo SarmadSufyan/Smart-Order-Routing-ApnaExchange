@@ -8,7 +8,7 @@ import { useDataStore } from '../stores/dataStore'
 import { useThemeStore } from '../stores/themeStore'
 import { backendVenueToUi } from '../adapters'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
-import { API_BASE, SERVER_LABEL } from '../services/api'
+import { API_BASE, SERVER_IS_REAL_MONEY, SERVER_LABEL } from '../services/api'
 
 const NAV = [
   { path: '/',            label: 'Dashboard'            },
@@ -187,7 +187,8 @@ export function AppShell() {
               title={`This page shows the gateway at ${API_BASE}, not the one on this machine`}
               style={{
                 borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
-                background: tint(C.blue, 16), color: C.blue, border: `1px solid ${C.blue}`, whiteSpace: 'nowrap',
+                background: tint(SERVER_IS_REAL_MONEY ? C.red : C.blue, 16), color: SERVER_IS_REAL_MONEY ? C.red : C.blue,
+                border: `1px solid ${SERVER_IS_REAL_MONEY ? C.red : C.blue}`, whiteSpace: 'nowrap',
               }}
             >
               {SERVER_LABEL}
