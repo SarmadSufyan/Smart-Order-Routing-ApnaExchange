@@ -98,7 +98,8 @@ Trading universe: **BTC, ETH, SOL, BNB, XRP vs USDT**, decimal quantities. `MARK
 backend/
   exchanges/            base.py (ExchangeAdapter, SymbolRules, ExecutionResult), ccxt_venue.py (shared execution
                         core: IOC, client-id idempotency, reconciliation, fees), key_permissions.py (real money:
-                        what the key may do, per exchange, pure parsers + the verdict), orderbook.py, precision.py,
+                        what the key may do, per exchange, pure parsers + the verdict, incl. the IP lock), fees.py
+                        (the account's own taker fee + LiveFees, the shared fee view), orderbook.py, precision.py,
                         update_id_sync.py / stream_sync.py (book integrity), registry.py (EXCHANGE_CATALOG),
                         binance/ bybit/ okx/ gate/ coinbase/ (per-venue feed + quirks)
   gateway/              main.py (lifespan: open store → restore state → start services), config.py (Settings,
@@ -118,6 +119,7 @@ backend/
     venue_monitor/      health_checker.py, coherence.py
     wallet/             portfolio.py (balances), ledger.py (pure P&L math), pnl.py (P&L + reconciliation)
     audit/              recorder.py (event bus → audit log)
+    alerts/             telegram.py (phone alerts from the audit summaries; /stop engages the kill switch, never releases)
     algos/              engine.py (AlgoEngine: every kind + auto), schedules.py (pure maths: VWAP profile, Almgren–
                         Chriss, POV, iceberg, auto choice, min-slice merge), twap.py (old import path)
     arbitrage/          detector.py (5c: pure edge math + WindowTracker at the top, ArbitrageDetector service)
@@ -150,7 +152,13 @@ scripts/                check_exchange_keys.py (all venues; --mode mainnet = you
                         arb_watch.py (arbitrage detector live in the terminal), hash_password.py (the .env
                         line for a real login password), security_check.py (tries the §7 attacks, read-only),
                         lab_status.py (bots + lab from a database, read-only; --db for a backup),
+                        export_records.py (a month's fills + orders as CSV, read-only),
                         backup_databases.py (online SQLite copies, gzipped, kept N days)
+deploy/real-server/     the REAL-MONEY server (Phase D): deploy.py (init, replace-ssh-key, passwords, setup = rehearsal with
+                        sandbox keys, keys = real keys via a hidden prompt -> root-only keys.env, check-keys, telegram,
+                        go-live, release with the promotion gate, status, tunnel 28000, backup-pull, rollback),
+                        check_settings.sh (each stage's rules), install_release.sh, write_keys.py, systemd/ units
+                        (project-info/REAL_MONEY_GUIDE.md parts 3-7, PHASE_D_PLAN.md)
 deploy/lab-server/      the 24/7 lab server on AWS (bots + practice lab, testnet only): deploy.py (laptop: init,
                         setup, release, env, passwords, status, logs, tunnel, backup-pull, rollback), setup.sh,
                         install_release.sh (backup -> install -> switch -> healthy or roll back), systemd/ units,
@@ -160,7 +168,8 @@ venues/ tests/ diagrams/ infra/   legacy from the simulated system — not used 
 start_all.py            starts the RAFT nodes (if enabled; waits for a leader), gateway + frontend; refuses a second
                         start (ports in use); Ctrl+C stops the gateway cleanly first, then everything else
                         (project-info/START_STOP_GUIDE.md)
-.github/workflows/ci.yml  CI on every push/PR to the 3 team branches: backend tests (Linux + Windows), ruff, tsc
+.github/workflows/ci.yml  CI on every push/PR to the 3 team branches: backend tests (Linux + Windows), ruff, tsc;
+                        lab-server-kit.yml / real-server-kit.yml deploy each server kit to a clean Ubuntu 24.04
 data/                   local SQLite audit DB per machine (gitignored, created automatically)
 ```
 
@@ -174,12 +183,13 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (534 as of 2026-10-15)
+python -m unittest discover -s backend/tests -t .   # all backend tests (569 as of 2026-10-20)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
 python scripts/benchmark_risk_batch.py --quick   # one process vs worker pool for the risk batch
 python deploy/lab-server/deploy.py status        # the 24/7 lab server on AWS (project-info/LAB_SERVER_GUIDE.md)
+python deploy/real-server/deploy.py status       # the real-money server (project-info/REAL_MONEY_GUIDE.md parts 3-7)
 ```
 
 Use the project venv's Python (`.venv/Scripts/python.exe`); a plain `python` on PATH may lack the packages.

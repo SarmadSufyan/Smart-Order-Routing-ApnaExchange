@@ -93,7 +93,8 @@ class TelegramAlerts:
     def __init__(self, token: str, chat_id: str, *, real_money: bool,
                  engage_kill_switch: Callable[[str, str], Awaitable[Any]],
                  status: Callable[[], Awaitable[str]], summary_hour_utc: int = 3,
-                 transport: httpx.AsyncBaseTransport | None = None, poll_timeout_s: int = 25) -> None:
+                 transport: httpx.AsyncBaseTransport | None = None, poll_timeout_s: int = 25,
+                 send_interval_s: float = 1.1) -> None:
         self._token = token
         self._chat = str(chat_id).strip()
         self._real_money = real_money
@@ -102,6 +103,7 @@ class TelegramAlerts:
         self._summary_hour = summary_hour_utc
         self._transport = transport
         self._poll_timeout = poll_timeout_s
+        self._send_interval = send_interval_s  # well under Telegram's rate limits
         self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=200)
         self._tasks: list[asyncio.Task] = []
         self._last_sent: dict[str, float] = {}
@@ -173,7 +175,7 @@ class TelegramAlerts:
                 except Exception as exc:  # noqa: BLE001 — never the URL: it holds the token
                     logger.warning("telegram_send_failed", attempt=attempt + 1, error=type(exc).__name__)
                     await asyncio.sleep(2 * (attempt + 1))
-            await asyncio.sleep(1.1)  # well under Telegram's rate limits
+            await asyncio.sleep(self._send_interval)
 
     # ── commands from the phone ─────────────────────────────────────
     async def _poll_loop(self) -> None:

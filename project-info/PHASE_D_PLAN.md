@@ -111,10 +111,10 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 | D1-5 ✅ 10-20 | **Your account's real fees** (`fetch_trading_fees`): routing, bots and P&L use the rate you actually pay (VIP level, BNB discount); the Venues page shows it next to the public rate | unit tests with recorded answers; confirmed at D3 with the real keys |
 | D1-6 ✅ 10-20 (code; live test with your bot) | **Alerts on your phone (Telegram)**: gateway started/stopped or down, kill switch on/off, loss limit hit, each real fill, an order an exchange refused, a key problem, a reconciliation BREAK, a daily summary. **`/stop` from your phone engages the kill switch** (stopping only — releasing it needs the screen); only your chat is obeyed; audited | tested on the lab server first (sandbox) |
 | D1-7 ✅ 10-20 | **Real-money screen mode**: `npm --prefix frontend run dev:real-server` → `localhost:5190`, red REAL MONEY SERVER label, its own tunnel port | checked in the browser against the rehearsal server |
-| D1-8 | **Monthly records export** (CSV: orders, fills, fees, P&L) for your own records | unit tests |
+| D1-8 ✅ 10-20 | **Monthly records export** (CSV: orders, fills, fees, P&L) for your own records | unit tests |
 | D1-9 | **OKX in the sandbox**: with your new OKX demo key (§5 B4), the full execution check; if it still refuses, OKX stays out of D4 | live, small sandbox orders |
 | D1-10 | **The lab gets today's version** after its week (≈ 2026-10-22), so later releases can be promoted | `deploy.py status` healthy, bots resumed |
-| D1-11 | Docs: `REAL_MONEY_GUIDE.md` rewritten around the server; a runbook and the incident playbook (§11) | — |
+| D1-11 ✅ 10-20 | Docs: `REAL_MONEY_GUIDE.md` rewritten around the server; a runbook and the incident playbook (§11) | — |
 - **Done when:** all of the above pass, tests + CI ✅, the lab ran the new version ≥ 3 days.
 
 ### D2 — The real-money server, tested empty (Sarmad: 10 minutes in AWS; the assistant: the rest)

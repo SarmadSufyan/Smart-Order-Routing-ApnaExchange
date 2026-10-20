@@ -44,7 +44,9 @@ if [[ "$TEST" == "--test" ]]; then
   tmp="$(mktemp -d)"
   tar -xzf "$TARBALL" -C "$tmp" --no-same-owner
   chown -R apnasor:apnasor "$tmp"
-  (cd "$tmp" && as_app "$REL/.venv/bin/python" -m unittest discover -s backend/tests -t . 2>&1 | tail -n 4)
+  # The names of failing tests, not only the count.
+  (cd "$tmp" && as_app "$REL/.venv/bin/python" -m unittest discover -s backend/tests -t . 2>&1 \
+     | grep -E "^(FAIL|ERROR): |^Ran |^OK|^FAILED")
   rm -rf "$tmp"
 fi
 

@@ -79,18 +79,19 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             return "REAL MONEY - all quiet"
 
         self.alerts = TelegramAlerts(TOKEN, CHAT, real_money=True, engage_kill_switch=engage, status=status,
-                                     transport=httpx.MockTransport(self.telegram.handler))
+                                     transport=httpx.MockTransport(self.telegram.handler), send_interval_s=0)
 
     def update(self, text: str, chat: str = CHAT, age_s: float = 0.0) -> dict:
         return {"update_id": 1, "message": {"chat": {"id": int(chat)}, "date": int(time.time() - age_s), "text": text}}
 
     async def drain(self) -> None:
+        """Run the sender until everything queued has gone out - no race with a wall clock (the gap is 0 here)."""
         task = asyncio.create_task(self.alerts._send_loop())
-        for _ in range(100):
-            if self.alerts._queue.empty():
+        expected = len(self.telegram.sent) + self.alerts._queue.qsize()
+        for _ in range(500):
+            if len(self.telegram.sent) >= expected:
                 break
             await asyncio.sleep(0.01)
-        await asyncio.sleep(0.05)
         task.cancel()
 
     async def test_stop_from_the_owners_chat_engages_the_kill_switch(self) -> None:

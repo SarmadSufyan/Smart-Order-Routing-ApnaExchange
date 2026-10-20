@@ -1,10 +1,9 @@
 # Real money — guide (Phase D)
 
-> **Status (2026-10-12):** the **safety rails are built and tested** (this guide's part 2). No real order has been
-> placed yet: that step is Sarmad's (part 5), with his own keys and a small amount.
-> **2026-10-15: the plan changed — real money gets its own server with a fixed IP, keys locked to it, and nothing
-> real on the laptop.** The stages, the walls between sandbox and real money and what Sarmad does are in
-> [`PHASE_D_PLAN.md`](PHASE_D_PLAN.md); parts 3–5 below are rewritten around the server in its stage D1-11.
+> **Status (2026-10-20):** the safety rails (part 2) and the **real-money server kit** (parts 3–7) are built and
+> tested — the kit end to end on a clean Ubuntu machine in CI. No real order has been placed yet: that is Sarmad's
+> (part 6). Real money runs only on its own server with a fixed IP, keys locked to it, nothing real on the laptop:
+> the plan, the stages and the walls between sandbox and real money are in [`PHASE_D_PLAN.md`](PHASE_D_PLAN.md).
 > Read with: [`ROADMAP.md`](ROADMAP.md) *Full product* D, [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md) (logins),
 > [`EXCHANGE_API_KEY_SECURITY.md`](EXCHANGE_API_KEY_SECURITY.md) (how keys are stored).
 
@@ -54,72 +53,95 @@ What the exchange is asked, per exchange (checked against each one's API documen
 
 Live so far: on Bybit's demo the call answered *trade spot: yes, withdraw: no, IP list: no* for our demo key. Binance's
 and Gate's **test** environments don't offer the endpoint. That doesn't matter, because the check runs only on real
-money, but it means the Binance, OKX and Gate answers are first seen with your real keys (part 4 does that, read-only).
+money, but it means the Binance, OKX and Gate answers are first seen with your real keys (part 5 does that, read-only).
 
 ---
 
-## 3. Before you start (one time)
+## 3. Where real money runs: its own server
 
-1. **An exchange account with identity verification done.** Start with **Binance and Bybit**: both are proven on their
-   test environments. OKX: some ISPs block okx.com (CLAUDE.md *Gotchas*), and its demo refused our orders (50124).
-   Gate: execution never tested (its spot test wallet is empty).
-2. **Only a small amount on it**: e.g. $50–100 of USDT on spot. Best is a **separate sub-account or a separate
-   account** that holds only ApnaSOR's money. A manual SELL in ApnaSOR uses whatever coins the account holds, so
-   keep your own savings elsewhere. (Bots only ever spend their own pocket.)
-3. **Create the API key** on the exchange's website (API management). Choose a system-generated (HMAC) key with:
-   - reading **on**, **spot trading on**, **withdrawals OFF**, and nothing else (no futures, margin, transfers);
-   - optionally **bind it to your IP address**. That is safer, but only if your IP is fixed: a home IP can change
-     (the likely reason the lab server's SSH timed out on 2026-10-12), and a bound key then stops working. Bybit disables a key
-     with no IP after 90 days (the check tells you the date).
-4. **Real login passwords for all three users** on this laptop: `python scripts/hash_password.py admin` (then
-   `trader1`, `risk_mgr`), put the lines in `.env`, then `python scripts/security_check.py` must say
-   "Every attack was refused." ([`SECURITY_GUIDE.md`](SECURITY_GUIDE.md))
+Real money runs **only on the real-money server** (AWS Zurich, Maham's account, its own fixed IP — decision A1);
+the laptop and the lab server stay in the sandbox ([`PHASE_D_PLAN.md`](PHASE_D_PLAN.md) §2–3). Everything below is
+done from the laptop with `deploy/real-server/deploy.py`, over SSH; you see the server's screen through a tunnel.
+Real keys never touch the laptop: you type them into a hidden prompt and they go straight into the server's
+root-only `keys.env`.
+
+**Before you start (one time):** Binance and Bybit accounts verified, 2FA with an authenticator app, an
+anti-phishing code, a withdrawal address whitelist, ~$50 USDT each in the spot / trading wallet (your savings in
+the *Funding* wallet). Don't create the API keys yet — part 5.
 
 ---
 
-## 4. Check the keys before switching (read-only)
-
-Put the keys in `.env` under **Real money** (`BINANCE_MAINNET_API_KEY` / `_SECRET`, `BYBIT_MAINNET_API_KEY` /
-`_SECRET`, …). Leave `EXCHANGE_MODE=testnet`. Then:
+## 4. Set the server up and rehearse (sandbox keys, no real money) — stage D2
 
 ```
-python scripts/check_exchange_keys.py --mode mainnet
+python deploy/real-server/deploy.py init --host <the server's Elastic IP> --key C:\Users\<you>\.ssh\apnasor-real.pem
+python deploy/real-server/deploy.py replace-ssh-key     # a key made on this laptop; the AWS-made one stops working
+python deploy/real-server/deploy.py passwords           # the server's own login passwords (no demo login there)
+python deploy/real-server/deploy.py setup --test        # machine, settings, this laptop's SANDBOX keys, first release
+python deploy/real-server/deploy.py telegram            # phone alerts + /stop (optional now, needed before go-live)
+python deploy/real-server/deploy.py status
 ```
 
-It reads balances and asks each exchange what the key may do, and never places an order. You want, per exchange:
+To see its screen: `python deploy/real-server/deploy.py tunnel` in one terminal,
+`npm --prefix frontend run dev:real-server` in another, then http://localhost:5190 (a red **REAL MONEY SERVER**
+badge; in rehearsal the environment still says SANDBOX). Then go through the rehearsal checklist
+(PHASE_D_PLAN D2): orders, a TWAP, the kill switch from the screen and from the phone, a restart, a reboot, a backup,
+a rollback, `security_check.py`.
+
+The server refuses an unsafe setup by itself: before every release and before go-live, `check_settings.sh` checks
+the stage's rules (rehearsal: sandbox mode; live: mainnet, no sandbox key left, a real password for every user).
+
+---
+
+## 5. Real keys, checked read-only — stage D3
+
+1. On each exchange, create the API key exactly as [`PHASE_D_PLAN.md`](PHASE_D_PLAN.md) §7 says: reading + spot
+   trading only, **withdrawals OFF**, **restricted to the server's Elastic IP**.
+2. `python deploy/real-server/deploy.py keys` — type each key and secret (hidden). They go to the server only.
+3. `python deploy/real-server/deploy.py check-keys` — from the server's own address, read-only. Per exchange:
 
 ```
   Binance (V1)     OK - authenticated on mainnet. Balances: USDT 50
-                   OK for real money - trade-only key (trade spot: yes, withdraw: no, IP list: no)
-                     note: not limited to your IP address (recommended if your IP is fixed)
+                   OK for real money - trade-only key (trade spot: yes, withdraw: no, IP list: yes)
+                   account fee: your Binance taker fee is 0.100%, public rate 0.100% (routing and bots use yours)
 ```
 
-`REFUSED FOR REAL MONEY - … can WITHDRAW …` → delete that key on the exchange, make a new one without
-withdrawals, and check again. Never "fix" this by weakening the check.
+`REFUSED FOR REAL MONEY - … can WITHDRAW …` or `… isn't locked to an IP address …` → delete that key on the
+exchange, make a new one with the right settings, run `keys` and `check-keys` again. Never weaken the check.
+If an exchange refuses the server's location, tell the assistant: the server moves region (never a proxy).
 
 ---
 
-## 5. Switch on, and the first real order (Sarmad does this)
+## 6. Go live, and the first real orders — stage D4 (Sarmad does this)
 
-1. In `.env`: `EXCHANGE_MODE=mainnet`, `ALLOW_MAINNET=true`. Keep the caps small; set `ENABLED_EXCHANGES` to the
-   exchanges you funded (e.g. `binance,bybit`).
-2. `python start_all.py`, log in with your real password. You should see: the red **MAINNET · REAL FUNDS** badge;
-   on *Venue Connectivity* a green 🔒 *Trade-only key confirmed by the exchange* per exchange (until the
-   exchange answers, the venue shows "checking with the exchange…" and gets no orders); on *Risk Manager* the
-   **REAL MONEY — hard caps** note; in the *Audit Log*: "Gateway started (mainnet …) — REAL MONEY, hard caps: …".
-3. **First order: about $12–15**, e.g. BUY 0.00015 BTC, Market, Best price. Tick the red box and submit. Then
-   check: the order proof (which exchange, price, fee), the *Wallet* (balances, P&L), reconciliation (MATCHED).
-4. Sell it back the same way. Then one small TWAP (e.g. $20 in 4 slices).
-5. Test the brakes: engage the kill switch and confirm an order is refused; release it.
-6. Write the results in `DEVELOPMENT_JOURNAL.md` (prices, fees, slippage vs the planned price: real numbers for the
-   report and the panel).
-
-**Back to testnet** at any time: `EXCHANGE_MODE=testnet`, restart. The real-money records stay in their own
-database.
+1. `python deploy/real-server/deploy.py go-live` — type `REAL MONEY` to confirm. The sandbox keys are removed, the
+   server switches to mainnet with the hard caps (`MAINNET_MAX_*`, default $25 / $100 / $150 / $10), the safety check
+   must pass (if it refuses, the server goes back to rehearsal unchanged), and the release log records it.
+2. `deploy.py status`: each exchange shows *key_confirmed_trade_only* and its account fee. On the screen: the red
+   **MAINNET · REAL FUNDS** badge; on *Venue Connectivity* 🔒 *Trade-only key confirmed by the exchange (no
+   withdrawals, accepted only from listed IP addresses)*; your phone gets "Gateway started (mainnet …)".
+3. The first-order checklist (PHASE_D_PLAN D4): ~$12 BUY, SELL it back, a split order, a small TWAP, an order above
+   the cap (refused), the kill switch from the screen and from the phone, a restart, reconciliation MATCHED.
+4. Write the real numbers into `DEVELOPMENT_JOURNAL.md` (prices, fees, slippage vs plan, fill times) — the M3 evidence.
 
 ---
 
-## 6. What happens when…
+## 7. Day to day on the real-money server
+
+| What | Command |
+|---|---|
+| How is it doing? (also the key and fee verdicts, the release log) | `deploy.py status` (your phone gets a summary every morning) |
+| Its log | `deploy.py logs` (`-f` to follow) |
+| The records to the laptop | `deploy.py backup-pull` (kept 90 days on the server) |
+| A month's trades as CSV | `python scripts/export_records.py --db data/real-server/backups/<backup>/apnasor-mainnet.db --month 2026-11` |
+| A new version | `deploy.py release` — only a commit that ran ≥ 3 days on the lab server with CI green; otherwise `--reason "…"` (written into the release log) |
+| Back to the version before | `deploy.py rollback` |
+| A cap change | edit the caps in your laptop's `.env`, `deploy.py env` (the server restarts with them; the reason goes in the journal) |
+| Stop everything now | `/stop` on the phone, or the kill switch on the screen; in the worst case delete the API keys on the exchanges |
+
+---
+
+## 8. What happens when…
 
 | Situation | What ApnaSOR does | What you do |
 |---|---|---|
@@ -134,7 +156,7 @@ database.
 
 ---
 
-## 7. Honest limits (say these to the panel)
+## 9. Honest limits (say these to the panel)
 
 - **Custody:** the exchange holds the money, not ApnaSOR. We are not "non-custodial"; we read balances and trade
   through a key.
@@ -152,16 +174,20 @@ database.
 
 ---
 
-## 8. Next in Phase D
+## 10. Next in Phase D
 
-1. **Sarmad:** parts 3–5 with Binance (and Bybit), first real orders, numbers into the journal.
-2. Real fee rates from the account (`fetch_trading_fees`) instead of the public base tier, once a real key exists to
-   test against.
+1. **Sarmad:** parts 4–6 (rehearsal, keys, go-live) with Binance and Bybit; first real orders; numbers into the journal.
+2. ~~Real fee rates from the account~~ ✅ 2026-10-20 (`exchanges/fees.py`; confirmed with the real keys at part 5).
 3. After the lab's verdict: decide `MAINNET_CYCLE_BOTS`, the threshold and the advisor's bracket on real money;
    then where real-money bots run 24/7 (the lab server is testnet only, on purpose).
 4. Later: a Web3 wallet / DEX venue (ROADMAP D).
 
-## 9. Panel Q&A
+## 11. Panel Q&A
+
+- *"How do you keep testing and real money apart?"* Three places: the laptop and the lab server only ever hold
+  sandbox keys (the lab's installer refuses real money); real money runs only on its own server, whose keys are
+  locked by the exchanges to that server's address — and once it is live, that server refuses sandbox keys. A version
+  reaches it only after three days on the lab server with all tests green.
 
 - *"What stops your system from stealing or losing the user's money?"* The key can't withdraw (the exchange itself
   confirms it, or we don't trade), every order is capped by limits that no screen can raise, a loss limit stops
@@ -170,5 +196,5 @@ database.
   exchange's own answer is the only fact; a key we can't verify is treated as unsafe.
 - *"Why can't an admin raise the limits from the screen?"* A stolen admin login or a mis-click shouldn't be able to
   turn a $25 system into a $10,000 one. Raising a cap needs the machine itself (edit `.env`, restart).
-- *"Did you trade real money?"* Only what part 5 records in the journal. Before that, the honest answer is: the
+- *"Did you trade real money?"* Only what part 6 records in the journal. Before that, the honest answer is: the
   real-money path is the testnet path plus these rails, verified on testnet and in a no-keys real-money dry run.

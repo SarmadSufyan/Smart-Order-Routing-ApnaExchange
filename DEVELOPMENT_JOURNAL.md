@@ -2119,3 +2119,68 @@ no keys. SSH is not tested yet: only Sarmad's IP may connect.
 Maham's root MFA and a $25 budget alert; Maham's credits and Free-plan end date (the server lives as long as her
 account); Stop until D2 (≈ $6/month, same IP) or keep running (≈ $0.70/day).
 *Files:* docs only — `project-info/PHASE_D_PLAN.md` (§1, §5 C, §15 A1), `PROGRESS.md`, this journal.
+
+
+---
+
+## 2026-10-20 — Phase D1: the real-money server kit, IP-locked keys, your own fee, phone alerts
+
+**Context.** Fizza had created the real-money server in AWS on 2026-10-18 (empty, Maham's account). Sarmad
+confirmed: the real system lives in Maham's account (her credits), the sandbox bots stay on the lab server in his;
+decisions A2-A6 as recommended. Then "go": stage D1 of the plan - everything that can be built and tested without
+money.
+
+**What was built.**
+1. **IP-locked keys** (D1-4). On real money a key the exchange doesn't report as accepted only from listed IP
+   addresses gets no orders (`MAINNET_REQUIRE_IP_LOCK=true` by default). The parsers already read each exchange's IP
+   list (Binance `ipRestrict`, Bybit `ips`, OKX `ip`, Gate `ip_whitelist`); the verdict now uses it. Withdrawal is
+   still checked first: an IP lock never makes a withdrawing key acceptable.
+2. **Your own fee** (D1-5). Each exchange is asked for the account's taker fee (`fetch_trading_fees`, or per symbol
+   on OKX) at start and every 6 h; `LiveFees` is one shared view (the account's rate where known, else the public
+   table) held - not copied - by the router, the bots and the lab, so a rate read later takes effect at once.
+   Verified live in the sandbox: a buy routed to Bybit and a sell to Binance with the public table, nothing changed.
+3. **The real-money server kit** (D1-1, D1-2, D1-3, D1-7; `deploy/real-server/`). The lab kit's proven pattern,
+   kept in its own folder (the running lab kit is untouched; the machine preparation, Python versions and package
+   lock are shared). Design choices:
+   - *Rehearsal first.* The server starts with this laptop's sandbox keys in testnet mode; `go-live` is a separate,
+     typed confirmation that removes the sandbox keys and switches to mainnet. A half-failed go-live puts the
+     rehearsal back.
+   - *Keys never on the laptop.* `keys` asks in a hidden prompt and sends the lines over SSH on stdin (never a
+     command line, which `ps` shows) to `write_keys.py`, which merges them into `keys.env`, root-only. systemd's
+     `EnvironmentFile` hands them to the gateway, so not even the service user can read the file.
+   - *A safety check per stage* (`check_settings.sh`, before every switch): rehearsal = testnet; live = mainnet, no
+     sandbox key left, a real password for every user (the real-money server has no demo login), no auto-resume.
+   - *The promotion gate.* On a live server, `release` takes a commit only if the lab server has been running that
+     exact commit for >= 72 h (its `current` link's switch time) and its GitHub checks are green - or with
+     `--reason`, which goes into the server's release log. In rehearsal it is reported, not enforced.
+   - `replace-ssh-key`: a key made on this laptop replaces the AWS-made one (which passed through another laptop);
+     the old one is removed from `authorized_keys` only after the new one is proven.
+   - A red **REAL MONEY SERVER** badge (`dev:real-server`, port 5190, tunnel 28000).
+   - **CI deploys it to a clean Ubuntu 24.04** (`real-server-kit.yml`): key swap, passwords, rehearsal with the
+     unit tests on the server, keys reaching only `keys.env`, go-live, an untested release refused, the override,
+     rollback, backup. Green on the first run.
+4. **Phone alerts** (D1-6; `services/alerts/telegram.py`). The audit log's own summaries go to one chat (gateway
+   start/stop, kill switch, loss limit, refused release, venue blacklisted; on real money also every fill and every
+   refused child), plus a daily summary. `/stop` engages the kill switch; releasing needs the screen (the RAFT
+   tighten/loosen asymmetry again). Only the configured chat is obeyed, commands older than the start are ignored,
+   and since the token sits in Telegram's URLs, no URL or raw error is ever logged. `deploy.py telegram` finds the
+   chat from the bot's last message; the health check tells the phone when it restarts a stuck gateway.
+5. **Records export** (D1-8; `scripts/export_records.py`): a month's fills and orders as CSV, read-only; on the lab's
+   October data: 781 fills, 929 orders, fees per coin.
+
+**Found while building.** The shell heredocs used for quick edits turned `\n` inside Python strings into real line
+breaks three times (a test, a shell script, a print) - caught by the tests, the syntax check and `bash -n`; edits with
+backslashes now go through files, not heredocs.
+
+**Lab after 8 days** (2026-10-20, BTC -2.2 %, ETH -6.3 %): 227 cycle-bot sales, all at target, +$13.5 at real-market
+fees; held coins -$32; the exploring advisor 136 trades, 20 wins, -$9; the strict advisor 0 trades; overall -$27 on
+$1,700. The lab's own lot model: no proven edge yet (84.9 % vs 81.1 % baseline, p = 0.16).
+
+**Files.** `backend/exchanges/key_permissions.py`, `fees.py` (new), `ccxt_venue.py`, `base.py`, `registry.py`;
+`backend/gateway/config.py`, `dependencies.py`, `main.py`; `backend/services/alerts/` (new); routing, automation and
+lab engines (shared fee view); `backend/shared/models/venue.py`, `venue_monitor/health_checker.py`;
+`deploy/real-server/` (new); `.github/workflows/real-server-kit.yml` (new); `scripts/check_exchange_keys.py`,
+`scripts/export_records.py` (new); frontend `VenueHealth.tsx`, `AppShell.tsx`, `api.ts`, `vite-env.d.ts`,
+`package.json`, `.env.real-server` (new); tests `test_fees.py`, `test_real_server.py`, `test_alerts.py`,
+`test_export_records.py` (new), `test_key_permissions.py`; docs `PHASE_D_PLAN.md`, `REAL_MONEY_GUIDE.md` (parts 3-7
+rewritten as the server runbook), `CLAUDE.md`, `PROGRESS.md`, `.env.example`.
