@@ -101,6 +101,9 @@ class SettingsTest(unittest.TestCase):
         # HTX has no sandbox: a rehearsal runs it data-only and asks for no key
         self.assertEqual(deploy.sandbox_key_lines(["binance", "htx"]),
                          ["BINANCE_TESTNET_API_KEY=bk", "BINANCE_TESTNET_API_SECRET=bs"])
+        # go-live's way back to the rehearsal: OKX with real keys but no sandbox key here runs data-only there
+        self.assertEqual(deploy.sandbox_key_lines(["binance", "okx"], strict=False),
+                         ["BINANCE_TESTNET_API_KEY=bk", "BINANCE_TESTNET_API_SECRET=bs"])
 
 
 class KeyWriterTest(unittest.TestCase):

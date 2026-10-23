@@ -381,7 +381,9 @@ def cmd_passwords(args) -> None:
     print(f"\nsaved (hashes only) in {LOGINS.relative_to(ROOT)} - the server gets them with: deploy.py env (or setup)")
 
 
-def sandbox_key_lines(exchanges: list[str]) -> list[str]:
+def sandbox_key_lines(exchanges: list[str], strict: bool = True) -> list[str]:
+    """This laptop's sandbox keys for a rehearsal. ``strict``: a missing one stops (setup); otherwise that exchange
+    is skipped and runs data-only (go-live's way back - OKX may have real keys but no complete sandbox key here)."""
     from dotenv import dotenv_values
 
     laptop = dotenv_values(ROOT / ".env") if (ROOT / ".env").exists() else {}
@@ -391,6 +393,8 @@ def sandbox_key_lines(exchanges: list[str]) -> list[str]:
             continue
         names = [f"{exchange.upper()}_TESTNET_{part}" for part in EXCHANGE_KEYS[exchange]]
         missing = [n for n in names if not (laptop.get(n) or "").strip()]
+        if missing and not strict:
+            continue  # go-live's way back: that exchange is data-only in the rehearsal it returns to
         if missing:
             fail(f"{exchange}: {', '.join(missing)} not set in this laptop's .env")
         lines += [f"{n}={laptop[n].strip()}" for n in names]
@@ -542,7 +546,7 @@ def cmd_go_live(args) -> None:
     missing = [e for e in args.exchanges if f"{e.upper()}_MAINNET_API_KEY" not in names]
     if missing:
         fail(f"no real keys on the server for {', '.join(missing)} - run deploy.py keys first")
-    sandbox = sandbox_key_lines(args.exchanges)  # read now: to put the rehearsal back if the check refuses
+    sandbox = sandbox_key_lines(args.exchanges, strict=False)  # read now: to put the rehearsal back if refused
     install_env(cfg, "live", args.exchanges)
     remote(cfg, f"rm -rf {KIT} && mkdir -p {KIT}/deploy && cp -r {BASE}/current/deploy/real-server {KIT}/deploy/")
     send_keys(cfg, [], drop="testnet")
