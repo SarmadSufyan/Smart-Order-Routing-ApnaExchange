@@ -2315,3 +2315,34 @@ scripts/check_exchange_keys.py, deploy/real-server/deploy.py, write_keys.py, fro
 .env.example, tests (test_exchanges/test_htx.py new, test_real_server.py, test_arbitrage/test_detector.py);
 docs CLAUDE.md, PHASE_D_PLAN.md (§1, §7, §15), PROGRESS.md.
 
+---
+
+## 2026-10-24 (later) — The real-money server rehearses; the first real keys, checked read-only (D2 / D3 started)
+
+**D2 (rehearsal), the parts that need no login:** `deploy/real-server/deploy.py setup --test --ref bca7bcd
+--exchanges binance,bybit,htx` — machine prepared, 583 tests passed on the server, gateway healthy; then
+`env --exchanges binance,bybit,okx,htx` (OKX data-only until its real key trades). Status: Binance and Bybit trade with
+the laptop's sandbox keys, **OKX and HTX stream live data (5/5 books each)**, 0 errors. `scripts/security_check.py` on
+the server: **every attack refused, the demo login too (HTTP 401)**. From the internet only SSH (22) is open; 8000,
+80, 443 and 5190 time out. Still to do with Sarmad (needs his login): sandbox orders, a split, a TWAP, the kill
+switch on screen; then restart / reboot / backups / alerts.
+
+**A bug found by Sarmad's first try at `keys`:** on Windows the hidden prompt (`getpass`) reads raw keystrokes, so a
+paste arrived as Ctrl+V's own character (0x16): the server got a 239-character "access key" and a one-character
+"secret", and HTX answered *incorrect access key* (nothing was traded or exposed; the entries were removed). Fixed
+(`53b03e9`): `keys`, `ai-key` and `telegram` read each value **from the clipboard on Windows** (copy, press Enter;
+never shown; the clipboard is wiped afterwards; `--type` keeps the old prompt), refuse anything with invisible
+characters or an implausible length, show the length and the last 4 characters, and ask before sending;
+`write_keys.py` refuses invisible characters too. A first attempt in the app's Terminal panel had also cancelled
+itself: that prompt treats the paste as Ctrl+C.
+
+**D3, first real keys (read-only test keys, as Sarmad chose):** `check-keys` from the server —
+- **OKX:** authenticated on the real account; withdraw **no**, IP list **yes**, `perm=read_only` → correctly refused
+  for real money (can't trade spot); **account taker fee 0.100 %** (public 0.150 %: routing will use the account's);
+- **HTX:** authenticated; withdraw **no**, IP list no (Sarmad's choice for the test), `permission=readonly` →
+  correctly refused; account fee 0.200 %;
+- both accounts hold no USDT or coins yet.
+So the whole chain works from Zurich: keys reach only the server's root-only file, both exchanges accept the
+server's address, and the permission parsers read each exchange's real answer. Next: the final keys (Read + Trade,
+withdraw off, IP `16.18.141.32`), deleting the read-only test keys, funding, Binance + Bybit keys, Telegram.
+
