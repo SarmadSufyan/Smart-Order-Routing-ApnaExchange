@@ -35,7 +35,7 @@ export function AuditRow({ e, showDate = false }: { e: AuditEvent; showDate?: bo
   const d = new Date(e.ts)
   const time = d.toLocaleTimeString(undefined, { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, alignItems: 'baseline', padding: '5px 0', borderBottom: `1px solid ${C.border}40` }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, alignItems: 'baseline', padding: '5px 0', borderBottom: `1px solid ${C.border2}` }}>
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, transform: 'translateY(-1px)' }} />
       <span style={{ fontSize: F.xs, color: C.dim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {showDate && `${d.toLocaleDateString()} `}{time}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle, RealMoneyCheck, useRealMoney } from '../components/shared'
+import { Card, CardTitle, PageHeader, RealMoneyCheck, useRealMoney } from '../components/shared'
 import { TwapChart } from '../components/TwapChart'
 import { OrderProofModal } from '../components/OrderProofModal'
 import { useDataStore } from '../stores/dataStore'
@@ -14,12 +14,12 @@ const MIN_INTERVAL_S = 3        // mirrors the backend (a slice + balance refres
 const TYPICAL_MIN_ORDER_USD = 5 // most venues' minimum order value
 
 const STATUS_STYLE: Record<AlgoStatus, { color: string; label: string }> = {
-  RUNNING:   { color: C.blue,   label: 'RUNNING' },
-  PAUSED:    { color: C.orange, label: 'PAUSED' },
-  COMPLETED: { color: C.green,  label: 'COMPLETED' },
-  EXPIRED:   { color: C.orange, label: 'EXPIRED' },
-  CANCELLED: { color: C.dim,    label: 'CANCELLED' },
-  FAILED:    { color: C.red,    label: 'FAILED' },
+  RUNNING:   { color: C.blue,   label: 'Running' },
+  PAUSED:    { color: C.orange, label: 'Paused' },
+  COMPLETED: { color: C.green,  label: 'Completed' },
+  EXPIRED:   { color: C.orange, label: 'Expired' },
+  CANCELLED: { color: C.dim,    label: 'Cancelled' },
+  FAILED:    { color: C.red,    label: 'Failed' },
 }
 
 function StatusChip({ status }: { status: AlgoStatus }) {
@@ -75,7 +75,7 @@ function PreflightResult({ result, error, base, side, onClose }: {
   return (
     <Card style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        <CardTitle>PRE-FLIGHT — NOTHING WAS SENT</CardTitle>
+        <CardTitle>Pre-flight — nothing was sent</CardTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {result && (
             <span style={{ fontSize: F.xs, color: C.dim }} title="Where the checks ran, and how long they took">
@@ -378,29 +378,31 @@ export function AlgoOrders() {
     boxSizing: 'border-box',
   }
   const th: React.CSSProperties = { padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { padding: '6px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border}40`, whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '6px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap' }
   const right: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
   const tile: React.CSSProperties = { padding: '10px 12px', borderRadius: 4, background: C.surface, minWidth: 0 }
   const two: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Algo Orders — execution algorithms</div>
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16, maxWidth: 980 }}>
-        An execution algorithm works a large order over time to reduce its market impact: TWAP (even slices), VWAP
-        (the market's usual volume), implementation shortfall (front-loaded), POV (a share of live volume) or iceberg
-        (small pieces at a limit) — or let <b>Auto</b> pick one and explain why. Every child is an ordinary order through
-        the same pre-trade risk checks, balance check and smart router as the order button; the algo has no other way
-        to trade. The kill switch pauses every running algo, and a restart never resumes one on its own.
-      </div>
+      <PageHeader
+        title="Algo Orders"
+        subtitle="Work a large order over time to reduce its market impact: TWAP, VWAP, implementation shortfall, POV or iceberg, or let Auto pick one and explain why."
+        about={<>
+          TWAP sends even slices, VWAP follows the market's usual volume, implementation shortfall front-loads, POV takes
+          a share of live volume and iceberg shows small pieces at a limit. Every child is an ordinary order through
+          the same pre-trade risk checks, balance check and smart router as the order button; the algo has no other way
+          to trade. The kill switch pauses every running algo, and a restart never resumes one on its own.
+        </>}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 360px) minmax(0, 1fr)', gap: 14, marginBottom: 14 }}>
         {/* New algo */}
         <Card>
-          <CardTitle>NEW ALGO ORDER</CardTitle>
+          <CardTitle>New algo order</CardTitle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
-              <div style={label}>ALGORITHM</div>
+              <div style={label}>Algorithm</div>
               <select value={kind} onChange={(e) => setKind(e.target.value as AlgoKind)} style={input}>
                 {ALGO_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
               </select>
@@ -410,13 +412,13 @@ export function AlgoOrders() {
             </div>
             <div style={two}>
               <div>
-                <div style={label}>SYMBOL</div>
+                <div style={label}>Symbol</div>
                 <select value={symbol} onChange={(e) => setSymbol(e.target.value)} style={input}>
                   {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <div style={label}>SIDE</div>
+                <div style={label}>Side</div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {(['BUY', 'SELL'] as const).map((sd) => (
                     <button key={sd} onClick={() => setSide(sd)} style={{
@@ -425,18 +427,18 @@ export function AlgoOrders() {
                       border: `1px solid ${side === sd ? (sd === 'BUY' ? C.green : C.red) : C.border}`,
                       background: side === sd ? tint(sd === 'BUY' ? C.green : C.red, 14) : C.surface,
                       color: side === sd ? (sd === 'BUY' ? C.green : C.red) : C.muted,
-                    }}>{sd}</button>
+                    }}>{sd === 'BUY' ? 'Buy' : 'Sell'}</button>
                   ))}
                 </div>
               </div>
             </div>
             <div>
-              <div style={label}>TOTAL QUANTITY ({base})</div>
+              <div style={label}>Total quantity ({base})</div>
               <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 0.002" style={input} />
             </div>
             <div style={two}>
               <div>
-                <div style={label}>{scheduled ? 'OVER' : 'AT MOST FOR'}</div>
+                <div style={label}>{scheduled ? 'Over' : 'At most for'}</div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <input value={duration} onChange={(e) => setDuration(e.target.value)} style={{ ...input, width: '55%' }} />
                   <select value={unit} onChange={(e) => setUnit(e.target.value as 'min' | 'sec')} style={{ ...input, width: '45%' }}>
@@ -447,32 +449,32 @@ export function AlgoOrders() {
               </div>
               {scheduled && (
                 <div>
-                  <div style={label}>SLICES</div>
+                  <div style={label}>Slices</div>
                   <input value={slices} onChange={(e) => setSlices(e.target.value)} style={input} />
                 </div>
               )}
               {kind === 'POV' && (
                 <div>
-                  <div style={label}>% OF MARKET VOLUME</div>
+                  <div style={label}>% of market volume</div>
                   <input value={participation} onChange={(e) => setParticipation(e.target.value)} style={input} />
                 </div>
               )}
               {kind === 'ICEBERG' && (
                 <div>
-                  <div style={label}>SHOW AT MOST ({base})</div>
+                  <div style={label}>Show at most ({base})</div>
                   <input value={display} onChange={(e) => setDisplay(e.target.value)} placeholder="display size" style={input} />
                 </div>
               )}
             </div>
             {kind === 'VWAP' && (
               <div>
-                <div style={label}>VOLUME HISTORY (DAYS OF THE SAME WINDOW)</div>
+                <div style={label}>Volume history (days of the same window)</div>
                 <input value={volumeDays} onChange={(e) => setVolumeDays(e.target.value)} style={input} />
               </div>
             )}
             {(kind === 'IS') && (
               <div>
-                <div style={label}>URGENCY</div>
+                <div style={label}>Urgency</div>
                 <select value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={input}>
                   <option value="LOW">Low — close to even, more price risk</option>
                   <option value="MEDIUM">Medium</option>
@@ -482,28 +484,28 @@ export function AlgoOrders() {
             )}
             {kind === 'POV' && (
               <div>
-                <div style={label}>CHECK THE VOLUME EVERY (S)</div>
+                <div style={label}>Check the volume every (s)</div>
                 <input value={checkEvery} onChange={(e) => setCheckEvery(e.target.value)} style={input} />
               </div>
             )}
             {kind === 'ICEBERG' && (
               <div style={two}>
                 <div>
-                  <div style={label}>LOOK EVERY (S)</div>
+                  <div style={label}>Look every (s)</div>
                   <input value={refresh} onChange={(e) => setRefresh(e.target.value)} style={input} />
                 </div>
                 <div>
-                  <div style={label}>SIZE VARIES ± %</div>
+                  <div style={label}>Size varies ± %</div>
                   <input value={variance} onChange={(e) => setVariance(e.target.value)} style={input} />
                 </div>
               </div>
             )}
             <div>
-              <div style={label}>{kind === 'ICEBERG' ? 'LIMIT PRICE (REQUIRED — ONLY AT THIS PRICE OR BETTER)' : 'LIMIT PRICE (OPTIONAL — WORST PRICE FOR ANY CHILD)'}</div>
+              <div style={label}>{kind === 'ICEBERG' ? 'LIMIT PRICE (REQUIRED — ONLY AT THIS PRICE OR BETTER)' : 'Limit price (optional — worst price for any child)'}</div>
               <input value={limit} onChange={(e) => setLimit(e.target.value)} placeholder={kind === 'ICEBERG' ? 'e.g. a bit below the ask' : 'none = market, price-protected'} style={input} />
             </div>
             <div>
-              <div style={label}>ROUTING OF EACH CHILD</div>
+              <div style={label}>Routing of each child</div>
               <select value={routing} onChange={(e) => setRouting(e.target.value as RoutingStrategyName)} style={input}>
                 {ROUTING_STRATEGIES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
@@ -630,7 +632,7 @@ export function AlgoOrders() {
 
         {/* List */}
         <Card>
-          <CardTitle>ALGO ORDERS</CardTitle>
+          <CardTitle>Algo orders</CardTitle>
           {algos.length === 0 ? (
             <div style={{ padding: 30, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No algo orders yet — start one {isNarrow ? 'above' : 'on the left'}.</div>
           ) : (
@@ -733,51 +735,51 @@ export function AlgoOrders() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: 8, marginBottom: 12 }}>
               <div style={tile}>
-                <div style={label}>FILLED</div>
+                <div style={label}>Filled</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtQty(a.filled_quantity)} <span style={{ fontSize: F.xs, color: C.muted }}>/ {fmtQty(a.params.quantity)} {b}</span></div>
               </div>
               <div style={tile}>
-                <div style={label}>AVG FILL PRICE</div>
+                <div style={label}>Avg fill price</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{a.filled_quantity > 0 ? fmtPrice(a.avg_fill_price) : '—'}</div>
               </div>
               <div style={tile} title="Implementation shortfall: average fill vs the market mid when the algo started. + = cost.">
-                <div style={label}>VS ARRIVAL PRICE</div>
+                <div style={label}>vs arrival price</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.arrival_slippage_bps} /></div>
                 <div style={{ fontSize: F.xs, color: C.dim }}>mid at start {fmtPrice(a.arrival_mid)}</div>
               </div>
               {a.market_vwap ? (
                 <div style={tile} title="Average fill vs the real market's VWAP over the same time (all exchanges we watch). + = cost.">
-                  <div style={label}>VS MARKET VWAP</div>
+                  <div style={label}>vs market VWAP</div>
                   <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.vs_market_vwap_bps ?? null} /></div>
                   <div style={{ fontSize: F.xs, color: C.dim }}>market {fmtPrice(a.market_vwap)}</div>
                 </div>
               ) : (
                 <div style={tile} title="Average fill vs the average market mid at the slice times — the TWAP benchmark. + = cost.">
-                  <div style={label}>VS INTERVAL TWAP</div>
+                  <div style={label}>vs interval TWAP</div>
                   <div style={{ fontSize: F.lg, fontWeight: 700 }}><Bps v={a.vs_interval_twap_bps} /></div>
                   <div style={{ fontSize: F.xs, color: C.dim }}>benchmark {fmtPrice(a.interval_twap)}</div>
                 </div>
               )}
               {k === 'POV' && (
                 <div style={tile} title="Our fills as a share of the real market volume since the start">
-                  <div style={label}>PARTICIPATION</div>
+                  <div style={label}>Participation</div>
                   <div style={{ fontSize: F.lg, fontWeight: 700 }}>{a.participation_actual_pct != null ? `${a.participation_actual_pct < 0.1 ? a.participation_actual_pct.toPrecision(2) : a.participation_actual_pct.toFixed(2)}%` : '—'}</div>
                   <div style={{ fontSize: F.xs, color: C.dim }}>target {a.params.participation_pct}% · market {a.market_volume != null ? fmtQty(a.market_volume, 4) : '—'} {b}</div>
                 </div>
               )}
               {k === 'IS' && num(plan.expected_cost_usdt) !== null && (
                 <div style={tile} title="Almgren–Chriss: expected impact cost ± 1 σ price risk, measured on the live book and volatility">
-                  <div style={label}>EXPECTED COST ± RISK</div>
+                  <div style={label}>Expected cost ± risk</div>
                   <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(num(plan.expected_cost_usdt) ?? 0, 4)}{num(plan.risk_usdt) !== null && <span style={{ fontSize: F.sm, color: C.muted }}> ±{fmtUsd(num(plan.risk_usdt) ?? 0, 4)}</span>}</div>
                   <div style={{ fontSize: F.xs, color: C.dim }}>even TWAP {fmtUsd(num(plan.twap_cost_usdt) ?? 0, 4)}{num(plan.twap_risk_usdt) !== null ? ` ±${fmtUsd(num(plan.twap_risk_usdt) ?? 0, 4)}` : ''}</div>
                 </div>
               )}
               <div style={tile}>
-                <div style={label}>FEES</div>
+                <div style={label}>Fees</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(a.fees_usdt, a.fees_usdt < 1 ? 4 : 2)}</div>
               </div>
               <div style={tile}>
-                <div style={label}>{a.status === 'RUNNING' ? (isSched ? 'NEXT SLICE' : 'ENDS IN') : 'CHILDREN SENT'}</div>
+                <div style={label}>{a.status === 'RUNNING' ? (isSched ? 'Next slice' : 'Ends in') : 'Children sent'}</div>
                 <div style={{ fontSize: F.lg, fontWeight: 700 }}>
                   {a.status === 'RUNNING' && nextIn !== null ? `in ${nextIn} s`
                     : a.status === 'RUNNING' && deadlineIn !== null ? `${Math.floor(deadlineIn / 60)}:${String(deadlineIn % 60).padStart(2, '0')}`
@@ -788,7 +790,7 @@ export function AlgoOrders() {
 
             {profile && (
               <div style={{ marginBottom: 10 }}>
-                <div style={label}>VOLUME PROFILE — SHARE OF THE WINDOW'S VOLUME PER SLICE {plan.profile_fallback ? '(NO HISTORY: EVEN)' : `(LAST ${String(plan.profile_days ?? '?')} DAYS)`}</div>
+                <div style={label}>Volume profile — share of the window's volume per slice {plan.profile_fallback ? '(NO HISTORY: EVEN)' : `(LAST ${String(plan.profile_days ?? '?')} DAYS)`}</div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 46 }}>
                   {profile.map((w, i) => (
                     <div key={i} title={`slice ${i + 1}: ${(w * 100).toFixed(1)}%`} style={{

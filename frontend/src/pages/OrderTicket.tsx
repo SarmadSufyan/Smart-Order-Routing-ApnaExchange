@@ -54,7 +54,7 @@ export function OrderTicket() {
   const reports = executionReports.slice(0, 50)
 
   const th: React.CSSProperties = { padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
-  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
+  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border2}` }
 
   return (
     <div>
@@ -64,7 +64,7 @@ export function OrderTicket() {
 
         {/* ORDER ENTRY */}
         <Card>
-          <CardTitle>NEW ORDER</CardTitle>
+          <CardTitle>New order</CardTitle>
 
           {killActive && (
             <div style={{
@@ -76,7 +76,7 @@ export function OrderTicket() {
             </div>
           )}
 
-          <label style={lblStyle}>SYMBOL</label>
+          <label style={lblStyle}>Symbol</label>
           <select
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
@@ -85,7 +85,7 @@ export function OrderTicket() {
             {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
 
-          <label style={lblStyle}>SIDE</label>
+          <label style={lblStyle}>Side</label>
           <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             {(['BUY', 'SELL'] as OrderSide[]).map((s) => (
               <button
@@ -104,7 +104,7 @@ export function OrderTicket() {
             ))}
           </div>
 
-          <label style={lblStyle}>QUANTITY</label>
+          <label style={lblStyle}>Quantity</label>
           <input
             type="number"
             min={1}
@@ -118,7 +118,7 @@ export function OrderTicket() {
             background: C.surface, border: `1px solid ${C.border}`,
             borderRadius: 4, padding: 10, marginBottom: 10, fontSize: F.sm,
           }}>
-            <div style={{ color: C.dim, fontSize: F.xs, letterSpacing: '.1em', marginBottom: 6 }}>INDICATIVE</div>
+            <div style={{ color: C.dim, fontSize: F.xs, letterSpacing: '.1em', marginBottom: 6 }}>Indicative</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ color: C.muted }}>Price ({side === 'BUY' ? 'ASK' : 'BID'})</span>
               <span style={{ color: side === 'BUY' ? C.red : C.green }}>
@@ -153,7 +153,7 @@ export function OrderTicket() {
             <div style={{
               marginTop: 10, padding: '8px 10px', borderRadius: 4, fontSize: F.sm,
               background: feedback.kind === 'ok' ? tint(C.green, 8) : tint(C.red, 8),
-              border: `1px solid ${feedback.kind === 'ok' ? C.green : C.red}40`,
+              border: `1px solid ${tint(feedback.kind === 'ok' ? C.green : C.red, 25)}`,
               color: feedback.kind === 'ok' ? C.green : C.red,
             }}>
               {feedback.msg}
@@ -164,7 +164,7 @@ export function OrderTicket() {
         {/* ORDER BLOTTER */}
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <CardTitle>ORDER BLOTTER</CardTitle>
+            <CardTitle>Order blotter</CardTitle>
             <span style={{ fontSize: F.xs, color: C.dim }}>{uiOrders.length} orders</span>
           </div>
           {uiOrders.length === 0 ? (
@@ -235,7 +235,7 @@ export function OrderTicket() {
       {/* EXECUTION REPORTS */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <CardTitle>EXECUTION REPORTS</CardTitle>
+          <CardTitle>Execution reports</CardTitle>
           <span style={{ fontSize: F.xs, color: C.dim }}>{reports.length} reports</span>
         </div>
         {reports.length === 0 ? (

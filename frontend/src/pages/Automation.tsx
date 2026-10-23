@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle, confirmRealMoney, useRealMoney } from '../components/shared'
-import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
+import { Card, CardTitle, PageHeader, confirmRealMoney, useRealMoney } from '../components/shared'
+import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
 import { SYMBOLS } from '../mockData'
 import { api } from '../services/api'
 import { wsClient } from '../services/websocket'
@@ -34,7 +34,7 @@ const input: React.CSSProperties = {
 }
 const tile: React.CSSProperties = { padding: '8px 10px', borderRadius: 4, background: C.surface, minWidth: 0 }
 const th: React.CSSProperties = { padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left', whiteSpace: 'nowrap' }
-const td: React.CSSProperties = { padding: '5px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border}40`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+const td: React.CSSProperties = { padding: '5px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
 const pill = (on: boolean): React.CSSProperties => ({
   padding: '5px 12px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit', fontSize: F.sm, fontWeight: 700,
   border: `1px solid ${on ? C.blue : C.border}`, background: on ? tint(C.blue, 14) : C.surface, color: on ? C.blue : C.muted,
@@ -77,24 +77,24 @@ function FundCard({ fund, onChange }: { fund: FundView | null; onChange: () => v
   const pnlColor = (v: number | null) => (v === null ? C.text : v >= 0 ? C.green : C.red)
   return (
     <Card>
-      <CardTitle>AUTOMATION FUND</CardTitle>
+      <CardTitle>Automation fund</CardTitle>
       <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
         Money you set aside for bots. Each bot gets its own pocket from it and can never spend more; manual
         orders can't use what the fund holds. {fund?.note.split('. ').slice(2).join('. ')}
       </div>
       {fund ? <>
         <div style={{ display: 'grid', gridTemplateColumns: narrow ? 'repeat(2, minmax(0, 1fr))' : 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
-          <Stat name="PUT IN" value={fmtUsd(fund.allocated_usdt)} hint="Moved from the wallet into the fund, net of what was moved out" />
-          <Stat name="UNASSIGNED" value={fmtUsd(fund.unassigned_usdt)} hint="In the fund, not given to any bot" />
-          <Stat name="BOTS' CASH" value={fmtUsd(fund.bots_cash_usdt)} />
-          <Stat name="BOTS' COINS" value={fund.coins_value_usdt === null ? '—' : fmtUsd(fund.coins_value_usdt)}
+          <Stat name="Put in" value={fmtUsd(fund.allocated_usdt)} hint="Moved from the wallet into the fund, net of what was moved out" />
+          <Stat name="Unassigned" value={fmtUsd(fund.unassigned_usdt)} hint="In the fund, not given to any bot" />
+          <Stat name="Bots' cash" value={fmtUsd(fund.bots_cash_usdt)} />
+          <Stat name="Bots' coins" value={fund.coins_value_usdt === null ? '—' : fmtUsd(fund.coins_value_usdt)}
             hint={Object.entries(fund.coins).map(([a, q]) => `${fmtQty(q)} ${a}`).join(', ') || 'none'} />
-          <Stat name="VALUE NOW" value={fund.value_usdt === null ? '—' : fmtUsd(fund.value_usdt)} />
-          <Stat name="P&L (REAL-MARKET FEES)" value={fmtPnl(fund.pnl_market_usdt, 4)} color={pnlColor(fund.pnl_market_usdt)}
+          <Stat name="Value now" value={fund.value_usdt === null ? '—' : fmtUsd(fund.value_usdt)} />
+          <Stat name="P&L (real-market fees)" value={fmtPnl(fund.pnl_market_usdt, 4)} color={pnlColor(fund.pnl_market_usdt)}
             hint={`Fees as the sandbox environments charged them: ${fmtPnl(fund.pnl_usdt, 4)}. Binance's sandbox charges no fees, so results are shown at each exchange's real taker fee.`} />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 10 }}>
-          <div style={{ width: 140 }}><Num name="AMOUNT (USDT)" value={amount} set={setAmount} min={0} /></div>
+          <div style={{ width: 140 }}><Num name="Amount (USDT)" value={amount} set={setAmount} min={0} /></div>
           <button disabled={busy} onClick={() => move('deposit')} style={button(C.blue, busy)}>Move into the fund</button>
           <button disabled={busy} onClick={() => move('withdraw')} style={button(C.muted, busy)}>Move back to the wallet</button>
           <div style={{ fontSize: F.xs, color: C.dim }}>
@@ -141,7 +141,7 @@ function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => v
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-        <CardTitle>START A BOT</CardTitle>
+        <CardTitle>Start a bot</CardTitle>
         <div style={{ display: 'flex', gap: 4 }}>
           <button onClick={() => setKind('cycle')} style={pill(kind === 'cycle')}>Profit cycle</button>
           <button onClick={() => setKind('advisor')} style={pill(kind === 'advisor')}>Advisor</button>
@@ -156,16 +156,16 @@ function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => v
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 8 }}>
           <div>
-            <div style={label}>COIN</div>
+            <div style={label}>Coin</div>
             <select value={cycle.symbol} onChange={(e) => setCycle({ ...cycle, symbol: e.target.value })} style={input}>
               {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <Num name="BUDGET (USDT)" value={cycle.budget_usdt} set={(v) => setCycle({ ...cycle, budget_usdt: v })} />
-          <Num name="EACH BUY (USDT)" value={cycle.buy_usdt} set={(v) => setCycle({ ...cycle, buy_usdt: v })} />
-          <Num name="THRESHOLD %" value={cycle.threshold_pct} set={(v) => setCycle({ ...cycle, threshold_pct: v })} />
-          <Num name="SPACING %" value={cycle.spacing_pct} set={(v) => setCycle({ ...cycle, spacing_pct: v })} />
-          <Num name="PAUSE BUYS AT DRAWDOWN %" value={cycle.max_drawdown_pct} set={(v) => setCycle({ ...cycle, max_drawdown_pct: v })} />
+          <Num name="Budget (USDT)" value={cycle.budget_usdt} set={(v) => setCycle({ ...cycle, budget_usdt: v })} />
+          <Num name="Each buy (USDT)" value={cycle.buy_usdt} set={(v) => setCycle({ ...cycle, buy_usdt: v })} />
+          <Num name="Threshold %" value={cycle.threshold_pct} set={(v) => setCycle({ ...cycle, threshold_pct: v })} />
+          <Num name="Spacing %" value={cycle.spacing_pct} set={(v) => setCycle({ ...cycle, spacing_pct: v })} />
+          <Num name="Pause buys at drawdown %" value={cycle.max_drawdown_pct} set={(v) => setCycle({ ...cycle, max_drawdown_pct: v })} />
         </div>
       </> : <>
         <div style={{ fontSize: F.sm, color: C.muted, margin: '4px 0 10px', lineHeight: 1.5 }}>
@@ -184,12 +184,12 @@ function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => v
           <button style={pill(adv.mode === 'AUTO')} disabled={mainnet} onClick={() => setAdv({ ...adv, mode: 'AUTO' })}>Auto (sandbox)</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 8 }}>
-          <Num name="BUDGET (USDT)" value={adv.budget_usdt} set={(v) => setAdv({ ...adv, budget_usdt: v })} />
-          <Num name="EACH TRADE (USDT)" value={adv.trade_usdt} set={(v) => setAdv({ ...adv, trade_usdt: v })} />
-          <Num name="MIN P(UP) NEXT HOUR" value={adv.min_probability} step="0.01" set={(v) => setAdv({ ...adv, min_probability: v })} />
+          <Num name="Budget (USDT)" value={adv.budget_usdt} set={(v) => setAdv({ ...adv, budget_usdt: v })} />
+          <Num name="Each trade (USDT)" value={adv.trade_usdt} set={(v) => setAdv({ ...adv, trade_usdt: v })} />
+          <Num name="Min P(up) next hour" value={adv.min_probability} step="0.01" set={(v) => setAdv({ ...adv, min_probability: v })} />
           <Num name="STOP (× ATR)" value={adv.k_atr} set={(v) => setAdv({ ...adv, k_atr: v })} />
-          <Num name="TARGET (R)" value={adv.rr} set={(v) => setAdv({ ...adv, rr: v })} />
-          <Num name="MAX HOLD (H)" value={adv.max_hold_hours} set={(v) => setAdv({ ...adv, max_hold_hours: v })} />
+          <Num name="Target (R)" value={adv.rr} set={(v) => setAdv({ ...adv, rr: v })} />
+          <Num name="Max hold (h)" value={adv.max_hold_hours} set={(v) => setAdv({ ...adv, max_hold_hours: v })} />
         </div>
       </>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
@@ -207,8 +207,8 @@ function LotsTable({ lots, advisor }: { lots: Lot[]; advisor: boolean }) {
     <div style={{ overflowX: 'auto', marginTop: 8 }}>
       <table style={{ borderCollapse: 'collapse', width: '100%' }}>
         <thead><tr>
-          <th style={th}>LOT</th><th style={th}>COIN</th><th style={th}>BOUGHT</th><th style={th}>@</th><th style={th}>COST</th>
-          <th style={th}>{advisor ? 'TARGET / STOP' : 'SELLS AT'}</th><th style={th}>STATUS</th><th style={th}>RESULT (REAL FEES)</th>
+          <th style={th}>Lot</th><th style={th}>Coin</th><th style={th}>Bought</th><th style={th}>@</th><th style={th}>Cost</th>
+          <th style={th}>{advisor ? 'Target / stop' : 'Sells at'}</th><th style={th}>Status</th><th style={th}>Result (real fees)</th>
         </tr></thead>
         <tbody>
           {lots.slice().reverse().slice(0, 12).map((l) => (
@@ -279,7 +279,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
           <span style={{ fontSize: F.xs, color: C.dim }}> · {bot.id}{bot.lab ? ' · lab' : ''} · by {bot.created_by}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: F.xs, padding: '2px 8px', borderRadius: 3, fontWeight: 700, background: tint(color, 14), color }}>{bot.status}</span>
+          <span style={{ fontSize: F.xs, padding: '2px 8px', borderRadius: 3, fontWeight: 700, background: tint(color, 14), color }}>{sentence(bot.status)}</span>
           {bot.status === 'RUNNING' && <button disabled={busy} onClick={() => act(() => api.controlBot(bot.id, 'pause'))} style={button(C.orange, busy)}>Pause</button>}
           {bot.status === 'PAUSED' && <button disabled={busy} onClick={() => act(() => api.controlBot(bot.id, 'resume'))} style={button(C.green, busy)}>Resume</button>}
           {(bot.status === 'RUNNING' || bot.status === 'PAUSED') && <button disabled={busy} onClick={() => act(() => api.controlBot(bot.id, 'stop'),
@@ -292,14 +292,14 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
       </div>
       {bot.status_reason && bot.status !== 'RUNNING' && <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>{bot.status_reason}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: narrow ? 'repeat(2, minmax(0, 1fr))' : 'repeat(6, minmax(0, 1fr))', gap: 8, marginTop: 8 }}>
-        <Stat name="BUDGET" value={fmtUsd(bot.pocket?.budget_usdt ?? 0)} />
-        <Stat name="CASH" value={fmtUsd(bot.pocket?.cash_usdt ?? 0)} />
-        <Stat name="VALUE NOW" value={bot.value_usdt === null ? '—' : fmtUsd(bot.value_usdt)} />
-        <Stat name="P&L (REAL FEES)" value={fmtPnl(bot.pnl_market_usdt, 4)} color={(bot.pnl_market_usdt ?? 0) >= 0 ? C.green : C.red}
+        <Stat name="Budget" value={fmtUsd(bot.pocket?.budget_usdt ?? 0)} />
+        <Stat name="Cash" value={fmtUsd(bot.pocket?.cash_usdt ?? 0)} />
+        <Stat name="Value now" value={bot.value_usdt === null ? '—' : fmtUsd(bot.value_usdt)} />
+        <Stat name="P&L (real fees)" value={fmtPnl(bot.pnl_market_usdt, 4)} color={(bot.pnl_market_usdt ?? 0) >= 0 ? C.green : C.red}
           hint={`As charged in the sandbox: ${fmtPnl(bot.pnl_usdt, 4)}; closed: ${fmtPnl(bot.pocket?.realized_market_usdt, 4)}`} />
-        <Stat name={bot.kind === 'CYCLE' ? 'CYCLES DONE' : 'WON / STOPPED / TIMED OUT'}
+        <Stat name={bot.kind === 'CYCLE' ? 'CYCLES DONE' : 'Won / stopped / timed out'}
           value={bot.kind === 'CYCLE' ? s.lots_closed : `${s.wins} / ${s.losses} / ${s.timeouts}`} />
-        <Stat name="OPEN" value={`${open.length} lot(s)`} />
+        <Stat name="Open" value={`${open.length} lot(s)`} />
       </div>
       {bot.waiting_reason && <div style={{ fontSize: F.sm, color: C.muted, marginTop: 8 }}>Now: {bot.waiting_reason}</div>}
       {waiting.map((p) => <ProposalCard key={p.id} p={p} onDecide={(approve) => act(() => api.decideProposal(p.id, approve))} />)}
@@ -324,7 +324,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
 function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  if (!lab) return <Card><CardTitle>PRACTICE LAB</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
+  if (!lab) return <Card><CardTitle>Practice lab</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
   const start = async (name: string, budget: number) => {
     if (!window.confirm(`Start this lab experiment? It moves ${fmtUsd(budget)} of sandbox funds from the wallet into the automation fund and starts its bots.`)) return
     setBusy(name); setError(null)
@@ -335,14 +335,14 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
     x ? `${x.mean >= 0 ? '+' : ''}${x.mean.toFixed(3)}% (95%: ${x.low.toFixed(3)} … ${x.high.toFixed(3)})` : '—'
   return (
     <Card>
-      <CardTitle>PRACTICE LAB — WHAT OUR OWN TRADES TEACH US</CardTitle>
+      <CardTitle>Practice lab — what our own trades teach us</CardTitle>
       <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>{lab.note}</div>
       <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 10 }}>
         Samples: {Object.entries(lab.samples).map(([k, n]) => `${n} ${k.toLowerCase().replace('_', ' ')}`).join(' · ') || 'none yet'}
       </div>
 
       {lab.enabled && <>
-        <div style={label}>EXPERIMENTS (SANDBOX)</div>
+        <div style={label}>Experiments (sandbox)</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8, marginBottom: 12 }}>
           {lab.presets.map((p) => (
             <div key={p.name} style={{ ...tile, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -357,13 +357,13 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
         {error && <div style={{ fontSize: F.sm, color: C.orange, marginBottom: 8 }}>{error}</div>}
       </>}
 
-      <div style={label}>PROFIT-CYCLE VARIANTS</div>
+      <div style={label}>Profit-cycle variants</div>
       {lab.scoreboard.length ? (
         <div style={{ overflowX: 'auto', marginBottom: 10 }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead><tr>
-              <th style={th}>VARIANT</th><th style={th}>LOTS (CLOSED / OPEN)</th><th style={th}>DAYS</th><th style={th}>PROFIT</th>
-              <th style={th}>PER DAY</th><th style={th}>PER DAY ON BUDGET</th><th style={th}>PER LOT</th><th style={th}>MEDIAN HOLD</th><th style={th}>SOLD ≤ 24 H</th>
+              <th style={th}>Variant</th><th style={th}>Lots (closed / open)</th><th style={th}>Days</th><th style={th}>Profit</th>
+              <th style={th}>Per day</th><th style={th}>Per day on budget</th><th style={th}>Per lot</th><th style={th}>Median hold</th><th style={th}>Sold ≤ 24 h</th>
             </tr></thead>
             <tbody>{lab.scoreboard.map((r) => (
               <tr key={r.variant}>
@@ -387,7 +387,7 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
         </div>
       )}
 
-      <div style={label}>ADVISOR TRADES</div>
+      <div style={label}>Advisor trades</div>
       {lab.advisor.length ? lab.advisor.map((r) => (
         <div key={r.variant} style={{ fontSize: F.sm, color: C.muted, marginBottom: 6, lineHeight: 1.5 }}>
           <b style={{ color: C.text }}>{r.variant}</b>: {r.trades} trades ({r.closed} closed) — {r.wins} hit the target, {r.stops} the stop,
@@ -398,13 +398,13 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
         </div>
       )) : <div style={{ fontSize: F.sm, color: C.dim, marginBottom: 10 }}>No advisor trades yet.</div>}
 
-      <div style={label}>TRADING COSTS MEASURED ON OUR OWN ORDERS</div>
+      <div style={label}>Trading costs measured on our own orders</div>
       {lab.costs.length ? (
         <div style={{ overflowX: 'auto', marginBottom: 10 }}>
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead><tr>
-              <th style={th}>EXCHANGE</th><th style={th}>COIN</th><th style={th}>ORDERS (FILLED)</th><th style={th}>FILL RATE</th>
-              <th style={th}>SLIPPAGE MEDIAN</th><th style={th}>P90</th><th style={th}>FEE CHARGED</th><th style={th}>REAL-MARKET FEE</th>
+              <th style={th}>Exchange</th><th style={th}>Coin</th><th style={th}>Orders (filled)</th><th style={th}>Fill rate</th>
+              <th style={th}>Slippage median</th><th style={th}>P90</th><th style={th}>Fee charged</th><th style={th}>Real-market fee</th>
             </tr></thead>
             <tbody>{lab.costs.map((r) => (
               <tr key={`${r.venue_id}-${r.symbol}`}>
@@ -419,7 +419,7 @@ function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () =
         </div>
       ) : <div style={{ fontSize: F.sm, color: C.dim, marginBottom: 10 }}>No bot orders yet.</div>}
 
-      <div style={label}>MODELS TRAINED ON OUR OWN TRADES</div>
+      <div style={label}>Models trained on our own trades</div>
       {lab.models.map((m) => (
         <div key={m.kind} style={{ fontSize: F.sm, color: C.muted, marginBottom: 4 }}>
           <b style={{ color: C.text }}>{m.question}</b> — {m.status}
@@ -464,13 +464,18 @@ export function Automation() {
   const ended = bots.filter((b) => !(b.status === 'RUNNING' || b.status === 'PAUSED'))
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Bots &amp; Lab</div>
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 12, maxWidth: 1000, lineHeight: 1.5 }}>
-        Bots trade from a fund you set aside, through the same order path as the order button — pre-trade risk, the kill
-        switch and price-protected IOC orders apply to every one of their orders. The kill switch pauses every bot, and a
-        restart leaves them paused. The practice lab writes down every bot trade and learns from them.
-        {' '}<span style={{ color: C.orange }}>No bot can guarantee a profit: prices can fall after a buy, and forecasts are probabilities.</span>
-      </div>
+      <PageHeader
+        title="Bots & Lab"
+        subtitle={<>
+          Bots trade from a fund you set aside, through the same order path as the order button.{' '}
+          <span style={{ color: C.orange }}>No bot can guarantee a profit.</span>
+        </>}
+        about={<>
+          Pre-trade risk, the kill switch and price-protected IOC orders apply to every bot order. The kill switch
+          pauses every bot, and a restart leaves them paused. The practice lab writes down every bot trade and learns
+          from them. Prices can fall after a buy, and forecasts are probabilities.
+        </>}
+      />
       {error && <div style={{ fontSize: F.sm, color: C.orange, marginBottom: 10 }}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <FundCard fund={fund} onChange={refreshAll} />

@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import '@fontsource-variable/inter'  // Studio's typeface, bundled: the demo laptop needs no internet for fonts
 import App from './App'
 import { THEME_CSS } from './themeStyles'
 

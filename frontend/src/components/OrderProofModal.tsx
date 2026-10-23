@@ -51,7 +51,6 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
   const modal: React.CSSProperties = {
     background: C.surface, border: `1px solid ${C.border}`,
     borderRadius: 8, width: '100%', maxWidth: 720,
-    fontFamily: "'Consolas','IBM Plex Mono',monospace",
     color: C.text, maxHeight: '90vh', overflowY: 'auto',
   }
   const header: React.CSSProperties = {
@@ -61,7 +60,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
 
   return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modal}>
+      <div data-glass="float" style={modal}>
         <div style={header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
@@ -107,7 +106,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
 
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 6, letterSpacing: '.05em' }}>
-              AUDIT TRAIL — EVERY STEP, AS RECORDED
+              Audit trail — every step, as recorded
             </div>
             <AuditTimeline orderId={order.id} />
           </div>

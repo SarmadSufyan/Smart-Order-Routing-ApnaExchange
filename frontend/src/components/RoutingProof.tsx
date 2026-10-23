@@ -2,6 +2,7 @@ import React from 'react'
 import { C, F, tint } from '../theme'
 import { baseAsset, fmtPrice, fmtQty, fmtSize, fmtUsd } from '../format'
 import { routingStrategyLabel } from '../services/api'
+import { venueName } from '../adapters'
 import type { RoutingDecision } from '../services/api'
 
 /**
@@ -46,7 +47,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
   const hasSmart = decision.candidates.some((c) => c.fill_ratio !== undefined && c.fill_ratio !== null)
 
   return (
-    <div style={{ fontFamily: "'Consolas','IBM Plex Mono',monospace" }}>
+    <div>
 
       {/* ── Header banner with savings highlight ── */}
       <div style={{
@@ -57,7 +58,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 3 }}>
-              SOR DECISION · {symbol} · {routingStrategyLabel(decision.strategy).toUpperCase()}
+              SOR decision · {symbol} · {routingStrategyLabel(decision.strategy)}
             </div>
             <div style={{ fontSize: F.md, color: C.text, fontWeight: 600 }}>
               Routed {isBuy ? 'buy' : 'sell'} of {fmtQty(decision.total_allocated)} {unit}
@@ -95,7 +96,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
           </div>
           {decision.total_savings > 0 && (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>SAVED vs WORST VENUE</div>
+              <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>Saved vs worst venue</div>
               <div style={{ fontSize: F.lg, color: C.green, fontWeight: 700 }}>
                 +{fmtUsd(decision.total_savings)}
               </div>
@@ -128,7 +129,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                   borderRight: i < decision.winning_venues.length - 1 ? `1px solid ${C.bg}` : undefined,
                   minWidth: pct < 8 ? 'auto' : undefined,
                 }}>
-                  {pct > 10 ? `${c.venue_id} · ${fmtQty(c.allocated_qty, 5)}` : c.venue_id}
+                  {pct > 10 ? `${venueName(c.venue_id)} · ${fmtQty(c.allocated_qty, 5)}` : venueName(c.venue_id)}
                 </div>
               )
             })}
@@ -150,7 +151,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
         borderRadius: 6, overflow: 'hidden', marginBottom: 12,
       }}>
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${C.border}`, fontSize: F.xs, color: C.dim, letterSpacing: '.1em' }}>
-          VENUE COMPARISON · executable venues ranked by {hasFees ? `all-in ${isBuy ? 'cost (ask + fee)' : 'proceeds (bid − fee)'}` : isBuy ? 'lowest ask' : 'highest bid'}, then excluded venues
+          Venue comparison · executable venues ranked by {hasFees ? `all-in ${isBuy ? 'cost (ask + fee)' : 'proceeds (bid − fee)'}` : isBuy ? 'lowest ask' : 'highest bid'}, then excluded venues
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -178,12 +179,12 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                   borderBottom: `1px solid ${tint(C.border, 40)}`,
                 }}>
                   <td style={{ ...td, color: rankColor, fontWeight: c.rank === 1 ? 700 : 400 }}>
-                    {c.rank === 1 ? '🥇' : c.rank}
+                    {c.rank}
                   </td>
                   <td style={{ ...td, color: C.text, fontWeight: winner ? 700 : 500 }}>
-                    {c.venue_id}
-                    {winner && <span style={{ marginLeft: 6, color: C.green, fontSize: F.xs, fontWeight: 700 }}>✓ WINNER</span>}
-                    {inelig && <span style={{ marginLeft: 6, color: C.red, fontSize: F.xs }}>EXCLUDED</span>}
+                    {venueName(c.venue_id)} <span style={{ color: C.dim, fontWeight: 400, fontSize: F.xs }}>{c.venue_id}</span>
+                    {winner && <span style={{ marginLeft: 6, color: C.green, fontSize: F.xs, fontWeight: 700 }}>✓ Winner</span>}
+                    {inelig && <span style={{ marginLeft: 6, color: C.red, fontSize: F.xs }}>Excluded</span>}
                   </td>
                   <td style={{ ...td, textAlign: 'right', color: c.eligible ? (isBuy ? C.red : C.green) : C.dim }}>
                     {fmtPrice(c.price)}
@@ -235,7 +236,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
           borderRadius: 6, padding: '10px 12px',
         }}>
           <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>
-            ROUTING NOTES
+            Routing notes
           </div>
           {decision.notes.map((n, i) => (
             <div key={i} style={{ fontSize: F.base, color: C.text, lineHeight: 1.6 }}>

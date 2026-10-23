@@ -153,7 +153,7 @@ export function TwapChart({ algo, now }: { algo: TwapState; now: number }) {
       </svg>
 
       {hs && (
-        <div style={{
+        <div data-glass="float" style={{
           position: 'absolute', top: 30, left: tipLeft, width: 218, pointerEvents: 'none',
           background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6,
           padding: '8px 10px', fontSize: F.xs, color: C.muted, boxShadow: '0 4px 14px rgba(0,0,0,.25)',

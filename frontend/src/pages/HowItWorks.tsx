@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card } from '../components/shared'
+import { Card, PageHeader } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { api, type NBBO, type Order, type ExecutionReport } from '../services/api'
 import { SYMBOLS } from '../mockData'
-import { fmtPrice, fmtUsd, spreadBps } from '../format'
+import { fmtPrice, fmtUsd, sentence, spreadBps } from '../format'
 import { LATENCY_WARN_MS } from '../adapters'
 import type { OrderSide } from '../types'
 
@@ -65,7 +65,7 @@ const STEP_DEFS = [
 ]
 
 const SPEEDS = [
-  { label: 'Very Slow', ms: 4000 },
+  { label: 'Very slow', ms: 4000 },
   { label: 'Slow',      ms: 2500 },
   { label: 'Normal',    ms: 1200 },
   { label: 'Fast',      ms: 500  },
@@ -223,33 +223,33 @@ export function HowItWorks() {
 
   return (
     <div>
-      <div style={{ fontSize: F.xl, color: C.text, marginBottom: 6, fontWeight: 600 }}>How It Works — Trace a Real Order</div>
-      <div style={{ fontSize: F.base, color: C.muted, marginBottom: 16 }}>
-        Watch a single order travel through the platform, one stage at a time, with real backend data at every step.
-      </div>
+      <PageHeader
+        title="How It Works"
+        subtitle="Trace a real order through the platform, one stage at a time, with live data at every step."
+      />
 
       {/* Controls */}
       <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 100px 1fr 220px', gap: 12, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 120px), 1fr))', gap: 12, alignItems: 'end' }}>
           <div>
-            <label style={lbl}>SYMBOL</label>
+            <label style={lbl}>Symbol</label>
             <select value={symbol} onChange={(e) => setSymbol(e.target.value)} disabled={isPlaying} style={inp}>
               {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label style={lbl}>SIDE</label>
+            <label style={lbl}>Side</label>
             <select value={side} onChange={(e) => setSide(e.target.value as OrderSide)} disabled={isPlaying} style={inp}>
-              <option value="BUY">BUY</option>
-              <option value="SELL">SELL</option>
+              <option value="BUY">Buy</option>
+              <option value="SELL">Sell</option>
             </select>
           </div>
           <div>
-            <label style={lbl}>QTY</label>
+            <label style={lbl}>Qty</label>
             <input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(parseFloat(e.target.value) || 0)} disabled={isPlaying} style={inp} />
           </div>
-          <div>
-            <label style={lbl}>SPEED</label>
+          <div style={{ gridColumn: 'span 2', minWidth: 0 }}>
+            <label style={lbl}>Speed</label>
             <div style={{ display: 'flex', gap: 4 }}>
               {SPEEDS.map((s, i) => (
                 <button
@@ -269,7 +269,7 @@ export function HowItWorks() {
               ))}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, gridColumn: 'span 2', minWidth: 0 }}>
             <button
               onClick={play}
               disabled={isPlaying}
@@ -280,7 +280,7 @@ export function HowItWorks() {
                 cursor: isPlaying ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}
             >
-              {isPlaying ? 'RUNNING…' : 'TRACE ORDER'}
+              {isPlaying ? 'Running…' : 'Trace order'}
             </button>
             <button
               onClick={reset}
@@ -291,7 +291,7 @@ export function HowItWorks() {
                 fontSize: F.base, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
-              RESET
+              Reset
             </button>
           </div>
         </div>
@@ -357,7 +357,7 @@ export function HowItWorks() {
                     background: tint(borderColor, 20), color: borderColor, letterSpacing: '.1em',
                     fontWeight: 600,
                   }}>
-                    {state.status.toUpperCase()}
+                    {sentence(state.status)}
                   </span>
                   {state.durationMs !== undefined && (
                     <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4 }}>
@@ -441,7 +441,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
     return (
       <div>
         <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
-          QUOTES FROM ALL VENUES ({side === 'BUY' ? 'buying — looking for lowest ASK' : 'selling — looking for highest BID'}):
+          Quotes from all venues ({side === 'BUY' ? 'buying — looking for lowest ASK' : 'selling — looking for highest BID'}):
         </div>
         <table style={tbl}>
           <thead>
@@ -493,7 +493,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
           borderRadius: 4, display: 'flex', alignItems: 'center', gap: 16,
         }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: F.sm, color: C.muted, letterSpacing: '.1em' }}>WINNER</div>
+            <div style={{ fontSize: F.sm, color: C.muted, letterSpacing: '.1em' }}>Winner</div>
             <div style={{ fontSize: F.xl, fontWeight: 700, color: C.accent, marginTop: 2 }}>{data.chosenVenue}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -555,7 +555,7 @@ function StepDetails({ stepKey, data, side }: { stepKey: string; data: any; side
     return (
       <div>
         <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 6, letterSpacing: '.1em' }}>
-          PORTFOLIO AFTER FILL:
+          Portfolio after fill:
         </div>
         <table style={tbl}>
           <thead>

@@ -142,7 +142,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
   })
 
   return (
-    <aside aria-label="Copilot" style={{
+    <aside aria-label="Copilot" data-glass="float" style={{
       position: 'fixed', top, right: 0, bottom: 0, zIndex: 120, width: 440, maxWidth: '100vw',
       background: C.surface, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column',
       boxShadow: '-8px 0 24px rgba(0, 0, 0, .35)',

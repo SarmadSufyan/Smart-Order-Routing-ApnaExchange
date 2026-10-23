@@ -7,14 +7,12 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+      /* Only until the theme CSS loads (main.tsx): the default look's dark page, no flash of another colour. */
       body {
-        font-family: 'Consolas', 'IBM Plex Mono', 'Courier New', monospace;
-        background: #0D0F11;
-        color: #E8E6DF;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        background: #050507;
+        color: #F5F5F7;
       }
-      ::-webkit-scrollbar { width: 4px; height: 4px; }
-      ::-webkit-scrollbar-track { background: #131619; }
-      ::-webkit-scrollbar-thumb { background: #2A2E35; border-radius: 2px; }
     </style>
   </head>
   <body>

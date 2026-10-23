@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle, ArcGauge } from '../components/shared'
+import { ArcGauge, Card, CardTitle, PageHeader } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
 import { backendRiskToPositions } from '../adapters'
@@ -91,15 +91,18 @@ export function RiskManager() {
   })
 
   const th: React.CSSProperties = { padding: '3px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
-  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
+  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border2}` }
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Risk Manager Console</div>
+      <PageHeader
+        title="Risk Manager"
+        subtitle="Every order passes the same seven pre-trade checks; here are the limits, what they caught and the positions they watch."
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: tileColumns, gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
-          <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open Positions" unit="symbols" size={120} />
+          <ArcGauge value={openPositions} max={SYMBOLS.length} label="Open positions" unit="pairs" size={120} />
         </Card>
         <Card style={{ textAlign: 'center' }}>
           <ArcGauge
@@ -135,7 +138,7 @@ export function RiskManager() {
             display: 'inline-block', flexShrink: 0,
           }} />
           <span style={{ fontSize: F.lg, color: riskStatus?.kill_switch_active ? C.red : C.green, fontWeight: 600 }}>
-            KILL SWITCH {riskStatus?.kill_switch_active ? 'ACTIVE' : 'INACTIVE'}
+            Kill switch {riskStatus?.kill_switch_active ? 'engaged' : 'off'}
           </span>
           {riskStatus?.kill_switch_active && riskStatus.kill_switch_reason && (
             <span style={{ fontSize: F.sm, color: C.muted, marginLeft: 8 }}>
@@ -151,14 +154,14 @@ export function RiskManager() {
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          {riskStatus?.kill_switch_active ? 'Manage Kill Switch' : 'Activate Kill Switch'}
+          {riskStatus?.kill_switch_active ? 'Manage kill switch' : 'Engage kill switch'}
         </button>
       </Card>
 
       {/* Portfolio controls — watched continuously by the risk monitor */}
       <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr)', gap: 12, marginBottom: 12 }}>
         <Card style={{ textAlign: 'center' }}>
-          <CardTitle>TRADING LOSS LIMIT</CardTitle>
+          <CardTitle>Trading loss limit</CardTitle>
           {portfolio && portfolio.loss_limit_usdt > 0 ? (
             <>
               <ArcGauge value={Math.round(lossUsed * 100) / 100} max={portfolio.loss_limit_usdt}
@@ -183,7 +186,7 @@ export function RiskManager() {
         </Card>
 
         <Card>
-          <CardTitle>CONCENTRATION</CardTitle>
+          <CardTitle>Concentration</CardTitle>
           {(portfolio?.concentration ?? []).length === 0 ? (
             <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
               Waiting for wallet balances…
@@ -211,7 +214,7 @@ export function RiskManager() {
         </Card>
 
         <Card>
-          <CardTitle>PORTFOLIO LIMITS</CardTitle>
+          <CardTitle>Portfolio limits</CardTitle>
           {riskStatus?.ceilings && (
             <div style={{
               fontSize: F.xs, color: C.red, background: tint(C.red, 8), border: `1px solid ${tint(C.red, 35)}`,
@@ -266,7 +269,7 @@ export function RiskManager() {
       </div>
 
       <Card style={{ marginBottom: 12 }}>
-        <CardTitle>PRE-TRADE CHECK BREAKDOWN</CardTitle>
+        <CardTitle>Pre-trade check breakdown</CardTitle>
         <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
@@ -312,7 +315,7 @@ export function RiskManager() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12 }}>
 
         <Card>
-          <CardTitle>VENUE ALLOCATION (LAST ROUTED)</CardTitle>
+          <CardTitle>Venue allocation (last routed)</CardTitle>
           {routingStats && Object.keys(routingStats.venue_allocation).length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {Object.entries(routingStats.venue_allocation).map(([vid, share]) => {
@@ -339,7 +342,7 @@ export function RiskManager() {
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-            <CardTitle>NET TRADED SINCE OPENING BALANCES</CardTitle>
+            <CardTitle>Net traded since opening balances</CardTitle>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}

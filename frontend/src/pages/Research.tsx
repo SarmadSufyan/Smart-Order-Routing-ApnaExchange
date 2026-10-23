@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { Card, CardTitle, PageHeader } from '../components/shared'
 import { EquityChart, ResearchChart } from '../components/ResearchChart'
-import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../format'
+import { fmtPct, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
 import { SYMBOLS } from '../mockData'
 import { api } from '../services/api'
 import type {
@@ -49,7 +49,7 @@ function ForecastCard({ f }: { f: HorizonForecast }) {
   if (f.unavailable) {
     return (
       <Card>
-        <CardTitle>{f.label.toUpperCase()}</CardTitle>
+        <CardTitle>{f.label.charAt(0).toUpperCase() + f.label.slice(1)}</CardTitle>
         <div style={{ fontSize: F.sm, color: C.muted }}>{f.unavailable}</div>
       </Card>
     )
@@ -58,16 +58,16 @@ function ForecastCard({ f }: { f: HorizonForecast }) {
   return (
     <Card style={{ border: `1px solid ${f.edge ? (f.lean === 'up' ? C.green : C.red) : C.border}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <CardTitle>{f.label.toUpperCase()}</CardTitle>
+        <CardTitle>{f.label.charAt(0).toUpperCase() + f.label.slice(1)}</CardTitle>
         <span style={{
           fontSize: F.xs, padding: '1px 7px', borderRadius: 3, fontWeight: 700,
           background: tint(f.edge ? C.green : C.dim, 14), color: f.edge ? C.green : C.muted,
-        }}>{f.edge ? 'SMALL PROVEN EDGE' : 'NO PROVEN EDGE'}</span>
+        }}>{f.edge ? 'Small proven edge' : 'No proven edge'}</span>
       </div>
       <Prob f={f} />
       <div style={{ fontSize: F.sm, color: f.edge ? C.text : C.muted, lineHeight: 1.45 }}>{f.call}</div>
 
-      <div style={label}>LIKELY RANGE AT THE CLOSE</div>
+      <div style={label}>Likely range at the close</div>
       <div style={{ fontSize: F.sm, color: C.text }}>
         80%: {f.range80 ? `${fmtPrice(f.range80[0])} – ${fmtPrice(f.range80[1])}` : '—'}
       </div>
@@ -75,7 +75,7 @@ function ForecastCard({ f }: { f: HorizonForecast }) {
         50%: {f.range50 ? `${fmtPrice(f.range50[0])} – ${fmtPrice(f.range50[1])}` : '—'} · now {fmtPrice(f.price)} · typical move ±{f.typical_move_pct?.toFixed(3)}%
       </div>
 
-      <div style={label}>TRACK RECORD</div>
+      <div style={label}>Track record</div>
       <div style={{ fontSize: F.xs, color: C.muted, lineHeight: 1.6 }}>
         {oos ? <>
           Tested on {oos.n.toLocaleString()} past {TF_PLURAL[f.horizon]} it had not seen: right <b style={{ color: C.text }}>{pct(oos.accuracy)}</b> vs {pct(oos.baseline_accuracy)} for always guessing the commoner side
@@ -90,7 +90,7 @@ function ForecastCard({ f }: { f: HorizonForecast }) {
       </div>
 
       {f.drivers && f.drivers.length > 0 && <>
-        <div style={label}>WHAT MOVED THIS FORECAST MOST</div>
+        <div style={label}>What moved this forecast most</div>
         {f.drivers.slice(0, 3).map((d) => (
           <div key={d.feature} style={{ fontSize: F.xs, color: C.muted }}>
             <span style={{ color: d.push >= 0 ? C.green : C.red }}>{d.push >= 0 ? '▲' : '▼'}</span> {d.text}
@@ -123,11 +123,11 @@ function TechniquesCard({ symbol }: { symbol: string }) {
     border: `1px solid ${on ? C.blue : C.border}`, background: on ? tint(C.blue, 14) : C.surface, color: on ? C.blue : C.muted,
   })
   const th: React.CSSProperties = { padding: '6px 8px', fontSize: F.xs, color: C.dim, fontWeight: 600, borderBottom: `1px solid ${C.border}` }
-  const td: React.CSSProperties = { padding: '6px 8px', borderBottom: `1px solid ${C.border}40` }
+  const td: React.CSSProperties = { padding: '6px 8px', borderBottom: `1px solid ${C.border2}` }
   return (
     <Card style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <CardTitle>TRADING TECHNIQUES ON {symbol} — WHAT WORKED AFTER FEES, WHAT EACH SAYS NOW</CardTitle>
+        <CardTitle>Trading techniques on {symbol} — WHAT WORKED AFTER FEES, WHAT EACH SAYS NOW</CardTitle>
         <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
           {(['1h', '1d'] as ResearchTf[]).map((x) => (
             <button key={x} onClick={() => setTf(x)} style={tab(x === tf)}>{x === '1h' ? 'Hourly' : 'Daily'}</button>
@@ -277,18 +277,24 @@ export function Research() {
     fontFamily: 'inherit', fontSize: F.sm, fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
   })
   const th: React.CSSProperties = { padding: '5px 8px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { padding: '5px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border}40`, whiteSpace: 'nowrap' }
+  const td: React.CSSProperties = { padding: '5px 8px', fontSize: F.sm, color: C.text, borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap' }
   const rule0 = RULES.find((r) => r.id === rule)!
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 6 }}>Research &amp; Forecasts</div>
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 12, maxWidth: 1000, lineHeight: 1.5 }}>
-        Forecasts for the next minute, hour and day, the indicators behind them, a backtester and a trade planner —
-        all on the real market's candles ({forecast?.horizons[0]?.model?.source === 'V1' ? 'Binance' : 'reference exchange'}).
-        Every forecast is a <b>probability with its own track record</b>, tested only on data it had not seen.
-        {' '}<span style={{ color: C.orange }}>No one can reliably predict crypto prices; this is research, not financial advice. Nothing on this page places an order.</span>
-      </div>
+      <PageHeader
+        title="Research"
+        subtitle={<>
+          Forecasts, indicators, a backtester and a trade planner on the real market's candles.{' '}
+          <span style={{ color: C.orange }}>Research, not financial advice: nothing here places an order.</span>
+        </>}
+        about={<>
+          Forecasts for the next minute, hour and day, the indicators behind them, a backtester and a trade planner —
+          all on the real market's candles ({forecast?.horizons[0]?.model?.source === 'V1' ? 'Binance' : 'reference exchange'}).
+          Every forecast is a <b>probability with its own track record</b>, tested only on data it had not seen.
+          No one can reliably predict crypto prices.
+        </>}
+      />
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
         {SYMBOLS.map((s) => <button key={s} onClick={() => setSymbol(s)} style={pill(s === symbol)}>{s.replace('/USDT', '')}</button>)}
@@ -300,7 +306,7 @@ export function Research() {
         {forecast
           ? forecast.horizons.map((h) => <ForecastCard key={h.horizon} f={h} />)
           : (['1m', '1h', '1d'] as ResearchTf[]).map((h) => (
-            <Card key={h}><CardTitle>NEXT {TF_LABEL[h].toUpperCase().replace('1 ', '')}</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
+            <Card key={h}><CardTitle>Next {TF_LABEL[h].replace('1 ', '')}</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
           ))}
       </div>
 
@@ -318,9 +324,9 @@ export function Research() {
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card>
-            <CardTitle>WHAT THE INDICATORS SAY ({TF_LABEL[tf].toUpperCase()})</CardTitle>
+            <CardTitle>What the indicators say ({TF_LABEL[tf]})</CardTitle>
             {horizon?.signals?.map((s) => (
-              <div key={s.name} style={{ fontSize: F.sm, color: C.muted, padding: '4px 0', borderBottom: `1px solid ${C.border}40`, lineHeight: 1.4 }}>
+              <div key={s.name} style={{ fontSize: F.sm, color: C.muted, padding: '4px 0', borderBottom: `1px solid ${C.border2}`, lineHeight: 1.4 }}>
                 <span style={{ color: s.direction > 0 ? C.green : s.direction < 0 ? C.red : C.dim, fontWeight: 700 }}>
                   {s.direction > 0 ? '▲' : s.direction < 0 ? '▼' : '●'}
                 </span>{' '}
@@ -332,7 +338,7 @@ export function Research() {
             </div>
           </Card>
           <Card>
-            <CardTitle>LIVE ORDER BOOK</CardTitle>
+            <CardTitle>Live order book</CardTitle>
             {book && book.available ? <>
               <div style={{ fontSize: F.sm, color: C.text, marginBottom: 6, lineHeight: 1.4 }}>{book.text}</div>
               <div style={{ position: 'relative', height: 10, borderRadius: 5, background: tint(C.red, 30), overflow: 'hidden', marginBottom: 6 }}>
@@ -353,29 +359,29 @@ export function Research() {
       {/* Backtest + trade plan */}
       <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, marginBottom: 12 }}>
         <Card>
-          <CardTitle>BACKTEST A RULE ON {symbol}</CardTitle>
+          <CardTitle>Backtest a rule on {symbol}</CardTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8 }}>
             <div>
-              <div style={label}>RULE</div>
+              <div style={label}>Rule</div>
               <select value={rule} onChange={(e) => { const r = e.target.value as BacktestRule; setRule(r); setRuleParams(RULES.find((x) => x.id === r)!.params) }} style={input}>
                 {RULES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
               </select>
             </div>
             <div>
-              <div style={label}>CANDLES</div>
+              <div style={label}>Candles</div>
               <select value={btTf} onChange={(e) => setBtTf(e.target.value as ResearchTf)} style={input}>
                 {(['1m', '1h', '1d'] as ResearchTf[]).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div><div style={label}>FEE BPS</div><input value={fee} onChange={(e) => setFee(e.target.value)} style={input} /></div>
-            <div><div style={label}>SLIPPAGE</div><input value={slip} onChange={(e) => setSlip(e.target.value)} style={input} /></div>
+            <div><div style={label}>Fee bps</div><input value={fee} onChange={(e) => setFee(e.target.value)} style={input} /></div>
+            <div><div style={label}>Slippage</div><input value={slip} onChange={(e) => setSlip(e.target.value)} style={input} /></div>
           </div>
           <div style={{ fontSize: F.xs, color: C.dim, margin: '6px 0' }}>{rule0.hint}</div>
           {Object.keys(ruleParams).length > 0 && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
               {Object.entries(ruleParams).map(([k, v]) => (
                 <div key={k} style={{ width: 110 }}>
-                  <div style={label}>{k.replace('_', ' ').toUpperCase()}</div>
+                  <div style={label}>{sentence(k)}</div>
                   {k === 'mode'
                     ? <select value={String(v)} onChange={(e) => setRuleParams({ ...ruleParams, mode: e.target.value })} style={input}>
                         <option value="reversion">reversion</option><option value="breakout">breakout</option>
@@ -390,12 +396,12 @@ export function Research() {
           {bt && (
             <div style={{ marginTop: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 110px), 1fr))', gap: 6, marginBottom: 8 }}>
-                <div style={tile}><div style={label}>RETURN</div><div style={{ fontSize: F.lg, fontWeight: 700, color: bt.total_return >= 0 ? C.green : C.red }}>{signed(bt.total_return)}</div></div>
+                <div style={tile}><div style={label}>Return</div><div style={{ fontSize: F.lg, fontWeight: 700, color: bt.total_return >= 0 ? C.green : C.red }}>{signed(bt.total_return)}</div></div>
                 <div style={tile}><div style={label}>BUY &amp; HOLD</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{signed(bt.buy_hold_return)}</div></div>
-                <div style={tile}><div style={label}>MAX DRAWDOWN</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{pct(bt.max_drawdown)}</div><div style={{ fontSize: F.xs, color: C.dim }}>hold {pct(bt.buy_hold_max_drawdown)}</div></div>
-                <div style={tile}><div style={label}>SHARPE</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{bt.sharpe?.toFixed(2) ?? '—'}</div></div>
-                <div style={tile}><div style={label}>TRADES</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{bt.trades}</div><div style={{ fontSize: F.xs, color: C.dim }}>won {pct(bt.win_rate, 0)}</div></div>
-                <div style={tile}><div style={label}>FEES PAID</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(bt.fees_paid)}</div><div style={{ fontSize: F.xs, color: C.dim }}>on {fmtUsd(bt.capital, 0)}</div></div>
+                <div style={tile}><div style={label}>Max drawdown</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{pct(bt.max_drawdown)}</div><div style={{ fontSize: F.xs, color: C.dim }}>hold {pct(bt.buy_hold_max_drawdown)}</div></div>
+                <div style={tile}><div style={label}>Sharpe</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{bt.sharpe?.toFixed(2) ?? '—'}</div></div>
+                <div style={tile}><div style={label}>Trades</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{bt.trades}</div><div style={{ fontSize: F.xs, color: C.dim }}>won {pct(bt.win_rate, 0)}</div></div>
+                <div style={tile}><div style={label}>Fees paid</div><div style={{ fontSize: F.lg, fontWeight: 700 }}>{fmtUsd(bt.fees_paid)}</div><div style={{ fontSize: F.xs, color: C.dim }}>on {fmtUsd(bt.capital, 0)}</div></div>
               </div>
               <EquityChart points={bt.equity_curve} />
               <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4 }}>
@@ -406,19 +412,19 @@ export function Research() {
         </Card>
 
         <Card>
-          <CardTitle>PLAN A TRADE ON {symbol} (BUY)</CardTitle>
+          <CardTitle>Plan a trade on {symbol} (BUY)</CardTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
             <div>
-              <div style={label}>CANDLES</div>
+              <div style={label}>Candles</div>
               <select value={planTf} onChange={(e) => setPlanTf(e.target.value as ResearchTf)} style={input}>
                 {(['1m', '1h', '1d'] as ResearchTf[]).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div><div style={label}>MONEY (USDT)</div><input value={equity} onChange={(e) => setEquity(e.target.value)} style={input} /></div>
-            <div><div style={label}>RISK %</div><input value={risk} onChange={(e) => setRisk(e.target.value)} style={input} /></div>
-            <div><div style={label}>STOP (× ATR)</div><input value={kAtr} onChange={(e) => setKAtr(e.target.value)} style={input} /></div>
-            <div><div style={label}>REWARD : RISK</div><input value={rr} onChange={(e) => setRr(e.target.value)} style={input} /></div>
-            <div><div style={label}>GIVE UP AFTER (CANDLES)</div><input value={maxBars} onChange={(e) => setMaxBars(e.target.value)} style={input} /></div>
+            <div><div style={label}>Money (USDT)</div><input value={equity} onChange={(e) => setEquity(e.target.value)} style={input} /></div>
+            <div><div style={label}>Risk %</div><input value={risk} onChange={(e) => setRisk(e.target.value)} style={input} /></div>
+            <div><div style={label}>Stop (× ATR)</div><input value={kAtr} onChange={(e) => setKAtr(e.target.value)} style={input} /></div>
+            <div><div style={label}>Reward : risk</div><input value={rr} onChange={(e) => setRr(e.target.value)} style={input} /></div>
+            <div><div style={label}>Give up after (candles)</div><input value={maxBars} onChange={(e) => setMaxBars(e.target.value)} style={input} /></div>
           </div>
           <div style={{ fontSize: F.xs, color: C.dim, margin: '6px 0' }}>
             Stop and target from volatility (ATR), size from the risk you accept, then this exact bracket is replayed at every past candle to see if it ever paid after fees.
@@ -435,12 +441,12 @@ export function Research() {
                 {plan.plan.verdict === 'positive' ? 'Positive expectancy on this history' : 'No edge after fees on this history — skip or change the bracket'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 110px), 1fr))', gap: 6, marginBottom: 8 }}>
-                <div style={tile}><div style={label}>ENTRY (ASK)</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{fmtPrice(plan.plan.entry)}</div></div>
-                <div style={tile}><div style={label}>STOP</div><div style={{ fontSize: F.md, fontWeight: 700, color: C.red }}>{fmtPrice(plan.plan.stop)}</div></div>
-                <div style={tile}><div style={label}>TARGET</div><div style={{ fontSize: F.md, fontWeight: 700, color: C.green }}>{fmtPrice(plan.plan.target)}</div></div>
-                <div style={tile}><div style={label}>SIZE</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{fmtQty(plan.plan.quantity, 6)}</div><div style={{ fontSize: F.xs, color: C.dim }}>{fmtUsd(plan.plan.notional)}</div></div>
-                <div style={tile}><div style={label}>WIN RATE</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{pct(plan.history.win_rate)}</div><div style={{ fontSize: F.xs, color: C.dim }}>needs {pct(plan.history.break_even_win_rate)}</div></div>
-                <div style={tile}><div style={label}>PER TRADE</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{plan.history.expectancy_r !== null ? `${plan.history.expectancy_r >= 0 ? '+' : ''}${plan.history.expectancy_r.toFixed(3)} R` : '—'}</div><div style={{ fontSize: F.xs, color: C.dim }}>Kelly {plan.history.kelly_fraction !== null ? pct(plan.history.kelly_fraction) : '—'}</div></div>
+                <div style={tile}><div style={label}>Entry (ask)</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{fmtPrice(plan.plan.entry)}</div></div>
+                <div style={tile}><div style={label}>Stop</div><div style={{ fontSize: F.md, fontWeight: 700, color: C.red }}>{fmtPrice(plan.plan.stop)}</div></div>
+                <div style={tile}><div style={label}>Target</div><div style={{ fontSize: F.md, fontWeight: 700, color: C.green }}>{fmtPrice(plan.plan.target)}</div></div>
+                <div style={tile}><div style={label}>Size</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{fmtQty(plan.plan.quantity, 6)}</div><div style={{ fontSize: F.xs, color: C.dim }}>{fmtUsd(plan.plan.notional)}</div></div>
+                <div style={tile}><div style={label}>Win rate</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{pct(plan.history.win_rate)}</div><div style={{ fontSize: F.xs, color: C.dim }}>needs {pct(plan.history.break_even_win_rate)}</div></div>
+                <div style={tile}><div style={label}>Per trade</div><div style={{ fontSize: F.md, fontWeight: 700 }}>{plan.history.expectancy_r !== null ? `${plan.history.expectancy_r >= 0 ? '+' : ''}${plan.history.expectancy_r.toFixed(3)} R` : '—'}</div><div style={{ fontSize: F.xs, color: C.dim }}>Kelly {plan.history.kelly_fraction !== null ? pct(plan.history.kelly_fraction) : '—'}</div></div>
               </div>
               {plan.plan.reasons.map((r) => <div key={r} style={{ fontSize: F.xs, color: C.muted, lineHeight: 1.5 }}>• {r}</div>)}
               {plan.forecast && <div style={{ fontSize: F.xs, color: C.muted, marginTop: 4 }}>• Forecast for the next {TF_LABEL[plan.timeframe].replace('1 ', '')}: {plan.forecast.call}</div>}
@@ -452,7 +458,7 @@ export function Research() {
 
       {/* Scoreboard */}
       <Card>
-        <CardTitle>SCOREBOARD — EVERY COIN × HORIZON, TESTED ON DATA THE MODEL HAD NOT SEEN</CardTitle>
+        <CardTitle>Scoreboard — every coin × horizon, tested on data the model had not seen</CardTitle>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>

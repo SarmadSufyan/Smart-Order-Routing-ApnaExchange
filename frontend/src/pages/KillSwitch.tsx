@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { Card, CardTitle, PageHeader } from '../components/shared'
 import { RaftPanel } from '../components/RaftPanel'
 import { useDataStore } from '../stores/dataStore'
 import { isVenueBlacklisted, LATENCY_WARN_MS, connectionLabel } from '../adapters'
+import { sentence } from '../format'
 
 type Alert = {
   sev: 'Critical' | 'Warning' | 'Info'
@@ -123,7 +125,7 @@ export function KillSwitch() {
   }, [killActive, riskStatus, venues, executionReports])
 
   const th: React.CSSProperties = { padding: '3px 6px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
-  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
+  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border2}` }
 
   const sevIcon = (s: string) => {
     const color = s === 'Critical' ? C.red : s === 'Warning' ? C.orange : C.blue
@@ -146,7 +148,10 @@ export function KillSwitch() {
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 14 }}>Kill Switch & Alerts</div>
+      <PageHeader
+        title="Kill Switch & Alerts"
+        subtitle="One switch stops every new order, algo and bot at once. It stays engaged across restarts until a person releases it."
+      />
 
       {/* BIG KILL SWITCH PANEL */}
       <div style={{
@@ -159,7 +164,7 @@ export function KillSwitch() {
         {killActive ? (
           <>
             <div style={{ fontSize: 28, color: '#fff', fontWeight: 700, animation: 'pocBlink 1s infinite' }}>
-               KILL SWITCH ACTIVE
+              Kill switch engaged
             </div>
             <div style={{ color: '#ffffffcc', fontSize: F.md, marginTop: 10 }}>
               Reason: {riskStatus?.kill_switch_reason || 'Manual activation'}
@@ -178,7 +183,7 @@ export function KillSwitch() {
               border: 'none', background: '#fff', color: C.red,
               fontSize: F.md, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
             }}>
-              {busy ? 'Deactivating…' : 'Deactivate Kill Switch'}
+              {busy ? 'Releasing…' : 'Release kill switch'}
             </button>
             {error && (
               <div style={{
@@ -198,8 +203,8 @@ export function KillSwitch() {
               border: `2px solid ${C.green}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: F.xxl, color: C.green, fontWeight: 700,
-            }}>OK</div>
-            <div style={{ fontSize: F.xxl, color: C.green, marginBottom: 6, fontWeight: 600 }}>System Operating Normally</div>
+            }}><ShieldCheck size={28} strokeWidth={2} /></div>
+            <div style={{ fontSize: F.xxl, color: C.green, marginBottom: 6, fontWeight: 600 }}>Trading is running normally</div>
             <div style={{ fontSize: F.base, color: C.dim }}>
               Kill switch is inactive — orders flow through pre-trade checks.
             </div>
@@ -210,7 +215,7 @@ export function KillSwitch() {
                 border: 'none', background: C.red, color: '#fff',
                 fontSize: F.md, cursor: 'pointer', fontFamily: 'inherit',
               }}>
-                Activate Kill Switch
+                Engage kill switch
               </button>
             ) : (
               <div style={{ marginTop: 16 }}>
@@ -265,7 +270,7 @@ export function KillSwitch() {
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <CardTitle>SYSTEM ALERTS</CardTitle>
+            <CardTitle>System alerts</CardTitle>
           </div>
           <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {alerts.map((a, i) => {
@@ -282,7 +287,7 @@ export function KillSwitch() {
                   <span style={{ color: C.dim, width: 55, flexShrink: 0, fontSize: F.xs }}>{a.time}</span>
                   <span style={{ color: C.muted, width: 90, flexShrink: 0, fontSize: F.xs }}>{a.sys}</span>
                   <span style={{ flex: '1 1 160px', minWidth: 0, color: C.text }}>{a.msg}</span>
-                  <span style={statusStyle(a.status)}>{a.status}</span>
+                  <span style={statusStyle(a.status)}>{sentence(a.status)}</span>
                 </div>
               )
             })}
@@ -290,7 +295,7 @@ export function KillSwitch() {
         </Card>
 
         <Card>
-          <CardTitle>BLACKLISTED VENUES</CardTitle>
+          <CardTitle>Blacklisted venues</CardTitle>
           {blacklisted.length === 0 ? (
             <div style={{ fontSize: F.sm, color: C.dim, textAlign: 'center', padding: '20px 0' }}>
               No venues blacklisted. All venues routable.
@@ -311,7 +316,7 @@ export function KillSwitch() {
                     <td style={{ padding: '7px 6px', color: C.orange }}>{v.name}</td>
                     <td style={{ padding: '7px 6px', color: C.muted }}>{connectionLabel(v)}</td>
                     <td style={{ padding: '7px 6px', textAlign: 'right', color: C.muted }}>{((v.health_score ?? 0) * 100).toFixed(0)}%</td>
-                    <td style={{ padding: '7px 6px', textAlign: 'right', color: C.red }}>BLACKLISTED</td>
+                    <td style={{ padding: '7px 6px', textAlign: 'right', color: C.red }}>Blacklisted</td>
                   </tr>
                 ))}
               </tbody>

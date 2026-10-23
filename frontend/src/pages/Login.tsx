@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Lock, User, Zap } from 'lucide-react'
 import { C, F, tint } from '../theme'
-import { BOOT_LINES } from '../mockData'
 import { useAuthStore } from '../stores/authStore'
 import { api, API_BASE, SERVER_LABEL } from '../services/api'
 import type { GatewayHealth } from '../services/api'
 import { environmentLabel } from '../adapters'
+import { sentence } from '../format'
+import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 
 // Quick sign-in, shown only for users the gateway says still accept the sandbox login
 // (password = user name; GET /api/auth/demo-logins) — none on a machine with real passwords.
 const DEMO_ACCOUNTS = [
-  { user: 'admin',    pass: 'admin',    role: 'ADMIN'        },
-  { user: 'trader1',  pass: 'trader1',  role: 'TRADER'       },
-  { user: 'risk_mgr', pass: 'risk_mgr', role: 'RISK_MANAGER' },
+  { user: 'admin',    pass: 'admin',    role: 'Admin'        },
+  { user: 'trader1',  pass: 'trader1',  role: 'Trader'       },
+  { user: 'risk_mgr', pass: 'risk_mgr', role: 'Risk manager' },
 ]
 
 export function Login() {
@@ -20,11 +22,11 @@ export function Login() {
   const login   = useAuthStore((s) => s.login)
   const error   = useAuthStore((s) => s.error)
   const loading = useAuthStore((s) => s.loading)
+  const isNarrow = useMediaQuery(MQ.narrow)
 
   const [user, setUser]       = useState('')
   const [pass, setPass]       = useState('')
   const [demoUsers, setDemoUsers] = useState<string[]>([])
-  const [bootIdx, setBootIdx] = useState(0)
   const [clock, setClock]     = useState('')
   const [health, setHealth]   = useState<GatewayHealth | null>(null)
   const [reachable, setReachable] = useState<boolean | null>(null)
@@ -40,6 +42,7 @@ export function Login() {
     return () => { stopped = true; clearInterval(t) }
   }, [])
   const exchanges = Object.entries(health?.exchanges ?? {})
+  const realMoney = health?.exchange_mode === 'mainnet'
 
   useEffect(() => {
     // The gateway may still be starting when this page opens: ask again until it answers.
@@ -61,9 +64,10 @@ export function Login() {
   const demoAccounts = DEMO_ACCOUNTS.filter((a) => demoUsers.includes(a.user))
 
   useEffect(() => {
-    const b = setInterval(() => setBootIdx((i) => Math.min(i + 1, BOOT_LINES.length)), 420)
-    const c = setInterval(() => setClock(new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'), 1000)
-    return () => { clearInterval(b); clearInterval(c) }
+    const tick = () => setClock(new Date().toISOString().slice(11, 19) + ' UTC')
+    tick()
+    const c = setInterval(tick, 1000)
+    return () => clearInterval(c)
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,191 +77,177 @@ export function Login() {
     if (ok) navigate('/')
   }
 
-  function fillDemo(u: string, p: string) {
-    setUser(u)
-    setPass(p)
+  const label: React.CSSProperties = { fontSize: F.sm, color: C.muted, fontWeight: 500, marginBottom: 6, display: 'block' }
+  const field: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 14px', marginBottom: 14,
+    background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
+  }
+  const input: React.CSSProperties = {
+    flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', boxShadow: 'none',
+    color: C.text, fontSize: F.md, fontFamily: 'inherit',
   }
 
-  const fieldStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    background: C.surface, border: `1px solid ${C.border}`,
-    borderRadius: 4, padding: '0 12px', height: 40, marginBottom: 12,
-  }
-  const inputStyle: React.CSSProperties = {
-    flex: 1, background: 'none', border: 'none', outline: 'none',
-    color: C.text, fontSize: F.base, fontFamily: 'inherit',
-  }
+  const envPill = health && (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 2,
+      fontSize: F.xs, fontWeight: 600,
+      background: realMoney ? C.red : tint(C.orange, 14), color: realMoney ? '#fff' : C.orange,
+      border: `1px solid ${realMoney ? C.red : tint(C.orange, 35)}`,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: realMoney ? '#fff' : C.orange }} />
+      {realMoney ? 'Real money' : sentence(environmentLabel(health.exchange_mode))}
+    </span>
+  )
 
-  return (
-    <div style={{ display: 'flex', height: '100vh', background: C.bg, color: C.text }}>
-
-      {/* LEFT — terminal panel */}
-      <div style={{
-        width: '46%', background: '#0A0C0E',
-        borderRight: `1px solid ${C.border}`,
-        display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-between', padding: 32,
+  // LEFT — what this is, and the exchanges the gateway is connected to right now
+  const hero = (
+    <div style={{ flex: '1 1 420px', maxWidth: 520, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+        <span style={{
+          width: 44, height: 44, borderRadius: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, boxShadow: `0 8px 24px ${tint(C.blue, 35)}`,
+        }}>
+          <Zap size={24} color="#fff" strokeWidth={2.2} fill="#fff" />
+        </span>
+        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>ApnaSOR</span>
+        {envPill}
+      </div>
+      <h1 style={{
+        fontSize: isNarrow ? 30 : 42, lineHeight: 1.1, fontWeight: 700, letterSpacing: '-0.03em', margin: '0 0 14px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: C.accent, fontSize: 18 }}></span>
-          <span style={{ fontSize: F.md, letterSpacing: '.08em' }}>SOR // COMMAND CENTER</span>
+        One order.<br />Every exchange.<br /><span style={{ color: C.muted }}>The best price.</span>
+      </h1>
+      <p style={{ fontSize: F.md, color: C.muted, lineHeight: 1.6, margin: '0 0 28px', maxWidth: 440 }}>
+        Apna Exchange's smart order router: live order books from real crypto exchanges, pre-trade risk on every
+        order, and price-protected child orders split across venues.
+      </p>
+
+      {!isNarrow && (
+        <div data-card="" style={{
+          background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 0', maxWidth: 440,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 16px 6px', fontSize: F.xs, color: C.dim }}>
+            <span>Exchanges</span>
+            <span>{clock}</span>
+          </div>
+          {exchanges.length === 0 ? (
+            <div style={{ padding: '10px 16px', fontSize: F.sm, color: reachable === false ? C.red : C.muted }}>
+              {reachable === false ? 'Gateway not reachable' : 'Connecting…'}
+            </div>
+          ) : exchanges.map(([vid, x]) => (
+            <div key={vid} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', fontSize: F.sm,
+              borderTop: `1px solid ${C.border2}`,
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                background: x.feed_connected ? C.green : C.red,
+              }} />
+              <span style={{ fontWeight: 600, width: 84 }}>{x.name}</span>
+              <span style={{ color: x.feed_connected ? C.muted : C.red }}>
+                {x.feed_connected ? `${x.books_synced} books live` : 'Offline'}
+              </span>
+              <span style={{ marginLeft: 'auto', color: C.dim, fontSize: F.xs }}>
+                {x.trading_enabled ? `trades in ${environmentLabel(x.mode).toLowerCase()}` : 'market data only'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  // RIGHT — the sign-in card
+  const card = (
+    <div data-card="" style={{
+      flex: '0 1 400px', width: '100%', maxWidth: 400, padding: 32,
+      background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6,
+    }}>
+      <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Sign in</div>
+      <div style={{ fontSize: F.base, color: C.muted, marginBottom: 24 }}>Every session is recorded in the audit log.</div>
+
+      <form onSubmit={handleSubmit}>
+        <label style={label} htmlFor="login-user">User name</label>
+        <div data-field="" style={field}>
+          <User size={17} color={C.dim} />
+          <input id="login-user" value={user} onChange={(e) => setUser(e.target.value)} style={input}
+            autoComplete="username" spellCheck={false} />
         </div>
 
-        <div>
-          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em', marginBottom: 8 }}>
-            // SYSTEM BOOT
-          </div>
-          <div style={{ minHeight: 90 }}>
-            {BOOT_LINES.slice(0, bootIdx).map((line, i) => (
-              <div key={i} style={{
-                fontSize: F.sm, lineHeight: 1.8,
-                color: i === bootIdx - 1 ? C.accent : C.muted,
-              }}>
-                {line}
-              </div>
-            ))}
-            {bootIdx < BOOT_LINES.length && (
-              <span style={{ display: 'inline-block', width: 8, height: 12, background: C.accent }} />
-            )}
-          </div>
+        <label style={label} htmlFor="login-pass">Password</label>
+        <div data-field="" style={field}>
+          <Lock size={17} color={C.dim} />
+          <input id="login-pass" type="password" value={pass} onChange={(e) => setPass(e.target.value)} style={input}
+            placeholder="Password" autoFocus autoComplete="current-password" />
         </div>
 
-        <div>
-          <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em', marginBottom: 6 }}>
-            // VENUE GATEWAYS
+        {error && (
+          <div role="alert" style={{
+            background: tint(C.red, 10), border: `1px solid ${tint(C.red, 30)}`,
+            borderRadius: 4, padding: '9px 12px', color: C.red, fontSize: F.sm, marginBottom: 14,
+          }}>
+            {error}
           </div>
-          <div style={{ border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
-            {exchanges.length === 0 ? (
-              <div style={{ padding: '6px 12px', background: C.surface, fontSize: F.sm, color: reachable === false ? C.red : C.muted }}>
-                {reachable === false ? 'Gateway not reachable' : 'Connecting…'}
-              </div>
-            ) : exchanges.map(([vid, x]) => {
-              const dotColor = x.feed_connected ? C.green : C.red
+        )}
+
+        <button type="submit" disabled={loading || !user || !pass} style={{
+          width: '100%', height: 44, border: 'none', borderRadius: 4, marginTop: 4,
+          background: C.blue, color: '#fff', fontSize: F.md, fontWeight: 600, fontFamily: 'inherit',
+          cursor: loading ? 'wait' : 'pointer', opacity: !user || !pass ? 0.5 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          {loading ? 'Signing in…' : <>Continue <ArrowRight size={17} /></>}
+        </button>
+
+        {demoAccounts.length > 0 && <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+            <span style={{ fontSize: F.xs, color: C.dim }}>Sandbox quick sign-in</span>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+            {demoAccounts.map((acct) => {
+              const picked = user === acct.user
               return (
-                <div key={vid} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '6px 12px', borderBottom: `1px solid ${C.border2}`,
-                  background: C.surface, fontSize: F.sm,
+                <button key={acct.user} type="button" onClick={() => { setUser(acct.user); setPass(acct.pass) }} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '9px 6px',
+                  borderRadius: 4, fontFamily: 'inherit', cursor: 'pointer',
+                  border: `1px solid ${picked ? C.blue : C.border}`, background: picked ? tint(C.blue, 12) : C.surface,
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
-                  <span style={{ width: 90 }}>{x.name}</span>
-                  <span style={{ color: dotColor }}>{x.feed_connected ? 'CONNECTED' : 'OFFLINE'}</span>
-                  <span style={{ marginLeft: 'auto', color: C.muted }}>
-                    {x.books_synced} books · {x.trading_enabled ? `exec: ${environmentLabel(x.mode)}` : 'market data only'}
-                  </span>
-                </div>
+                  <span style={{ fontSize: F.sm, fontWeight: 600, color: C.text }}>{acct.user}</span>
+                  <span style={{ fontSize: F.xs, color: C.dim }}>{acct.role}</span>
+                </button>
               )
             })}
           </div>
-        </div>
+        </>}
+      </form>
+    </div>
+  )
 
-        <div style={{ display: 'flex', gap: 16, fontSize: F.xs, color: C.dim }}>
-          <span>ENV {health ? environmentLabel(health.exchange_mode).toUpperCase() : '—'}</span>
-          <span>GATEWAY {new URL(API_BASE).host}</span>
-          <span style={{ marginLeft: 'auto', color: C.muted }}>{clock}</span>
-        </div>
-      </div>
-
-      {/* RIGHT — auth form */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <div style={{ width: '100%', maxWidth: 360 }}>
-
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <span style={{ color: C.accent }}></span>
-              <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>SECURE ACCESS</span>
-            </div>
-            <div style={{ fontSize: F.xxl, letterSpacing: '-.3px', marginBottom: 4 }}>Sign in to continue</div>
-            <div style={{ fontSize: F.base, color: C.muted }}>
-              Operator credentials required. All sessions are audited.
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit}>
-            <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>OPERATOR ID</div>
-            <div style={fieldStyle}>
-              <span style={{ color: C.dim }}></span>
-              <input
-                value={user}
-                onChange={(e) => setUser(e.target.value)}
-                style={inputStyle}
-                autoComplete="username"
-              />
-            </div>
-
-            <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 4 }}>PASSPHRASE</div>
-            <div style={fieldStyle}>
-              <span style={{ color: C.dim }}></span>
-              <input
-                type="password"
-                value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                placeholder="••••••••••••"
-                autoFocus
-                style={{ ...inputStyle, letterSpacing: 3 }}
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div style={{
-                background: tint(C.red, 8), border: `1px solid #E24B4A40`,
-                borderRadius: 4, padding: '8px 12px', color: C.red, fontSize: F.sm, marginBottom: 10,
-              }}>
-                 {error}
-              </div>
-            )}
-
-            <button type="submit" disabled={loading} style={{
-              width: '100%', height: 40, border: 'none', borderRadius: 4,
-              background: loading ? C.surface : C.accent,
-              color: loading ? C.muted : C.bg,
-              fontSize: F.base, letterSpacing: '.1em', cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}>
-              {loading ? 'AUTHENTICATING…' : 'CONTINUE >'}
-            </button>
-
-            {demoAccounts.length > 0 && <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
-                <div style={{ flex: 1, height: 1, background: C.border }} />
-                <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.15em' }}>SANDBOX QUICK SIGN-IN</span>
-                <div style={{ flex: 1, height: 1, background: C.border }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {demoAccounts.map((acct) => (
-                  <button
-                    key={acct.user}
-                    type="button"
-                    onClick={() => fillDemo(acct.user, acct.pass)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '7px 12px', border: `1px solid ${C.border}`,
-                      borderRadius: 4, background: C.surface, color: C.text,
-                      fontSize: F.sm, fontFamily: 'inherit', cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ color: C.text }}>{acct.user}</span>
-                    <span style={{ color: C.dim, fontSize: F.xs }}>{acct.role}</span>
-                  </button>
-                ))}
-              </div>
-            </>}
-          </form>
-
-          <div style={{
-            marginTop: 28, paddingTop: 12, borderTop: `1px solid ${C.border2}`,
-            display: 'flex', justifyContent: 'space-between', fontSize: F.xs, color: C.dim,
-          }}>
-            <span>© 2026 APNASOR · APNA EXCHANGE</span>
-            <span>
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: reachable === false ? C.red : C.green, marginRight: 4 }} />
-              {SERVER_LABEL ? `${SERVER_LABEL} · ` : ''}{reachable === false ? 'Not reachable:' : 'Connected to'} {new URL(API_BASE).host}
-            </span>
-          </div>
-        </div>
-      </div>
+  return (
+    <div style={{
+      minHeight: '100vh', height: '100%', overflowY: 'auto', color: C.text,
+      background: 'var(--page-bg, var(--c-bg))', backgroundAttachment: 'fixed',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <main style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap',
+        gap: isNarrow ? 32 : 72, padding: isNarrow ? '40px 20px' : '48px 40px',
+      }}>
+        {hero}
+        {card}
+      </main>
+      <footer style={{
+        display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+        padding: '14px 24px', fontSize: F.xs, color: C.dim,
+      }}>
+        <span>© 2026 ApnaSOR · Apna Exchange · UITU CS14</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: reachable === false ? C.red : C.green }} />
+          {SERVER_LABEL ? `${SERVER_LABEL} · ` : ''}{reachable === false ? 'Not reachable:' : 'Connected to'} {new URL(API_BASE).host}
+        </span>
+      </footer>
     </div>
   )
 }

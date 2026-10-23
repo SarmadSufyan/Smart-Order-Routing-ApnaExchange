@@ -1,29 +1,125 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import {
+  AlertOctagon, ArrowLeftRight, BookOpen, Bot, CandlestickChart, Check, ChevronLeft, ChevronRight,
+  LayoutDashboard, LineChart, LogOut, Menu, Moon, Network, Palette, ScrollText, ShieldCheck, Sparkles, Sun,
+  Wallet, Workflow, X, Zap,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { C, F, tint } from '../theme'
 import { ConnDot } from './shared'
 import { CopilotPanel } from './CopilotPanel'
 import { useAuthStore } from '../stores/authStore'
 import { useDataStore } from '../stores/dataStore'
-import { useThemeStore } from '../stores/themeStore'
+import { THEME_STYLES, useThemeStore } from '../stores/themeStore'
 import { backendVenueToUi } from '../adapters'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
 import { API_BASE, SERVER_IS_REAL_MONEY, SERVER_LABEL } from '../services/api'
 
-const NAV = [
-  { path: '/',            label: 'Dashboard'            },
-  { path: '/market-data', label: 'Market Data'          },
-  { path: '/arbitrage',   label: 'Arbitrage Detector'   },
-  { path: '/research',    label: 'Research & Forecasts' },
-  { path: '/algos',       label: 'Algo Orders'          },
-  { path: '/bots',        label: 'Bots & Lab'           },
-  { path: '/wallet',      label: 'Wallet'               },
-  { path: '/howitworks',  label: 'How It Works'         },
-  { path: '/venues',      label: 'Venue Connectivity'   },
-  { path: '/risk',        label: 'Risk Manager'         },
-  { path: '/killswitch',  label: 'Kill Switch & Alerts' },
-  { path: '/audit',       label: 'Audit Log'            },
+interface NavItem { path: string; label: string; icon: LucideIcon }
+
+const NAV: { section: string; items: NavItem[] }[] = [
+  { section: 'Trade', items: [
+    { path: '/',            label: 'Dashboard',          icon: LayoutDashboard },
+    { path: '/market-data', label: 'Market Data',        icon: CandlestickChart },
+    { path: '/algos',       label: 'Algo Orders',        icon: Workflow },
+    { path: '/bots',        label: 'Bots & Lab',         icon: Bot },
+    { path: '/wallet',      label: 'Wallet',             icon: Wallet },
+  ] },
+  { section: 'Insight', items: [
+    { path: '/research',    label: 'Research',           icon: LineChart },
+    { path: '/arbitrage',   label: 'Arbitrage',          icon: ArrowLeftRight },
+  ] },
+  { section: 'Control', items: [
+    { path: '/risk',        label: 'Risk Manager',       icon: ShieldCheck },
+    { path: '/killswitch',  label: 'Kill Switch',        icon: AlertOctagon },
+    { path: '/venues',      label: 'Venues',             icon: Network },
+    { path: '/audit',       label: 'Audit Log',          icon: ScrollText },
+  ] },
+  { section: 'Learn', items: [
+    { path: '/howitworks',  label: 'How It Works',       icon: BookOpen },
+  ] },
 ]
+
+const pill = (color: string, solid = false): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', gap: 6, height: 26, padding: '0 10px', borderRadius: 999,
+  fontSize: F.xs, fontWeight: 600, whiteSpace: 'nowrap',
+  background: solid ? color : tint(color, 14), color: solid ? '#fff' : color,
+  border: `1px solid ${solid ? color : tint(color, 30)}`,
+})
+
+const ghostButton: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 32, minWidth: 32,
+  padding: '0 10px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface2,
+  color: C.text, fontSize: F.sm, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+}
+
+function initials(name: string): string {
+  return name.split(/[\s_]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'
+}
+
+/** The palette menu: the look (Studio / Liquid Glass / Terminal) and dark or light. */
+function ThemeMenu({ compact }: { compact: boolean }) {
+  const { mode, style, setMode, setStyle } = useThemeStore()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} title="Theme" style={ghostButton}>
+        <Palette size={16} strokeWidth={1.8} />
+        {!compact && <span>Theme</span>}
+      </button>
+      {open && (
+        <div role="menu" data-glass="float" style={{
+          position: 'absolute', top: 40, right: 0, zIndex: 200, width: 260, padding: 8, borderRadius: 14,
+          background: C.surface, border: `1px solid ${C.border}`, boxShadow: '0 18px 48px rgba(0,0,0,.35)',
+          WebkitBackdropFilter: 'saturate(180%) blur(28px)', backdropFilter: 'saturate(180%) blur(28px)',
+        }}>
+          <div style={{ fontSize: F.xs, color: C.dim, fontWeight: 600, padding: '6px 10px 4px' }}>Style</div>
+          {THEME_STYLES.map((s) => (
+            <button key={s.id} role="menuitemradio" aria-checked={style === s.id} onClick={() => setStyle(s.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 10,
+              border: 'none', background: style === s.id ? tint(C.blue, 14) : 'transparent', cursor: 'pointer',
+              textAlign: 'left', fontFamily: 'inherit', color: C.text,
+            }}>
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontSize: F.base, fontWeight: 600 }}>{s.name}</span>
+                <span style={{ fontSize: F.xs, color: C.muted }}>{s.by}</span>
+              </span>
+              {style === s.id && <Check size={16} color={C.blue} />}
+            </button>
+          ))}
+          <div style={{ fontSize: F.xs, color: C.dim, fontWeight: 600, padding: '10px 10px 6px' }}>Appearance</div>
+          <div style={{ display: 'flex', gap: 4, padding: 3, margin: '0 6px 6px', borderRadius: 10, background: C.surface2 }}>
+            {(['dark', 'light'] as const).map((m) => {
+              const Icon = m === 'dark' ? Moon : Sun
+              return (
+                <button key={m} onClick={() => setMode(m)} aria-pressed={mode === m} style={{
+                  flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30,
+                  borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: F.sm, fontWeight: 600,
+                  background: mode === m ? C.surface : 'transparent', color: mode === m ? C.text : C.muted,
+                  boxShadow: mode === m ? '0 1px 3px rgba(0,0,0,.18)' : 'none',
+                }}>
+                  <Icon size={14} /> {m === 'dark' ? 'Dark' : 'Light'}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function AppShell() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -36,15 +132,11 @@ export function AppShell() {
   const fetchAll     = useDataStore((s) => s.fetchAll)
   const setupWS      = useDataStore((s) => s.setupWebSocket)
 
-  const themeMode    = useThemeStore((s) => s.mode)
-  const toggleTheme  = useThemeStore((s) => s.toggleMode)
-
   const [collapsed, setCollapsed] = useState(false)
   const [clock, setClock] = useState('')
 
-  // Narrow screens: below 900 px the sidebar becomes a slide-in menu (☰) so
-  // pages get the full width; below 600 px the top bar drops its labels.
-  // The environment badge and the KILL SWITCH button stay visible at every width.
+  // Narrow screens: below 900 px the sidebar becomes a slide-in menu so pages get the full width; below 600 px
+  // the top bar drops its labels. The environment badge and the kill switch stay visible at every width.
   const isPhone   = useMediaQuery(MQ.phone)
   const isDrawer  = useMediaQuery(MQ.narrow)
   const isCompact = useMediaQuery(MQ.compact)
@@ -72,8 +164,9 @@ export function AppShell() {
   }, [isAuthenticated, setupWS, fetchAll])
 
   useEffect(() => {
-    const t = setInterval(() =>
-      setClock(new Date().toISOString().replace('T', ' ').slice(0, 23)), 100)
+    const tick = () => setClock(new Date().toISOString().slice(11, 19))
+    tick()
+    const t = setInterval(tick, 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -89,167 +182,141 @@ export function AppShell() {
     navigate('/login')
   }
 
-  const venuesForDots = venues.length > 0
-    ? venues.map((v) => backendVenueToUi(v))
-    : []
+  const venuesForDots = venues.length > 0 ? venues.map((v) => backendVenueToUi(v)) : []
   const exchangeMode = venues[0]?.mode
+  const realMoney = exchangeMode === 'mainnet'
   const showLabels = isDrawer || !collapsed
+  const displayName = user?.name || user?.username || ''
 
-  // Shown in the top bar on wide screens, inside the slide-in menu on narrow ones.
-  const themeButton = (
-    <button
-      onClick={toggleTheme}
-      title={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
-      style={{
-        padding: '5px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
-        border: `1px solid ${C.border}`, background: C.surface2,
-        color: C.text, fontSize: F.base,
-        display: 'flex', alignItems: 'center', gap: 6,
-      }}
-    >
-      <span>{themeMode === 'dark' ? '☀' : '🌙'}</span>
-      <span style={{ fontSize: F.xs, color: C.muted, letterSpacing: '.05em' }}>
-        {themeMode === 'dark' ? 'LIGHT' : 'DARK'}
+  const brand = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span style={{
+        width: 30, height: 30, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, boxShadow: `0 4px 14px ${tint(C.blue, 35)}`,
+      }}>
+        <Zap size={17} color="#fff" strokeWidth={2.2} fill="#fff" />
       </span>
-    </button>
+      {!isPhone && <span style={{ fontSize: F.md, fontWeight: 650, letterSpacing: '-0.01em' }}>ApnaSOR</span>}
+    </span>
   )
 
-  const userLabel = (
-    <>
-      <span style={{ fontSize: F.base, color: C.text }}>{user?.name || user?.username}</span>
-      <span style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.05em' }}>{user?.role}</span>
-    </>
+  const userBlock = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span title={displayName} style={{
+        width: 32, height: 32, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: tint(C.blue, 20), color: C.blue, fontSize: F.xs, fontWeight: 700,
+      }}>
+        {initials(displayName)}
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+        <span style={{ fontSize: F.sm, fontWeight: 600, color: C.text }}>{displayName}</span>
+        <span style={{ fontSize: F.xs, color: C.muted }}>{(user?.role || '').replace('_', ' ').toLowerCase()}</span>
+      </span>
+    </span>
   )
 
   const logoutButton = (
-    <button
-      onClick={handleLogout}
-      style={{
-        padding: '5px 12px', borderRadius: 3, border: `1px solid ${C.border}`,
-        background: C.surface2, color: C.muted, fontSize: F.xs,
-        cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '.05em',
-      }}
-    >
-      LOGOUT
+    <button onClick={handleLogout} title="Sign out" style={ghostButton}>
+      <LogOut size={15} strokeWidth={1.8} />
+      {isDrawer && <span>Sign out</span>}
     </button>
   )
 
-  const iconButton: React.CSSProperties = {
-    background: 'none', border: `1px solid ${C.border}`, borderRadius: 4,
-    color: C.text, cursor: 'pointer', fontSize: F.lg, lineHeight: 1,
-    padding: '5px 9px', fontFamily: 'inherit',
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100vh',
+      background: 'var(--page-bg, var(--c-bg))', backgroundAttachment: 'fixed', color: C.text,
+    }}>
 
       <style>{`
         @keyframes pocPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
         @keyframes pocBlink  { 0%,100%{opacity:1} 50%{opacity:.5} }
       `}</style>
 
-      {/* TOPBAR — wraps onto a second line rather than cutting anything off */}
-      <header style={{
-        minHeight: 52, background: C.surface, borderBottom: `1px solid ${C.border}`,
+      {/* TOP BAR — wraps onto a second line rather than cutting anything off */}
+      <header data-glass="chrome" style={{
+        minHeight: 56, background: C.surface, borderBottom: `1px solid ${C.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', columnGap: 12, rowGap: 6,
-        padding: isDrawer ? '6px 12px' : '0 18px', flexShrink: 0,
+        flexWrap: 'wrap', columnGap: 12, rowGap: 6, position: 'relative', zIndex: 20,
+        padding: isDrawer ? '8px 12px' : '0 20px', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {isDrawer && (
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              aria-expanded={menuOpen}
-              style={iconButton}
-            >
-              ☰
+            <button onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen} style={ghostButton}>
+              <Menu size={18} />
             </button>
           )}
-          <span style={{ color: C.blue, fontSize: F.xl }}>⚡</span>
-          {!isPhone && <span style={{ fontSize: F.md, fontWeight: 600 }}>ApnaSOR</span>}
+          {brand}
           {exchangeMode && (
             <span
-              title={exchangeMode === 'mainnet' ? 'Orders use REAL funds' : 'Orders execute in the exchanges\' sandbox environments; order books are live market data'}
-              style={{
-                borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
-                background: tint(exchangeMode === 'mainnet' ? C.red : C.orange, 16),
-                color: exchangeMode === 'mainnet' ? C.red : C.orange,
-                border: `1px solid ${exchangeMode === 'mainnet' ? C.red : C.orange}`,
-                whiteSpace: 'nowrap',
-              }}
+              title={realMoney ? 'Orders use REAL funds'
+                : 'Orders execute in the exchanges\' sandbox environments; order books are live market data'}
+              style={pill(realMoney ? C.red : C.orange, realMoney)}
             >
-              {exchangeMode === 'mainnet' ? 'MAINNET · REAL FUNDS' : 'SANDBOX'}
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: realMoney ? '#fff' : C.orange }} />
+              {realMoney ? 'Real money' : 'Sandbox'}
             </span>
           )}
           {SERVER_LABEL && (
-            <span
-              title={`This page shows the gateway at ${API_BASE}, not the one on this machine`}
-              style={{
-                borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
-                background: tint(SERVER_IS_REAL_MONEY ? C.red : C.blue, 16), color: SERVER_IS_REAL_MONEY ? C.red : C.blue,
-                border: `1px solid ${SERVER_IS_REAL_MONEY ? C.red : C.blue}`, whiteSpace: 'nowrap',
-              }}
-            >
+            <span title={`This page shows the gateway at ${API_BASE}, not the one on this machine`}
+              style={pill(SERVER_IS_REAL_MONEY ? C.red : C.blue)}>
               {SERVER_LABEL}
             </span>
           )}
         </div>
 
         <div style={{
-          display: 'flex', alignItems: 'center', gap: isPhone ? 10 : 14,
+          display: 'flex', alignItems: 'center', gap: isPhone ? 8 : 10,
           flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto',
         }}>
-          {/* Venue dots (labels dropped on phones; the name is in the tooltip) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {venuesForDots.map((v) => (
-              <div key={v.id} title={`${v.name} — ${v.status}`} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <ConnDot status={v.status} />
-                {!isPhone && <span style={{ fontSize: F.xs, color: C.dim }}>{v.shortName}</span>}
-              </div>
-            ))}
-          </div>
-
-          {/* Clock */}
-          {!isCompact && (
-            <span style={{ fontSize: F.sm, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{clock}</span>
+          {/* Exchanges: a dot each (names on wide screens; the status is in the tooltip) */}
+          {venuesForDots.length > 0 && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: isCompact ? 8 : 12, height: 32, padding: '0 12px',
+              borderRadius: 999, background: C.surface2, border: `1px solid ${C.border2}`,
+            }}>
+              {venuesForDots.map((v) => (
+                <span key={v.id} title={`${v.name} — ${v.status}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <ConnDot status={v.status} />
+                  {!isCompact && <span style={{ fontSize: F.xs, color: C.muted, fontWeight: 500 }}>{v.name}</span>}
+                </span>
+              ))}
+            </div>
           )}
 
-          {!isDrawer && themeButton}
+          {!isCompact && (
+            <span title="Coordinated universal time" style={{
+              fontSize: F.sm, color: C.muted, fontVariantNumeric: 'tabular-nums', minWidth: 92, textAlign: 'right',
+            }}>
+              {clock} UTC
+            </span>
+          )}
+
+          {!isDrawer && <ThemeMenu compact={isCompact} />}
 
           {/* The copilot: ask, analyze, propose — every action waits for a confirm */}
-          <button
-            onClick={() => setCopilotOpen((o) => !o)}
-            aria-expanded={copilotOpen}
-            style={{
-              padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
-              border: `1px solid ${C.blue}`, background: copilotOpen ? C.blue : tint(C.blue, 12),
-              color: copilotOpen ? '#fff' : C.blue, fontSize: F.xs, letterSpacing: '.08em', fontWeight: 700, whiteSpace: 'nowrap',
-            }}
-          >
-            ✦ COPILOT
+          <button onClick={() => setCopilotOpen((o) => !o)} aria-expanded={copilotOpen} style={{
+            ...ghostButton, border: `1px solid ${tint(C.blue, 40)}`,
+            background: copilotOpen ? C.blue : tint(C.blue, 12), color: copilotOpen ? '#fff' : C.blue, fontWeight: 600,
+          }}>
+            <Sparkles size={15} strokeWidth={2} />
+            {!isPhone && <span>Copilot</span>}
           </button>
 
-          {/* Kill switch button */}
-          <button
-            onClick={() => navigate('/killswitch')}
-            style={{
-              padding: '5px 14px', borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
-              border: `1px solid ${killActive ? C.red : tint(C.red, 40)}`,
-              background: killActive ? C.red : tint(C.red, 10),
-              color: killActive ? '#fff' : C.red,
-              fontSize: F.xs, letterSpacing: '.1em', fontWeight: 600, whiteSpace: 'nowrap',
-            }}
-          >
-            ⚡ KILL SWITCH {killActive ? 'ACTIVE' : ''}
+          <button onClick={() => navigate('/killswitch')} title="Kill switch" style={{
+            ...ghostButton, fontWeight: 600,
+            border: `1px solid ${killActive ? C.red : tint(C.red, 40)}`,
+            background: killActive ? C.red : tint(C.red, 10), color: killActive ? '#fff' : C.red,
+            animation: killActive ? 'pocBlink 1.6s infinite' : undefined,
+          }}>
+            <AlertOctagon size={15} strokeWidth={2} />
+            {!isPhone && <span>{killActive ? 'Kill switch on' : 'Kill switch'}</span>}
           </button>
 
-          {/* User & logout */}
           {!isDrawer && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 12, borderLeft: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
-                {userLabel}
-              </div>
+              {!isCompact ? userBlock : null}
               {logoutButton}
             </div>
           )}
@@ -260,99 +327,108 @@ export function AppShell() {
 
         {/* Backdrop behind the slide-in menu: a tap outside closes it */}
         {isDrawer && menuOpen && (
-          <div
-            onClick={() => setMenuOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 99, background: 'rgba(0, 0, 0, .5)' }}
-          />
+          <div onClick={() => setMenuOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 99, background: 'var(--modal-overlay)' }} />
         )}
 
         {/* SIDEBAR — a fixed column on wide screens, a slide-in menu on narrow ones */}
-        <nav
-          aria-label="Pages"
-          style={{
-            background: C.surface, borderRight: `1px solid ${C.border}`,
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            ...(isDrawer ? {
-              position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100,
-              width: 260, maxWidth: '85vw',
-              transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
-              // hidden once closed, so keyboard focus can't land on off-screen links
-              visibility: menuOpen ? 'visible' : 'hidden',
-              transition: 'transform .2s, visibility .2s',
-              boxShadow: menuOpen ? '0 0 24px rgba(0, 0, 0, .45)' : 'none',
-            } : {
-              width: collapsed ? 56 : 240, flexShrink: 0, transition: 'width .2s',
-            }),
-          }}
-        >
+        <nav aria-label="Pages" data-glass={isDrawer ? 'float' : 'chrome'} style={{
+          background: C.surface, borderRight: `1px solid ${C.border}`,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          ...(isDrawer ? {
+            position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100, width: 272, maxWidth: '86vw',
+            transform: menuOpen ? 'translateX(0)' : 'translateX(-100%)',
+            // hidden once closed, so keyboard focus can't land on off-screen links
+            visibility: menuOpen ? 'visible' : 'hidden',
+            transition: 'transform .22s cubic-bezier(.2,.8,.2,1), visibility .22s',
+            boxShadow: menuOpen ? '0 0 40px rgba(0, 0, 0, .35)' : 'none',
+          } : {
+            width: collapsed ? 68 : 232, flexShrink: 0, transition: 'width .2s cubic-bezier(.2,.8,.2,1)',
+          }),
+        }}>
           {isDrawer && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 12px 10px 20px', borderBottom: `1px solid ${C.border}`,
+              padding: '12px 12px 12px 16px', borderBottom: `1px solid ${C.border}`,
             }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: F.md, fontWeight: 600 }}>
-                <span style={{ color: C.blue, fontSize: F.xl }}>⚡</span> ApnaSOR
-              </span>
-              <button onClick={() => setMenuOpen(false)} aria-label="Close menu" style={iconButton}>✕</button>
+              {brand}
+              <button onClick={() => setMenuOpen(false)} aria-label="Close menu" style={ghostButton}><X size={16} /></button>
             </div>
           )}
 
-          <div style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
-            {NAV.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                title={item.label}
-                style={({ isActive }) => ({
-                  display: 'flex', alignItems: 'center',
-                  padding: '13px 20px', fontSize: F.md, textDecoration: 'none',
-                  color: isActive ? C.text : C.muted,
-                  background: isActive ? C.surface2 : undefined,
-                  borderLeft: `3px solid ${isActive ? C.blue : 'transparent'}`,
-                  whiteSpace: 'nowrap', transition: 'all .15s',
-                  fontWeight: isActive ? 600 : 400,
+          <div style={{ flex: 1, padding: '10px 0', overflowY: 'auto' }}>
+            {NAV.map((group) => (
+              <div key={group.section} style={{ marginBottom: 6 }}>
+                {showLabels ? (
+                  <div style={{ fontSize: F.xs, color: C.dim, fontWeight: 600, padding: '10px 22px 6px' }}>
+                    {group.section}
+                  </div>
+                ) : (
+                  <div style={{ height: 1, background: C.border2, margin: '10px 16px' }} />
+                )}
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      end={item.path === '/'}
+                      title={item.label}
+                      style={({ isActive }) => ({
+                        display: 'flex', alignItems: 'center', gap: 12, margin: '2px 10px',
+                        padding: showLabels ? '8px 12px' : '9px 0', justifyContent: showLabels ? 'flex-start' : 'center',
+                        borderRadius: 10, fontSize: F.base, textDecoration: 'none',
+                        color: isActive ? C.text : C.muted,
+                        background: isActive ? tint(C.blue, 15) : 'transparent',
+                        fontWeight: isActive ? 600 : 500, whiteSpace: 'nowrap', transition: 'background-color .15s, color .15s',
+                      })}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon size={18} strokeWidth={isActive ? 2.1 : 1.8} color={isActive ? 'var(--c-blue)' : 'currentColor'} />
+                          {showLabels && <span>{item.label}</span>}
+                        </>
+                      )}
+                    </NavLink>
+                  )
                 })}
-              >
-                {showLabels && <span>{item.label}</span>}
-                {!showLabels && <span style={{ width: '100%', textAlign: 'center' }}>{item.label.charAt(0)}</span>}
-              </NavLink>
+              </div>
             ))}
           </div>
 
           {isDrawer ? (
             <div style={{
-              borderTop: `1px solid ${C.border}`, padding: '12px 16px 16px 20px',
-              display: 'flex', flexDirection: 'column', gap: 10,
+              borderTop: `1px solid ${C.border}`, padding: '12px 16px 16px',
+              display: 'flex', flexDirection: 'column', gap: 12,
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>{userLabel}</div>
+              {userBlock}
               <div style={{ display: 'flex', gap: 8 }}>
-                {themeButton}
+                <ThemeMenu compact={false} />
                 {logoutButton}
               </div>
             </div>
           ) : (
             <button
               onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 12, borderTop: `1px solid ${C.border}`,
-                background: 'none', border: 'none',
-                color: C.dim, cursor: 'pointer', fontSize: F.lg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44,
+                borderTop: `1px solid ${C.border}`, borderLeft: 'none', borderRight: 'none', borderBottom: 'none',
+                background: 'none', color: C.dim, cursor: 'pointer', fontFamily: 'inherit', fontSize: F.xs,
               }}
             >
-              {collapsed ? '▶' : '◀'}
+              {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /> Collapse</>}
             </button>
           )}
         </nav>
 
         {/* MAIN CONTENT */}
-        <main style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: isPhone ? 12 : isDrawer ? 16 : 24, background: C.bg }}>
+        <main style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: isPhone ? 12 : isDrawer ? 16 : 24 }}>
           <Outlet />
         </main>
 
         {/* Stays mounted while you move between pages, so the conversation is kept */}
-        <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} top={isDrawer ? 0 : 53} />
+        <CopilotPanel open={copilotOpen} onClose={() => setCopilotOpen(false)} top={isDrawer ? 0 : 57} />
 
       </div>
     </div>

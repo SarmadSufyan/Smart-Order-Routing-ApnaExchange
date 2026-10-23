@@ -57,3 +57,10 @@ export function fmtBps(v: number | null | undefined, digits = 1): string {
 export function baseAsset(symbol: string): string {
   return symbol.split('/')[0] || symbol
 }
+
+/** An API word for display: 'PARTIALLY_FILLED' -> 'Partially filled', 'testnet' -> 'Testnet'. */
+export function sentence(word: string | null | undefined): string {
+  if (!word) return '—'
+  const s = word.replace(/_/g, ' ').toLowerCase()
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}

@@ -215,8 +215,9 @@ export function NewOrderModal({
   const indicativePrice = nbbo
     ? form.side === 'BUY' ? nbbo.best_ask : nbbo.best_bid
     : 0
+  const nameOf = (id: string) => venues.find((v) => v.shortName === id)?.name ?? id
   const indicativeVenue = nbbo
-    ? form.side === 'BUY' ? nbbo.best_ask_venue : nbbo.best_bid_venue
+    ? nameOf(form.side === 'BUY' ? nbbo.best_ask_venue : nbbo.best_bid_venue)
     : '—'
 
   // Resolved venue label after fill
@@ -236,7 +237,6 @@ export function NewOrderModal({
   const modal: React.CSSProperties = {
     background: C.surface, border: `1px solid ${C.border}`,
     borderRadius: 8, width: '100%', maxWidth: 520,
-    fontFamily: "'Consolas','IBM Plex Mono',monospace",
     color: C.text, maxHeight: '90vh', overflowY: 'auto',
   }
   const header: React.CSSProperties = {
@@ -264,7 +264,7 @@ export function NewOrderModal({
   // ── FORM ──
   if (stage === 'form') return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modal}>
+      <div data-glass="float" style={modal}>
         <div style={header}>
           <div>
             <div style={{ fontSize: F.md, fontWeight: 700 }}>New Order</div>
@@ -314,7 +314,7 @@ export function NewOrderModal({
                     transition: 'all .15s',
                   }}
                 >
-                  {s}
+                  {s === 'BUY' ? 'Buy' : 'Sell'}
                 </button>
               ))}
             </div>
@@ -407,11 +407,11 @@ export function NewOrderModal({
               fontSize: F.sm, color: C.muted,
             }}>
               <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>
-                LIVE NBBO (across {Object.keys(nbbo.venue_quotes || {}).length} venue{Object.keys(nbbo.venue_quotes || {}).length === 1 ? '' : 's'})
+                Live NBBO (across {Object.keys(nbbo.venue_quotes || {}).length} exchange{Object.keys(nbbo.venue_quotes || {}).length === 1 ? '' : 's'})
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Best Bid: <span style={{ color: C.green }}>{fmtPrice(nbbo.best_bid)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_bid_venue}</span></span>
-                <span>Best Ask: <span style={{ color: C.red }}>{fmtPrice(nbbo.best_ask)}</span> @ <span style={{ color: C.blue }}>{nbbo.best_ask_venue}</span></span>
+                <span>Best bid <span style={{ color: C.green }}>{fmtPrice(nbbo.best_bid)}</span> on <span style={{ color: C.text }}>{nameOf(nbbo.best_bid_venue)}</span></span>
+                <span>Best ask <span style={{ color: C.red }}>{fmtPrice(nbbo.best_ask)}</span> on <span style={{ color: C.text }}>{nameOf(nbbo.best_ask_venue)}</span></span>
               </div>
               {form.qty && (
                 <div style={{ marginTop: 6, fontSize: F.xs, color: C.dim }}>
@@ -432,8 +432,8 @@ export function NewOrderModal({
               borderRadius: 4, padding: '10px 12px', marginBottom: 14,
               fontSize: F.sm, color: C.muted,
             }}>
-              <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>ORDER PREVIEW</div>
-              <span style={{ color: form.side === 'BUY' ? C.green : C.red, fontWeight: 700 }}>{form.side} </span>
+              <div style={{ color: C.dim, marginBottom: 4, fontSize: 10 }}>Order preview</div>
+              <span style={{ color: form.side === 'BUY' ? C.green : C.red, fontWeight: 700 }}>{form.side === 'BUY' ? 'Buy' : 'Sell'} </span>
               <span style={{ color: C.text }}>{fmtQty(parseFloat(form.qty) || 0)} </span>
               <span style={{ color: C.text }}>{form.symbol} </span>
               {form.orderType === 'Limit' && form.price && (
@@ -460,11 +460,11 @@ export function NewOrderModal({
               opacity: killActive || (realMoney && !realOk) ? 0.6 : 1,
             }}
           >
-            {killActive ? 'KILL SWITCH ACTIVE — TRADING DISABLED' : `Submit ${form.side} Order →`}
+            {killActive ? 'Kill switch engaged — trading stopped' : `Submit ${form.side === 'BUY' ? 'buy' : 'sell'} order`}
           </button>
 
           <div style={{ textAlign: 'center', fontSize: F.xs, color: C.dim, marginTop: 8 }}>
-            Order will pass {RISK_CHECKS.length} pre-trade risk checks before routing
+            The order passes {RISK_CHECKS.length - 1} pre-trade risk checks and a balance check before routing
           </div>
         </div>
       </div>
@@ -559,7 +559,7 @@ export function NewOrderModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
-                background: `${stateColor}20`, border: `2px solid ${stateColor}`,
+                background: tint(stateColor, 12), border: `2px solid ${stateColor}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: F.lg, color: stateColor,
               }}>✓</div>
@@ -648,7 +648,7 @@ export function NewOrderModal({
             borderRadius: 4, padding: '10px 14px', marginBottom: 20,
             fontSize: F.sm, color: C.red, textAlign: 'left',
           }}>
-            <div style={{ fontSize: F.xs, color: C.muted, marginBottom: 4 }}>REASON</div>
+            <div style={{ fontSize: F.xs, color: C.muted, marginBottom: 4 }}>Reason</div>
             {rejectReason}
           </div>
 

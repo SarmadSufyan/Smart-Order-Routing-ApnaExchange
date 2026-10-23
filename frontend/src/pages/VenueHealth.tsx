@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle, ConnDot } from '../components/shared'
+import { Card, CardTitle, ConnDot, PageHeader } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendVenueToUi, fmtRate, LATENCY_WARN_MS, connectionLabel, dataFeedLabel } from '../adapters'
 
@@ -53,13 +53,18 @@ export function VenueHealth() {
 
   return (
     <div>
-      <div style={{ fontSize: F.lg, color: C.text, marginBottom: 4 }}>Venue Connectivity</div>
-      <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 14 }}>
-        Order books: {dataFeedLabel(backendVenues[0]?.data_mode)} feeds · orders execute in{' '}
-        {backendVenues[0]?.mode === 'mainnet' ? 'mainnet (real funds)' : "each exchange's sandbox environment"}.
-        Latency = measured REST round-trip. “Inject Latency” adds a fixed delay to our own connection to that exchange
-        (fault injection), so the health monitor's response can be observed on a live venue; the exchange is not affected.
-      </div>
+      <PageHeader
+        title="Venues"
+        subtitle={<>
+          Order books from {dataFeedLabel(backendVenues[0]?.data_mode)} feeds · orders execute in{' '}
+          {backendVenues[0]?.mode === 'mainnet' ? 'mainnet (real funds)' : "each exchange's sandbox environment"}.
+        </>}
+        about={<>
+          Latency is the measured REST round-trip. “Inject latency” adds a fixed delay to our own connection to that
+          exchange (fault injection), so the health monitor's response can be observed on a live venue; the exchange
+          is not affected.
+        </>}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 14, marginBottom: 14 }}>
         {venues.map((v) => {
@@ -73,7 +78,8 @@ export function VenueHealth() {
             isOffline                    ? tint(C.red, 2) : C.surface2
 
           return (
-            <div key={v.id} style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 6, padding: 14 }}>
+            <div key={v.id} data-card={borderColor === C.border ? '' : undefined}
+              style={{ background: bg, border: `1px solid ${borderColor}`, borderRadius: 6, padding: 16 }}>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -83,7 +89,7 @@ export function VenueHealth() {
                     <span title={b.execution_note ?? ''} style={{
                       fontSize: F.xs, padding: '1px 6px', borderRadius: 3, fontWeight: 700,
                       background: tint(C.blue, 14), color: C.blue, border: `1px solid ${tint(C.blue, 40)}`,
-                    }}>DATA ONLY</span>
+                    }}>Data only</span>
                   )}
                 </div>
                 <span style={{ fontSize: F.xs, color: C.muted, background: C.surface, padding: '2px 7px', borderRadius: 3 }}>
@@ -99,9 +105,9 @@ export function VenueHealth() {
                       { l: 'P99',             v: fmtMs(v.p99),           c: v.p99 > LATENCY_WARN_MS * 1.5 ? C.orange : C.text },
                       { l: 'Order books',     v: `${b.books_synced ?? 0}/${b.books_total ?? 0} synced`, c: b.books_synced === b.books_total ? C.green : C.orange },
                       { l: 'Resyncs',         v: `${b.resyncs ?? 0} gap · ${b.reconnects ?? 0} reconnect`, c: C.muted },
-                      { l: 'Fill Rate',       v: fmtRate(v, v.fillRate),   c: !v.hasOrders ? C.dim : v.fillRate > 90 ? C.green : v.fillRate > 75 ? C.orange : C.red },
-                      { l: 'Reject Rate',     v: fmtRate(v, v.rejectRate), c: !v.hasOrders ? C.dim : v.rejectRate > 5 ? C.red : C.text },
-                      { l: 'Health Score',    v: `${((v.backend.health_score ?? 0) * 100).toFixed(0)}%`, c: C.text          },
+                      { l: 'Fill rate',       v: fmtRate(v, v.fillRate),   c: !v.hasOrders ? C.dim : v.fillRate > 90 ? C.green : v.fillRate > 75 ? C.orange : C.red },
+                      { l: 'Reject rate',     v: fmtRate(v, v.rejectRate), c: !v.hasOrders ? C.dim : v.rejectRate > 5 ? C.red : C.text },
+                      { l: 'Health score',    v: `${((v.backend.health_score ?? 0) * 100).toFixed(0)}%`, c: C.text          },
                       { l: 'Uptime',          v: `${((v.backend.uptime ?? 0) * 100).toFixed(0)}%`,    c: C.green         },
                     ].map((row) => (
                       <div key={row.l}>
@@ -186,7 +192,7 @@ export function VenueHealth() {
                           opacity: busy === v.backend.venue_id ? 0.5 : 1,
                         }}
                       >
-                        {busy === v.backend.venue_id ? '…' : 'Inject Latency'}
+                        {busy === v.backend.venue_id ? '…' : 'Inject latency'}
                       </button>
                     )}
                     <button
@@ -207,7 +213,7 @@ export function VenueHealth() {
               ) : (
                 <>
                   <div style={{ textAlign: 'center', padding: '14px 0', color: C.red, fontSize: F.base }}>
-                    {v.blacklisted ? 'Venue Blacklisted' : 'Feed Disconnected'}
+                    {v.blacklisted ? 'Venue blacklisted' : 'Feed disconnected'}
                     <div style={{ color: C.dim, fontSize: F.xs, marginTop: 4 }}>
                       {v.blacklisted
                         ? 'Excluded from routing by an operator — no orders being sent'
@@ -245,7 +251,7 @@ export function VenueHealth() {
       </div>
 
       <Card>
-        <CardTitle>VENUE COMPARISON</CardTitle>
+        <CardTitle>Venue comparison</CardTitle>
         <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: F.sm }}>
           <thead>
@@ -259,7 +265,7 @@ export function VenueHealth() {
           </thead>
           <tbody>
             {venues.map((v) => (
-              <tr key={v.id} style={{ borderBottom: `1px solid ${C.border}40` }}>
+              <tr key={v.id} style={{ borderBottom: `1px solid ${C.border2}` }}>
                 <td style={{ padding: '8px', fontWeight: 600 }}>{v.name}</td>
                 <td style={{ padding: '8px', color: C.muted }}>{connectionLabel(v.backend)}</td>
                 <td style={{ padding: '8px' }}><ConnDot status={v.status} /></td>

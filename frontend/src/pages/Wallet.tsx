@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { environmentLabel } from '../adapters'
-import { Card, CardTitle } from '../components/shared'
+import { RefreshCw } from 'lucide-react'
+import { Button, Card, CardTitle, PageHeader } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
 import { fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
@@ -13,11 +14,11 @@ import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 const BAR_COLORS = [C.blue, C.green, C.orange, C.gold, C.purple, C.red]
 
 const RECON_STYLE: Record<ReconStatus, { color: string; label: string }> = {
-  OK:          { color: C.green,  label: 'MATCHED' },
-  PENDING:     { color: C.blue,   label: 'SETTLING' },
-  BREAK:       { color: C.red,    label: 'BREAK' },
-  UNKNOWN:     { color: C.dim,    label: 'UNREADABLE' },
-  NO_BASELINE: { color: C.dim,    label: 'NO BASELINE' },
+  OK:          { color: C.green,  label: 'Matched' },
+  PENDING:     { color: C.blue,   label: 'Settling' },
+  BREAK:       { color: C.red,    label: 'Break' },
+  UNKNOWN:     { color: C.dim,    label: 'Unreadable' },
+  NO_BASELINE: { color: C.dim,    label: 'No baseline' },
 }
 
 // The automation fund (Bots & Lab): what is set aside for bots, and what manual trading may still use.
@@ -112,7 +113,7 @@ export function Wallet() {
   }
 
   const th: React.CSSProperties = { padding: '6px 10px', fontSize: F.xs, color: C.dim, fontWeight: 400, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }
-  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border}40` }
+  const tr: React.CSSProperties = { borderBottom: `1px solid ${C.border2}` }
   const td: React.CSSProperties = { padding: '8px 10px', color: C.text, fontSize: F.base }
   const right: React.CSSProperties = { ...td, textAlign: 'right' }
   const statLabel: React.CSSProperties = { fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }
@@ -120,52 +121,47 @@ export function Wallet() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-        <div style={{ fontSize: F.lg, color: C.text }}>Wallet — Unified Portfolio</div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          style={{
-            padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 4,
-            background: C.surface, color: C.muted, fontSize: F.xs,
-            cursor: 'pointer', fontFamily: 'inherit', opacity: refreshing ? 0.5 : 1,
-          }}
-        >
-          {refreshing ? 'Refreshing…' : '↻ Refresh balances'}
-        </button>
-      </div>
+      <PageHeader
+        title="Wallet"
+        subtitle="Balances read from every exchange, valued at live prices, with P&L reconciled against the exchanges."
+        about={<>
+          Real balances read from each exchange with your API keys, valued in USDT at live mid prices from
+          ApnaSOR's own order books. Read-only — funds stay on the exchange. P&L comes from our own records
+          (opening balances + every fill) and is reconciled against what the exchanges report.
+        </>}
+        actions={
+          <Button onClick={handleRefresh} disabled={refreshing} icon={<RefreshCw size={14} />}>
+            {refreshing ? 'Refreshing…' : 'Refresh balances'}
+          </Button>
+        }
+      />
       {refreshError && (
-        <div style={{ marginBottom: 8, padding: '6px 10px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>
+        <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 4, background: tint(C.red, 10), color: C.red, fontSize: F.sm }}>
           Couldn't refresh the balances: {refreshError} — showing the last balances read.
         </div>
       )}
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16 }}>
-        Real balances read from each exchange with your API keys, valued in USDT at live mid prices from
-        ApnaSOR's own order books. Read-only — funds stay on the exchange. P&L comes from our own records
-        (opening balances + every fill) and is reconciled against what the exchanges report.
-      </div>
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: tileColumns, gap: 12, marginBottom: 14 }}>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={statLabel}>TOTAL VALUE</div>
+          <div style={statLabel}>Total value</div>
           <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>{fmtUsd(total)}</div>
           <div style={statSub}>
             USDT ·{' '}
             <span style={{ color: isMainnet ? C.red : C.orange, fontWeight: 600 }}>
-              {isMainnet ? 'REAL funds' : `${environmentLabel(wallet?.mode).toUpperCase()} balances`}
+              {isMainnet ? 'REAL funds' : `${environmentLabel(wallet?.mode)} balances`}
             </span>
           </div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={statLabel}>P&L SINCE OPENING BALANCES</div>
+          <div style={statLabel}>P&L since opening balances</div>
           <div style={{ fontSize: F.xxl, fontWeight: 700, color: pnlColor(pnl?.total_pnl) }}>
             {pnl?.complete ? fmtPnl(pnl.total_pnl) : '—'}
           </div>
           <div style={statSub}>since {fmtTime(pnl?.since)}</div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={statLabel}>TRADING P&L</div>
+          <div style={statLabel}>Trading P&L</div>
           <div style={{ fontSize: F.xxl, fontWeight: 700, color: pnlColor(pnl?.trading_pnl) }}>
             {pnl?.complete ? fmtPnl(pnl.trading_pnl) : '—'}
           </div>
@@ -174,9 +170,9 @@ export function Wallet() {
           </div>
         </Card>
         <Card style={{ textAlign: 'center', padding: 18 }}>
-          <div style={statLabel}>RECONCILIATION</div>
+          <div style={statLabel}>Reconciliation</div>
           <div style={{ fontSize: F.xxl, fontWeight: 700, color: breaks.length ? C.red : C.green }}>
-            {breaks.length ? `${breaks.length} BREAK${breaks.length > 1 ? 'S' : ''}` : 'MATCHED'}
+            {breaks.length ? `${breaks.length} break${breaks.length > 1 ? 's' : ''}` : 'Matched'}
           </div>
           <div style={statSub}>
             {connected}/{exchanges.length || venues.length} exchanges readable · updated{' '}
@@ -203,7 +199,7 @@ export function Wallet() {
           {/* Holdings */}
           <Card>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <CardTitle>HOLDINGS — ALL EXCHANGES</CardTitle>
+              <CardTitle>Holdings — all exchanges</CardTitle>
               <span style={{ fontSize: F.xs, color: C.dim }}>{assets.length} asset{assets.length === 1 ? '' : 's'}</span>
             </div>
 
@@ -261,7 +257,7 @@ export function Wallet() {
                     )
                   })}
                   <tr style={{ borderTop: `2px solid ${C.border}`, background: C.surface }}>
-                    <td style={{ ...td, fontWeight: 700 }}>TOTAL</td>
+                    <td style={{ ...td, fontWeight: 700 }}>Total</td>
                     <td style={td} /><td style={td} />
                     <td style={{ ...right, color: C.blue, fontWeight: 700 }}>{fmtUsd(total)}</td>
                     <td style={{ ...right, color: C.muted }}>100%</td>
@@ -286,7 +282,7 @@ export function Wallet() {
 
           {/* P&L breakdown */}
           <Card>
-            <CardTitle>P&L BREAKDOWN</CardTitle>
+            <CardTitle>P&L breakdown</CardTitle>
             {!pnl?.complete ? (
               <div style={{ padding: 16, color: C.dim, fontSize: F.sm }}>
                 {(pnl?.notes ?? ['Loading…']).map((n) => <div key={n}>{n}</div>)}
@@ -337,7 +333,7 @@ export function Wallet() {
           {/* Reconciliation */}
           <Card>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-              <CardTitle>RECONCILIATION — OUR LEDGER VS. THE EXCHANGE</CardTitle>
+              <CardTitle>Reconciliation — our ledger vs. the exchange</CardTitle>
               <span style={{ fontSize: F.xs, color: C.dim }}>expected = opening balances + our fills</span>
             </div>
             {actionError && (
@@ -424,7 +420,7 @@ export function Wallet() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Per-exchange */}
           <Card>
-            <CardTitle>BY EXCHANGE</CardTitle>
+            <CardTitle>By exchange</CardTitle>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {exchanges.length === 0 && (
                 <div style={{ padding: 12, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No exchanges yet.</div>
@@ -442,7 +438,7 @@ export function Wallet() {
                         fontSize: F.xs, padding: '1px 6px', borderRadius: 3,
                         background: tint(v.mode === 'mainnet' ? C.red : C.orange, 14),
                         color: v.mode === 'mainnet' ? C.red : C.orange,
-                      }}>{environmentLabel(v.mode).toUpperCase()}</span>
+                      }}>{environmentLabel(v.mode)}</span>
                     </div>
                     {v.error ? (
                       <div style={{ fontSize: F.xs, color: C.red, marginTop: 4 }}>{v.error}</div>
@@ -465,7 +461,7 @@ export function Wallet() {
 
           {/* Allocation */}
           <Card>
-            <CardTitle>ALLOCATION</CardTitle>
+            <CardTitle>Allocation</CardTitle>
             {assets.length === 0 ? (
               <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: F.sm }}>Nothing to allocate yet.</div>
             ) : (
@@ -501,7 +497,7 @@ export function Wallet() {
 
           {/* Recent fills */}
           <Card>
-            <CardTitle>RECENT FILLS</CardTitle>
+            <CardTitle>Recent fills</CardTitle>
             {recentFills.length === 0 ? (
               <div style={{ padding: 16, textAlign: 'center', color: C.dim, fontSize: F.sm }}>No fills yet.</div>
             ) : (

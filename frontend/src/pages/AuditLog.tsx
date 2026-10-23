@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { C, F } from '../theme'
-import { Card } from '../components/shared'
+import { RefreshCw } from 'lucide-react'
+import { Button, Card, PageHeader } from '../components/shared'
 import { AuditRow } from '../components/AuditTimeline'
 import { api, type AuditEvent } from '../services/api'
 
@@ -45,20 +46,18 @@ export function AuditLog() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ fontSize: F.lg, color: C.text }}>Audit Log</div>
-        <button onClick={() => load()} disabled={loading} style={{
-          padding: '5px 12px', border: `1px solid ${C.border}`, borderRadius: 4,
-          background: C.surface, color: C.muted, fontSize: F.xs, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          {loading ? 'Loading…' : '↻ Refresh'}
-        </button>
-      </div>
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 14 }}>
-        Append-only record of everything that happened — every order step, risk decision, routing decision and
-        fill, and every operator action with who did it. Survives restarts{store && ` (stored in ${store})`}.
-        Open any order in the blotter to see its own timeline.
-      </div>
+      <PageHeader
+        title="Audit Log"
+        subtitle={<>
+          An append-only record of every order step, risk decision, routing decision and fill, and every operator
+          action with who did it. Survives restarts{store && ` (stored in ${store})`}.
+        </>}
+        actions={
+          <Button onClick={() => load()} disabled={loading} icon={<RefreshCw size={14} />}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </Button>
+        }
+      />
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {FILTERS.map((f) => (

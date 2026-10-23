@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
-import { Card, CardTitle } from '../components/shared'
+import { Card, CardTitle, PageHeader, Pill } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { wsClient } from '../services/websocket'
 import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtSize } from '../format'
@@ -163,34 +163,32 @@ export function Arbitrage() {
   }
 
   const status = !arb ? null
-    : !arb.enabled ? { color: C.dim, text: 'OFF — ARB_ENABLED=false' }
-    : arb.running ? { color: C.green, text: `SCANNING · ${scansPerSecond ?? '?'}× a second` }
-    : { color: C.orange, text: 'STOPPED' }
+    : !arb.enabled ? { color: C.dim, text: 'Off — ARB_ENABLED=false' }
+    : arb.running ? { color: C.green, text: `Scanning · ${scansPerSecond ?? '?'}× a second` }
+    : { color: C.orange, text: 'Stopped' }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-        <div style={{ fontSize: F.lg, color: C.text }}>Arbitrage Detector</div>
-        <span style={{
-          borderRadius: 3, padding: '3px 9px', fontSize: F.xs, fontWeight: 700, letterSpacing: '.08em',
-          background: tint(C.blue, 14), color: C.blue, border: `1px solid ${tint(C.blue, 50)}`,
-        }}>
-          DETECTOR ONLY · NOTHING IS TRADED
-        </span>
-        {status && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: F.xs, color: status.color, letterSpacing: '.05em' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
-            {status.text}
-          </span>
-        )}
-      </div>
-      <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16, maxWidth: 980 }}>
-        When one exchange's best bid is above another exchange's best ask, the two order books are <b>crossed</b>:
-        buying on one and selling on the other at the same moment would earn the gap. ApnaSOR checks every pair of
-        exchanges, in both directions{scansPerSecond ? `, ${scansPerSecond} times a second` : ''}, and then subtracts
-        both exchanges' taker fees, which is what doing it would actually cost. Prices are the real market.
-        1 bps = 0.01%.
-      </div>
+      <PageHeader
+        title="Arbitrage"
+        badge={<>
+          <Pill tone={C.blue}>Detector only · nothing is traded</Pill>
+          {status && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: F.sm, color: status.color }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color }} />
+              {status.text}
+            </span>
+          )}
+        </>}
+        subtitle="Price gaps between exchanges on the real market, measured after both exchanges' taker fees."
+        about={<>
+          When one exchange's best bid is above another exchange's best ask, the two order books are <b>crossed</b>:
+          buying on one and selling on the other at the same moment would earn the gap. ApnaSOR checks every pair of
+          exchanges, in both directions{scansPerSecond ? `, ${scansPerSecond} times a second` : ''}, and then subtracts
+          both exchanges' taker fees, which is what doing it would actually cost. Prices are the real market.
+          1 bps = 0.01%.
+        </>}
+      />
 
       {error && (
         <div style={{
@@ -223,12 +221,12 @@ export function Arbitrage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 12 }}>
               <div style={tilePair}>
                 <Card style={{ textAlign: 'center', padding: 16, background: C.surface }}>
-                  <div style={statLabel}>BOOKS CROSSED</div>
+                  <div style={statLabel}>Books crossed</div>
                   <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>{pct(all.crossed, all.scans)}</div>
                   <div style={statSub}>of {all.scans.toLocaleString()} scans, all coins</div>
                 </Card>
                 <Card style={{ textAlign: 'center', padding: 16, background: C.surface }}>
-                  <div style={statLabel}>AVG GAP BEFORE FEES</div>
+                  <div style={statLabel}>Avg gap before fees</div>
                   <div style={{ fontSize: F.xxl, fontWeight: 700, color: C.text }}>
                     {all.scans ? fmtBps(all.sumGross / all.scans) : '—'}
                   </div>
@@ -237,14 +235,14 @@ export function Arbitrage() {
               </div>
               <div style={tilePair}>
                 <Card style={{ textAlign: 'center', padding: 16, background: C.surface }}>
-                  <div style={statLabel}>AVG AFTER TAKER FEES</div>
+                  <div style={statLabel}>Avg after taker fees</div>
                   <div style={{ fontSize: F.xxl, fontWeight: 700, color: all.scans ? edgeColor(all.sumNet / all.scans) : C.text }}>
                     {all.scans ? fmtBps(all.sumNet / all.scans) : '—'}
                   </div>
                   <div style={statSub}>best pair once both fees are paid</div>
                 </Card>
                 <Card style={{ textAlign: 'center', padding: 16, background: C.surface }}>
-                  <div style={statLabel}>PROFITABLE WINDOWS</div>
+                  <div style={statLabel}>Profitable windows</div>
                   <div style={{ fontSize: F.xxl, fontWeight: 700, color: all.profitableWindows > 0 ? C.green : C.text }}>
                     {all.profitableWindows.toLocaleString()}
                     <span style={{ fontSize: F.md, color: C.muted, fontWeight: 400 }}> of {all.windows.toLocaleString()}</span>
@@ -336,7 +334,7 @@ export function Arbitrage() {
 
           {/* Coin filter for the charts and the windows list */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: F.xs, color: C.dim, marginRight: 4 }}>SHOW</span>
+            <span style={{ fontSize: F.xs, color: C.dim, marginRight: 4 }}>Show</span>
             <button onClick={() => setSymbol('')} style={chip(symbol === '')}>All coins</button>
             {symbols.map((s) => (
               <button key={s.symbol} onClick={() => setSymbol(s.symbol)} style={chip(symbol === s.symbol)}>
@@ -465,7 +463,7 @@ export function Arbitrage() {
                               <span style={{
                                 marginRight: 6, padding: '1px 6px', borderRadius: 3, fontSize: F.xs,
                                 background: tint(C.blue, 14), color: C.blue,
-                              }}>OPEN</span>
+                              }}>Open</span>
                             )}
                             {fmtDuration(w.duration_s)}
                           </td>
@@ -474,7 +472,7 @@ export function Arbitrage() {
                           <td style={{ ...tdR, color: edgeColor(w.peak.net_bps), fontWeight: 600 }}>{fmtBps(w.peak.net_bps, 2)}</td>
                           <td style={td}>
                             {w.profitable
-                              ? <span style={{ color: C.green, fontWeight: 700 }}>PROFITABLE</span>
+                              ? <span style={{ color: C.green, fontWeight: 700 }}>Profitable</span>
                               : <span style={{ color: C.dim }}>loss after fees</span>}
                           </td>
                         </tr>

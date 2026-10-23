@@ -9,10 +9,10 @@ import type { ConsensusNode } from '../services/api'
 const POLL_MS = 2000
 
 function roleStyle(n: ConsensusNode): { label: string; color: string } {
-  if (!n.reachable) return { label: 'UNREACHABLE', color: C.red }
-  if (n.role === 'LEADER') return { label: 'LEADER', color: C.blue }
-  if (n.role === 'CANDIDATE') return { label: 'CANDIDATE', color: C.orange }
-  return { label: n.role ?? '—', color: C.muted }
+  if (!n.reachable) return { label: 'Unreachable', color: C.red }
+  if (n.role === 'LEADER') return { label: 'Leader', color: C.blue }
+  if (n.role === 'CANDIDATE') return { label: 'Candidate', color: C.orange }
+  return { label: n.role ? n.role.charAt(0) + n.role.slice(1).toLowerCase() : '—', color: C.muted }
 }
 
 function fmtIndex(i: number | null | undefined): string {
@@ -55,7 +55,7 @@ export function RaftPanel({ style, compact = false }: { style?: React.CSSPropert
   if (compact) {
     return (
       <Card style={style}>
-        <CardTitle>RAFT CONSENSUS NODES</CardTitle>
+        <CardTitle>RAFT consensus nodes</CardTitle>
         {!status ? (
           <div style={{ padding: 10, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : 'Loading…'}</div>
         ) : !status.enabled ? (
@@ -101,7 +101,7 @@ export function RaftPanel({ style, compact = false }: { style?: React.CSSPropert
             <span style={chip(status.majority_reachable ? C.green : C.red)}>
               {status.majority_reachable ? `MAJORITY · ${reachable} OF ${nodes.length} UP` : `NO MAJORITY · ${reachable} OF ${nodes.length} UP`}
             </span>
-            {status.signed && <span style={chip(C.blue)} title="Every RAFT message carries an HMAC-SHA256 signature">SIGNED</span>}
+            {status.signed && <span style={chip(C.blue)} title="Every RAFT message carries an HMAC-SHA256 signature">Signed</span>}
           </div>
         )}
       </div>

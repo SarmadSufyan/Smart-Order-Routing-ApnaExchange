@@ -172,7 +172,7 @@ export function ResearchChart({ data }: { data: ChartData }) {
               onPointerMove={onMove} onPointerLeave={() => setHover(null)} />
       </svg>
       {h !== null && (
-        <div style={{
+        <div data-glass="float" style={{
           position: 'absolute', top: 22, left: Math.min(Math.max(x(h) + 12, 0), width - 210), width: 196,
           pointerEvents: 'none', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4,
           padding: '6px 8px', fontSize: F.xs, color: C.muted, lineHeight: 1.6, boxShadow: '0 2px 8px rgba(0,0,0,.25)',
