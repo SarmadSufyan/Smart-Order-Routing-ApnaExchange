@@ -65,6 +65,16 @@ done from the laptop with `deploy/real-server/deploy.py`, over SSH; you see the 
 Real keys never touch the laptop: you type them into a hidden prompt and they go straight into the server's
 root-only `keys.env`.
 
+**Getting into the server (once — Phase D "step 2").** Sign in to Maham's AWS account with your own IAM user (a
+private browser window keeps it apart from your own account) → **MFA** on that login (your name → *Security
+credentials* → *Assign MFA device* → authenticator app; if it says *not authorized*, Maham grants it) → region
+**Europe (Zurich)** → EC2 → `apnasor-real` **Running**, Elastic IP `16.18.141.32` → its security group
+`apnasor-real-ssh` → *Edit inbound rules* → the SSH rule with your old `/32` address → source **My IP** (keep the
+Instance Connect rule, add nothing) → save the key file as `C:\Users\TLS\.ssh\apnasor-real.pem`. Then the assistant
+runs `deploy.py init` and `replace-ssh-key` (a key made on your laptop replaces the AWS-made one, which then opens
+nothing). Afterwards: Fizza deletes her copy of the `.pem`; Maham deletes Fizza's IAM user, turns on MFA for her own
+login, sets a $25 budget alert and tells you her account's Free-plan end date.
+
 **Before you start (one time):** Binance and Bybit accounts verified, 2FA with an authenticator app, an
 anti-phishing code, a withdrawal address whitelist, ~$50 USDT each in the spot / trading wallet (your savings in
 the *Funding* wallet). Don't create the API keys yet — part 5.

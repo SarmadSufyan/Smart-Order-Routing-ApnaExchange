@@ -2184,3 +2184,62 @@ lab engines (shared fee view); `backend/shared/models/venue.py`, `venue_monitor/
 `package.json`, `.env.real-server` (new); tests `test_fees.py`, `test_real_server.py`, `test_alerts.py`,
 `test_export_records.py` (new), `test_key_permissions.py`; docs `PHASE_D_PLAN.md`, `REAL_MONEY_GUIDE.md` (parts 3-7
 rewritten as the server runbook), `CLAUDE.md`, `PROGRESS.md`, `.env.example`.
+
+---
+
+## 2026-10-23 — The lab's verdict after 11 days: no bot makes money on its own yet
+
+**Why now.** The plan (D6, decision of 2026-10-15) said: read the lab's verdict after its extended run (≈ 2026-10-22),
+before any bot touches real money and before the lab gets a new release (D1-10). Read from a fresh backup
+(`data/lab-server/backups/2026-10-23_162252`, gitignored) plus live public prices; the coins the bots hold are valued
+at the live bid minus a 0.10 % sale fee, and every profit is at real-market fees (Binance's sandbox charges none).
+
+**The market in those 11.2 days** (Binance real market, hourly): BTC 83,501 → 81,692 (−2.2 %; low 79,800, high
+84,898); ETH 2,556 → 2,408 (−5.8 %), never back above its start (low 2,318). A falling stretch — exactly the test
+D6 asked for.
+
+**Result: $1,700 → −$23.57 (−1.4 %).** Realized +$10.29, the coins still held −$33.85.
+
+| Bot ($200 each; advisor explore $300) | sales | realized | held coins | total | buying and holding instead |
+|---|---|---|---|---|---|
+| BTC cycle 0.1 % | 95 | +2.54 | −3.49 | −0.94 | −4.95 |
+| BTC cycle 0.3 % | 53 | +3.38 | −3.43 | −0.05 | −4.95 |
+| BTC cycle 1 % | 24 | +4.82 | −3.17 | **+1.65** | −4.95 |
+| ETH cycle 0.1 % | 90 | +2.62 | −7.90 | −5.28 | −12.25 |
+| ETH cycle 0.3 % | 49 | +3.42 | −7.92 | −4.50 | −12.25 |
+| ETH cycle 1 % | 15 | +3.19 | −7.81 | −4.62 | −12.25 |
+| Advisor explore | 175 closed | −9.69 | −0.14 | −9.83 | — |
+| Advisor strict | 0 | 0 | 0 | 0 | — |
+
+**What it means.**
+- **The profit-cycle bot keeps its promise and only that.** All 326 sales were at their targets; the average sale
+  earned what its threshold says (0.1 % → +0.14 %, 0.3 % → +0.33 %, 1 % → +1.03–1.08 % per lot after real fees,
+  tight bootstrap intervals). But it buys every dip, so in a falling market it fills up with coins (all three ETH bots
+  held their 10 lots for the last ~37 h): overall −1.5 % on $1,200 against −4.3 % for simply holding the same coins.
+  It loses less than holding and skims rises; it is not a way to make money in a downtrend.
+- **Threshold:** profit per day BTC 1 % +0.43, 0.3 % +0.30, 0.1 % +0.23; ETH 0.3 % +0.31, 1 % +0.29, 0.1 % +0.23 —
+  but **no difference is proven** (permutation p = 0.15–0.92). Slower thresholds hold longer (median 1 h / 2–3 h /
+  14–20 h; sold within 24 h: ~80 % / ~70 % / 32–45 %).
+- **The outcome model found no edge** (which lots sell within 24 h: 59.2 % vs 64.5 % for the base rate, p = 0.91):
+  the market conditions at the buy don't predict it.
+- **The advisor's loose rule is a proven loser:** 179 trades, 29 targets / 104 stops / 42 time-outs, −0.28 % per
+  trade (95 % interval −0.45 to −0.11 %, entirely below zero) — as the research predicted (no forecast edge, a
+  negative bracket). The strict advisor made no trade in 11 days: its rule correctly refuses.
+- **Costs (1,272 orders):** slippage tiny (median −1.5 to +0.6 bps; Bybit −0.3 to −0.7 bps, slightly in our favour);
+  Bybit fills 93–100 %; Binance's sandbox BTC/ETH 63–71 % (IOC target sells that found no buyer, by design).
+- **Running unattended works:** 0 errors, 0 crashes; on 2026-10-13 06:59 UTC Ubuntu's automatic security updates
+  restarted the gateway twice (both clean stops) and all 8 bots resumed by themselves 60 s later — the only 16 pauses
+  in 11 days. Daily backups, 13 kept.
+
+**Decisions taken from it** (plan §1, D6, §15): no bot is switched on at D4; the BTC 1 % cycle bot (the only variant
+positive over the falling stretch) stays the only D6 candidate with $30; the advisor stays off real money. The lab
+keeps running (cheap, and the comparisons need more days to separate); next is D1-10, releasing the current version
+to it (starts the 3-day promotion gate).
+
+**Also today:** the GitHub CLI's active account had become `veloxisdev`, so `git fetch` said "Repository not found";
+commands for this repo use `GH_TOKEN` from `gh auth token --user SarmadSufyan` (Sarmad's active account left as is).
+Step 2 (access to the real-money server) written up for Sarmad in `REAL_MONEY_GUIDE.md` part 3.
+
+**Files.** Docs only: project-info/PHASE_D_PLAN.md (§1, D6, §15), project-info/REAL_MONEY_GUIDE.md (part 3),
+PROGRESS.md, this journal.
+

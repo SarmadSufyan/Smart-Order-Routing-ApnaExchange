@@ -29,7 +29,7 @@ widen one step at a time: more exchanges, higher limits, and bots only if the la
 | OKX | ⚠️ not proven | its demo refused our orders (50124 "no trading permission") — needs a new demo key |
 | Gate | ⚠️ not proven | its spot test wallet can't be funded (test funds go to futures only) |
 | Fees | ⚠️ public base rate (0.10 %) | the account's real rate is not read yet |
-| Bots | ⏳ lab verdict pending | cycle bots: every sale profitable, but the held coins carry the price risk; the advisor lost as the research predicted (2026-10-15: −$18 on $1,700 overall). Lab runs until about 2026-10-22 |
+| Bots | ⚠️ lab verdict 2026-10-23: **no bot makes money on its own yet** | 11.2 days, $1,700: −$23.57 (−1.4 %). Cycle bots: every one of 326 sales profitable after real fees (+$20), but the coins they hold lost $34 as ETH fell 5.8 % and BTC 2.2 %; −1.5 % net vs −4.3 % for simply holding. Only **BTC 1 %** ended positive (+$1.65); no threshold proven better than another. Advisor (loose rule): −0.28 % per trade, proven loser; strict advisor: 0 trades. Details: journal 2026-10-23 |
 | Copilot | ✅ works (Gemini) | asks before every action; Auto is sandbox-only |
 | Real-money server | ✅ created 2026-10-18, **empty** | Maham's AWS account, Zurich: `apnasor-real`, Elastic IP `16.18.141.32`; nothing installed, no keys — §5 C |
 | Real orders | ❌ none yet | Sarmad places the first ones (stage D4) |
@@ -175,7 +175,11 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 ### D6 — Bots on real money (only if the lab proves them)
 - After the lab's extended run (≈ 2026-10-22), we read its verdict together. Only a bot whose results hold up after
   real fees **and** over a falling stretch gets real money.
-- Today's best candidate: **profit-cycle, BTC, 1 % target**, a **$30** budget, on a **separate sub-account** if the
+- **Verdict read 2026-10-23** (journal): the cycle bots keep their promise (every sale profitable after real fees) but
+  lost money overall in this falling stretch because of the coins they hold (−1.5 % vs −4.3 % for holding); the
+  advisor's loose rule is a proven loser. So no bot is switched on at D4.
+- Today's best candidate: **profit-cycle, BTC, 1 % target** (the only variant positive over the falling stretch:
+  +$1.65 on $200), a **$30** budget, on a **separate sub-account** if the
   exchange allows one (so the bot's money is physically apart from manual trading). `MAINNET_CYCLE_BOTS=true` only
   then.
 - **The advisor does not trade real money** until the lab shows an edge after costs (it lost as predicted).
@@ -374,5 +378,6 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 | A6 | Bots on real money | none until the lab's verdict; then at most the BTC 1 % cycle bot with $30 | 2026-10-20 |
 | A7 | M3 date | — | — |
 | — | Lab extended run | until ≈ 2026-10-22, or until Sarmad stops it; no release to the lab before then | 2026-10-15 |
+| — | Lab verdict | read 2026-10-23 (11.2 days): no bot switched on at D4; BTC 1 % cycle stays the only D6 candidate ($30); the advisor stays off real money | 2026-10-23 |
 | — | Sandbox and real money fully separate (own server, own keys, own records) | yes (Sarmad) | 2026-10-15 |
 | — | Proxies | not used for real money (fixed-IP server instead) | 2026-10-15 |
