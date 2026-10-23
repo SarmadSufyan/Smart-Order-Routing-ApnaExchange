@@ -113,7 +113,7 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 | D1-7 ✅ 10-20 | **Real-money screen mode**: `npm --prefix frontend run dev:real-server` → `localhost:5190`, red REAL MONEY SERVER label, its own tunnel port | checked in the browser against the rehearsal server |
 | D1-8 ✅ 10-20 | **Monthly records export** (CSV: orders, fills, fees, P&L) for your own records | unit tests |
 | D1-9 | **OKX in the sandbox**: with your new OKX demo key (§5 B4), the full execution check; if it still refuses, OKX stays out of D4 | live, small sandbox orders |
-| D1-10 ✅ 10-23 | **The lab gets today's version** after its week (≈ 2026-10-22), so later releases can be promoted — release `c4cc7ec` live on the lab since 2026-10-23 17:02 UTC (569 tests passed on the server, all 8 bots resumed by themselves); it can reach the real server from 2026-10-26 17:02 UTC | `deploy.py status` healthy, bots resumed |
+| D1-10 ✅ 10-23 | **The lab gets today's version** after its week (≈ 2026-10-22), so later releases can be promoted — release `c4cc7ec` live on the lab since 2026-10-23 17:02 UTC; then `5af45d4` (Claude for the copilot, decision A5) since **17:29 UTC** (572 tests passed on the server, all 8 bots resumed by themselves, `anthropic` installed) — it can reach the real server from **2026-10-26 17:29 UTC** | `deploy.py status` healthy, bots resumed |
 | D1-11 ✅ 10-20 | Docs: `REAL_MONEY_GUIDE.md` rewritten around the server; a runbook and the incident playbook (§11) | — |
 - **Done when:** all of the above pass, tests + CI ✅, the lab ran the new version ≥ 3 days.
 
