@@ -2267,3 +2267,51 @@ Files: deploy/real-server/deploy.py, write_keys.py, check_ai_key.py (new), check
 deploy/lab-server/requirements.lock, backend/tests/test_real_server.py, .github/workflows/real-server-kit.yml;
 docs PHASE_D_PLAN (§1, §9, §15), REAL_MONEY_GUIDE, COPILOT_GUIDE, CLAUDE.md, PROGRESS.
 
+---
+
+## 2026-10-24 — Four real-money exchanges: OKX stays, Gate goes, HTX added (V7)
+
+**Why.** Sarmad: two exchanges (Binance, Bybit) are too few for the real-money demo; at least two more, and they
+must accept accounts from Pakistan. Researched and tested the same night:
+- **From the real-money server's own IP** (`16.18.141.32`, Zurich) Binance, Bybit, OKX, Gate, Bitget, KuCoin, HTX,
+  MEXC and Kraken all answer their public APIs. Our 5 coins are listed everywhere with small minimums (ccxt on the lab
+  server: OKX/Bitget/HTX/MEXC ~$1, Gate $3, KuCoin ~$0.1).
+- **Gate is out for real money:** its own User Agreement (clause 2.5) names **Pakistan** a restricted location.
+  It stays a sandbox venue.
+- **OKX stays** (third): not on its blocked list (third-party lists; its terms page is JavaScript-only), answers from
+  Zurich; only Pakistani ISPs' DNS blocks okx.com on the laptop (to open the website: DNS 8.8.8.8 or the app).
+- **HTX added** (fourth): one of the two exchanges with a PVARA No-Objection Certificate (with Binance); its terms page
+  served from Zurich is a Pakistan-specific agreement under Pakistani law. Sarmad already has a KYC'd HTX account.
+- **Bitget = backup only:** Sarmad's old KYC account exists, but Bitget has no PVARA approval yet and lost $352M in a
+  hot-wallet hack on 2026-09-24 (withdrawals restored in stages).
+
+**The HTX adapter** (`backend/exchanges/htx/`, venue **V7**):
+- **No sandbox exists**, so the adapter is data-only outside real money (like Coinbase): `execution_available` only
+  on mainnet, no keys ever attached and no sandbox switch on testnet (ccxt has no HTX test URL); its live book counts
+  in the market view and the NBBO, the router never sends it an order there.
+- **Feed:** `market.<sym>.mbp.refresh.20` — every message a whole 20-level snapshot (about one a second per coin),
+  so there is no sequence chain to break; an older `seqNum` than the book's is ignored. `market.<sym>.ticker` for
+  last price and 24 h volume. Every frame is gzip; `{"ping": n}` is answered with `{"pong": n}` on its own task.
+- **Execution:** the shared ccxt core. Children are IOC limits → `buy-ioc` / `sell-ioc`; our client id as
+  `client-order-id` (≤ 64 chars; ours is 27), found again after a network error; fee rate via `fetch_trading_fee`.
+- **Key check** (`key_permissions.parse_htx`): `GET /v2/user/uid`, then `GET /v2/user/api-key` → permission
+  (`readOnly,trade[,withdraw]`), ipAddresses, status, validDays. Trade-only + IP-locked + status normal, or no orders.
+- Settings `HTX_MAINNET_API_KEY / SECRET` (no testnet keys exist), public taker fee `htx:20` in the fee table; the
+  real-money kit accepts HTX keys and never asks for an HTX sandbox key; `check_exchange_keys.py` explains HTX's
+  missing sandbox; frontend venue name V7 → HTX.
+
+**Verified live (laptop, data-only, 45 s):** connected in 3 s, **5/5 books synced**, 0 reconnects, a message every
+few ms; HTX mids vs Binance: BTC +0.3, ETH +0.7, SOL −3.4, BNB +2.6, XRP +3.6 bps; spreads BTC/ETH ~0, SOL 3.5,
+BNB 12, XRP 19 bps (thinner books — the router will prefer Binance/Bybit there). Trading is proven only once Sarmad's
+keys exist: first the read-only key check from the server, then tiny real orders.
+
+**Tests:** 11 new (583): the feed on HTX's own recorded frames (snapshot replaces, older ignored, ticker, errors,
+garbage, pong), data-only on testnet, blocked on real money until HTX answers, registry/settings, the key parser
+(accepted; withdraw / read-only / no IP / expired / unknown key refused; expiry date), the uid-then-key call order,
+the kit (HTX keys accepted, no HTX sandbox key asked).
+
+**Files.** backend/exchanges/htx/ (new), key_permissions.py, registry.py, gateway/config.py,
+scripts/check_exchange_keys.py, deploy/real-server/deploy.py, write_keys.py, frontend/src/adapters.ts,
+.env.example, tests (test_exchanges/test_htx.py new, test_real_server.py, test_arbitrage/test_detector.py);
+docs CLAUDE.md, PHASE_D_PLAN.md (§1, §7, §15), PROGRESS.md.
+

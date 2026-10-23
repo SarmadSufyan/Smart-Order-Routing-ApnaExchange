@@ -27,7 +27,9 @@ widen one step at a time: more exchanges, higher limits, and bots only if the la
 | Binance (spot) | ✅ proven in the sandbox | every execution path, TWAPs, splits |
 | Bybit (spot) | ✅ proven in the sandbox | Demo Trading; splits with Binance |
 | OKX | ⚠️ not proven | its demo refused our orders (50124 "no trading permission") — needs a new demo key |
-| Gate | ⚠️ not proven | its spot test wallet can't be funded (test funds go to futures only) |
+| Gate | ❌ **not for real money** | Pakistan is a restricted location in Gate's own User Agreement (clause 2.5, checked 2026-10-24): stays sandbox-only |
+| HTX | 🔨 **added 2026-10-24** (V7) | PVARA NOC in Pakistan; no sandbox, so data-only there and real money only; adapter, feed (verified live: 5/5 books within ±4 bps of Binance) and its key check built; Sarmad has a KYC account |
+| Bitget | 🅱️ backup only | Sarmad has an old KYC account; not PVARA-approved yet and hacked for $352M on 2026-09-24 (withdrawals restored in stages) — an adapter only if needed |
 | Fees | ⚠️ public base rate (0.10 %) | the account's real rate is not read yet |
 | Bots | ⚠️ lab verdict 2026-10-23: **no bot makes money on its own yet** | 11.2 days, $1,700: −$23.57 (−1.4 %). Cycle bots: every one of 326 sales profitable after real fees (+$20), but the coins they hold lost $34 as ETH fell 5.8 % and BTC 2.2 %; −1.5 % net vs −4.3 % for simply holding. Only **BTC 1 %** ended positive (+$1.65); no threshold proven better than another. Advisor (loose rule): −0.28 % per trade, proven loser; strict advisor: 0 trades. Details: journal 2026-10-23 |
 | Copilot | ✅ works (Gemini, sandbox) | asks before every action; Auto is sandbox-only. Real money: **Claude** (A5, 2026-10-23) — set up, off until Sarmad's key (`deploy.py ai-key`) |
@@ -271,6 +273,8 @@ stay yours.
 
 If the gateway refuses a key, **make a new key** with the right settings — never weaken the check.
 
+**HTX** (added 2026-10-24): API Management → create a key — **Read-only** (+ **Trade** after the read-only check), **Withdraw off**, **IP address `16.18.141.32`** (an IP-bound key also doesn't expire after 90 days). It shows an Access Key and a Secret Key (the secret once). What the gateway asks: `GET /v2/user/api-key` (after `GET /v2/user/uid`): permission, ipAddresses, status. **Gate is not used for real money**: Pakistan is a restricted location in its User Agreement (clause 2.5).
+
 ---
 
 ## 8. Money and limits
@@ -374,6 +378,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 |---|---|---|---|
 | A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C). **Confirmed by Sarmad 2026-10-20**: the real system in Maham's account, the sandbox bots stay on the lab server in his account; access rules in §10 | 2026-10-18 / 2026-10-20 |
 | A2 | Exchanges and order | Binance + Bybit first; OKX third (after its sandbox works); Gate fourth with $5 orders (Sarmad: all recommended) | 2026-10-20 |
+| A2 (widened) | Exchanges and order | **Binance, Bybit, OKX, HTX** for real money (Sarmad: two exchanges are too few). Gate dropped for real money (Pakistan restricted in its User Agreement); HTX added (PVARA NOC; new adapter V7); **Bitget** = backup (Sarmad's old KYC account; recent hack). OKX works from Zurich (tested); the laptop only needs DNS 8.8.8.8 to open okx.com | 2026-10-24 |
 | A3 | Starting money | ~$50 USDT on each of Binance and Bybit; caps at step 1 | 2026-10-20 |
 | A4 | Alerts | Telegram, with `/stop` (engage only) from the phone | 2026-10-20 |
 | A5 | Copilot on real money | AI off at first (`LLM_PROVIDER=off` on the real server; the quick analysis still works) | 2026-10-20 |

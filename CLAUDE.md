@@ -72,7 +72,7 @@ A trader submits an order. ApnaSOR keeps live order books from **real crypto exc
    │
  Exchange adapter layer (backend/exchanges/) — ccxt for REST execution + own WebSocket book sync;
    real money: a venue trades only once its exchange confirms the key can't withdraw (key_permissions.py)
-   V1 Binance  · V4 Bybit · V5 OKX · V6 Gate  (+ V2 Coinbase data-only, V3 Kraken impossible)
+   V1 Binance  · V4 Bybit · V5 OKX · V6 Gate · V7 HTX (real money only)  (+ V2 Coinbase data-only, V3 Kraken impossible)
 ```
 
 Internal events flow over an in-process async event bus (`backend/shared/events/event_bus.py`); the WebSocket fans selected channels out to the browser (`venue_health`, `market_data`, `nbbo_update`, `order_update`, `risk_alert`, `kill_switch`, `execution_report`, `wallet_update`, `algo_update`, `arb_update`). **`/ws` is for logged-in users only:** the first message must be `{"type": "auth", "token": …}` (never put a token in a URL — URLs are printed in the server log); anything else, or a bad / expired token, is closed with code 4401, and an open connection is closed when its login expires (`websocket/ws_manager.py`).
@@ -85,6 +85,7 @@ Internal events flow over an in-process async event bus (`backend/shared/events/
 | V4 | Bybit | mainnet public feed | **Demo Trading** (not Bybit Testnet — its books drift) | ✅ verified live |
 | V5 | OKX | mainnet public feed | Demo Trading (needs key + secret + **passphrase**) | ⚠️ authenticates; orders get 50124 "no trading permission" (2026-10-02) — router pauses it; some ISPs' DNS blocks okx.com |
 | V6 | Gate | mainnet public feed | spot testnet | ⚠️ authenticates; spot testnet wallet empty |
+| V7 | HTX | mainnet public feed (gzip `mbp.refresh.20` snapshots) | **real money only** (no sandbox: data-only on testnet) | added 2026-10-24 (Phase D, PVARA NOC in Pakistan); live data verified (5/5 books, within ±4 bps of Binance) |
 | V2 | Coinbase | mainnet public feed | none (no real testnet) — data-only, off by default | — |
 | V3 | Kraken | — | no spot testnet | not possible |
 
@@ -101,7 +102,7 @@ backend/
                         what the key may do, per exchange, pure parsers + the verdict, incl. the IP lock), fees.py
                         (the account's own taker fee + LiveFees, the shared fee view), orderbook.py, precision.py,
                         update_id_sync.py / stream_sync.py (book integrity), registry.py (EXCHANGE_CATALOG),
-                        binance/ bybit/ okx/ gate/ coinbase/ (per-venue feed + quirks)
+                        binance/ bybit/ okx/ gate/ htx/ coinbase/ (per-venue feed + quirks)
   gateway/              main.py (lifespan: open store → restore state → start services), config.py (Settings,
                         SecretStr keys, mainnet interlock, CORS rule), dependencies.py (wiring),
                         middleware/auth.py (users, logins, JWT signed with this machine's own key),
@@ -184,7 +185,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (572 as of 2026-10-23)
+python -m unittest discover -s backend/tests -t .   # all backend tests (583 as of 2026-10-24)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)
