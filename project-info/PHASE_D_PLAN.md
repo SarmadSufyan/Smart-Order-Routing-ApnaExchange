@@ -231,8 +231,10 @@ prompts yourself.
 > Sarmad's home IP (/32) and from the EC2 Instance Connect prefix list only, outbound default. Key pair `apnasor-real`
 > (ED25519) **made by AWS**: the `.pem` was downloaded to Fizza's laptop and goes to Sarmad by hand; she deletes her
 > copy once his login works. Running, 3/3 status checks, **empty**. SSH not tested yet (only Sarmad's IP may connect).
-> **Still open:** (a) Sarmad: the SSH test, then **replace the key with one made on his own laptop before D3** (this
-> one passed through another laptop); (b) Maham: an IAM login for Sarmad (EC2, MFA) so he can change the SSH rule when
+> **Still open:** (a) ~~Sarmad: the SSH test, then replace the key with one made on his own laptop before D3~~ **done
+> 2026-10-23**: `deploy.py init` connected (Ubuntu 24.04.4, aarch64), `replace-ssh-key` installed
+> `apnasor-real-ed25519` (made on Sarmad's laptop) and removed the AWS-made key - checked: the new key opens the server,
+> the old `.pem` gets *Permission denied*; (b) Maham: an IAM login for Sarmad (EC2, MFA) so he can change the SSH rule when
 > his IP changes, then remove Fizza's; MFA on her root login (item 1 applies to her account); a $25 budget alert;
 > (c) the server lives as long as Maham's account: her credits and Free-plan end date replace the dates in item 3 for
 > this server. Running ≈ $0.70/day; **Stop** (not Terminate) until D2 ≈ $6/month, same IP.
