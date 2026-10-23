@@ -15,6 +15,8 @@ Each parser is a pure function over the exchange's JSON:
   Gate     GET /api/v4/account/main_keys         a read_only flag per area (spot, wallet, ...). Gate lists no
                                                  separate withdrawal flag, so a writable wallet area counts
                                                  as "may withdraw" — the strict reading.
+  HTX      GET /v2/user/api-key (uid from        permission = "readOnly,trade[,withdraw]", ipAddresses, status,
+           GET /v2/user/uid)                     validDays (-1 = never expires)
 
 Anything a parser doesn't recognise is ``None`` ("the answer didn't say"), and ``None`` is never good enough
 for real money.
@@ -25,7 +27,7 @@ the exchange accepts the key only from that server's fixed address, so a copied 
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -118,6 +120,26 @@ def parse_gate(raw: Any, api_key: str) -> KeyPermissions:
     return KeyPermissions(trade, withdraw, bool(ips), None, _summary(trade, withdraw, bool(ips), extra))
 
 
+def parse_htx(raw: Any, api_key: str, today: datetime | None = None) -> KeyPermissions:
+    """HTX ``GET /v2/user/api-key`` (the whole answer, a list in ``data``); ours is found by its access key."""
+    data = raw.get("data") if isinstance(raw, dict) else None
+    keys = [k for k in data if isinstance(k, dict)] if isinstance(data, list) else []
+    mine = next((k for k in keys if k.get("accessKey") == api_key), None)
+    if mine is None or "permission" not in mine:
+        return KeyPermissions(None, None, None, summary="this key isn't in HTX's answer")
+    perms = {p.strip().lower() for p in str(mine["permission"]).split(",") if p.strip()}
+    status = str(mine.get("status") or "normal").lower()
+    trade = "trade" in perms and status == "normal"
+    withdraw = "withdraw" in perms
+    ip = bool(str(mine.get("ipAddresses") or "").strip())
+    expires = None
+    days = mine.get("validDays")
+    if isinstance(days, int) and not isinstance(days, bool) and days >= 0:
+        expires = ((today or datetime.now(UTC)) + timedelta(days=days)).strftime("%Y-%m-%d")
+    extra = f"permission={','.join(sorted(perms))}" + ("" if status == "normal" else f", key status {status}")
+    return KeyPermissions(trade, withdraw, ip, expires, _summary(trade, withdraw, ip, extra))
+
+
 async def fetch_key_permissions(client: Any, exchange_id: str, api_key: str) -> KeyPermissions | None:
     """Ask the exchange what this key may do (one read-only call). None = no such endpoint here.
 
@@ -131,6 +153,9 @@ async def fetch_key_permissions(client: Any, exchange_id: str, api_key: str) -> 
         return parse_okx(await client.private_get_account_config())
     if exchange_id == "gate":
         return parse_gate(await client.private_account_get_main_keys(), api_key)
+    if exchange_id == "htx":
+        uid = (await client.v2private_get_user_uid()).get("data")
+        return parse_htx(await client.v2private_get_user_api_key({"uid": uid, "accessKey": api_key}), api_key)
     return None
 
 

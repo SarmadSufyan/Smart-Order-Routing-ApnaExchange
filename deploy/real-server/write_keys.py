@@ -15,8 +15,8 @@ import re
 import sys
 import tempfile
 
-NAME = re.compile(r"^((BINANCE|BYBIT|OKX|GATE)_(TESTNET|MAINNET)_API_(KEY|SECRET|PASSPHRASE)|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID"
-                  r"|COPILOT_CLAUDE_API_KEY)$")
+NAME = re.compile(r"^((BINANCE|BYBIT|OKX|GATE|HTX)_(TESTNET|MAINNET)_API_(KEY|SECRET|PASSPHRASE)|TELEGRAM_BOT_TOKEN"
+                  r"|TELEGRAM_CHAT_ID|COPILOT_CLAUDE_API_KEY)$")
 
 
 def read(path: str) -> dict[str, str]:

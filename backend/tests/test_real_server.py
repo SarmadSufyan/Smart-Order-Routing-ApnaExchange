@@ -98,6 +98,9 @@ class SettingsTest(unittest.TestCase):
                                  "BYBIT_TESTNET_API_KEY=yk", "BYBIT_TESTNET_API_SECRET=ys"])
         with self.assertRaises(SystemExit):
             deploy.sandbox_key_lines(["okx"])  # no OKX sandbox key on this laptop
+        # HTX has no sandbox: a rehearsal runs it data-only and asks for no key
+        self.assertEqual(deploy.sandbox_key_lines(["binance", "htx"]),
+                         ["BINANCE_TESTNET_API_KEY=bk", "BINANCE_TESTNET_API_SECRET=bs"])
 
 
 class KeyWriterTest(unittest.TestCase):
@@ -143,6 +146,12 @@ class KeyWriterTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(sorted(self.stored()), ["BYBIT_MAINNET_API_KEY"])  # only that one went
         self.assertNotEqual(self.write("", "--remove", "PATH").returncode, 0)
+
+    def test_htx_keys_are_accepted(self) -> None:
+        out = self.write("HTX_MAINNET_API_KEY=htxaccess1111\nHTX_MAINNET_API_SECRET=htxsecret2222\n")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(sorted(self.stored()), ["HTX_MAINNET_API_KEY", "HTX_MAINNET_API_SECRET"])
+        self.assertNotIn("htxsecret", out.stdout)
 
     def test_only_exchange_keys_and_plain_values(self) -> None:
         self.assertNotEqual(self.write("PATH=/tmp\n").returncode, 0)

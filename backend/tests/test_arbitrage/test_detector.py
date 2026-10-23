@@ -90,7 +90,7 @@ class FeeScheduleTest(unittest.TestCase):
 
     def test_the_default_setting_covers_every_venue(self) -> None:
         fees = parse_fee_schedule(Settings.model_fields["arb_taker_fees_bps"].default)
-        self.assertEqual(set(fees), {"V1", "V2", "V4", "V5", "V6"})
+        self.assertEqual(set(fees), {"V1", "V2", "V4", "V5", "V6", "V7"})
 
     def test_bad_entries_refuse_to_start(self) -> None:
         for text in ("binance", "binance:ten", "nasdaq:10", "binance:-1", "", " , "):

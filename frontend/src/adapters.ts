@@ -7,10 +7,10 @@ import type { VenueHealth, Order as BackendOrder, RiskStatus } from './services/
 export const LATENCY_WARN_MS = 900
 
 const VENUE_NAMES: Record<string, string> = {
-  V1: 'Binance', V2: 'Coinbase', V3: 'Kraken', V4: 'Bybit', V5: 'OKX', V6: 'Gate',
+  V1: 'Binance', V2: 'Coinbase', V3: 'Kraken', V4: 'Bybit', V5: 'OKX', V6: 'Gate', V7: 'HTX',
 }
 
-const VENUE_NUMERIC_ID: Record<string, number> = { V1: 1, V2: 2, V3: 3, V4: 4, V5: 5, V6: 6 }
+const VENUE_NUMERIC_ID: Record<string, number> = { V1: 1, V2: 2, V3: 3, V4: 4, V5: 5, V6: 6, V7: 7 }
 
 export function venueName(venueId: string, venues?: VenueHealth[]): string {
   return venues?.find((v) => v.venue_id === venueId)?.name || VENUE_NAMES[venueId] || venueId

@@ -57,7 +57,9 @@ EXCHANGE_KEYS = {
     "bybit": ["API_KEY", "API_SECRET"],
     "okx": ["API_KEY", "API_SECRET", "API_PASSPHRASE"],
     "gate": ["API_KEY", "API_SECRET"],
+    "htx": ["API_KEY", "API_SECRET"],  # HTX calls them Access Key / Secret Key
 }
+NO_SANDBOX = {"htx"}  # real money only: in a rehearsal these are data-only, so they need no sandbox key
 LOGIN_KEYS = ["AUTH_PASSWORD_HASH_ADMIN", "AUTH_PASSWORD_HASH_TRADER1", "AUTH_PASSWORD_HASH_RISK_MGR"]
 AI_KEY = "COPILOT_CLAUDE_API_KEY"  # decision A5: the copilot's Claude key lives in keys.env, typed with ai-key
 # Copied from this laptop's .env when set: the same universe, fee table and (if you set them) real-money caps.
@@ -385,6 +387,8 @@ def sandbox_key_lines(exchanges: list[str]) -> list[str]:
     laptop = dotenv_values(ROOT / ".env") if (ROOT / ".env").exists() else {}
     lines = []
     for exchange in exchanges:
+        if exchange in NO_SANDBOX:
+            continue
         names = [f"{exchange.upper()}_TESTNET_{part}" for part in EXCHANGE_KEYS[exchange]]
         missing = [n for n in names if not (laptop.get(n) or "").strip()]
         if missing:
@@ -629,7 +633,8 @@ def main() -> None:
     p.add_argument("--key-file", help="where to keep the new key (default ~/.ssh/apnasor-real-ed25519)")
     sub.add_parser("passwords", help="the real-money server's own login passwords")
     exchanges = {"type": lambda s: [e.strip().lower() for e in s.split(",") if e.strip()],
-                 "default": ["binance", "bybit"], "help": "exchanges (default binance,bybit - decision A2)"}
+                 "default": ["binance", "bybit"],
+                 "help": "exchanges (default binance,bybit - decision A2; add okx,htx once their keys exist)"}
     p = sub.add_parser("setup", help="once: machine, settings, sandbox keys, first release (rehearsal)")
     p.add_argument("--ref", default="HEAD")
     p.add_argument("--exchanges", **exchanges)

@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     okx_mainnet_api_passphrase: SecretStr | None = None
     gate_mainnet_api_key: SecretStr | None = None
     gate_mainnet_api_secret: SecretStr | None = None
+    # HTX has no sandbox, so only real-money keys exist (Access Key / Secret Key); on testnet it is data-only.
+    htx_mainnet_api_key: SecretStr | None = None
+    htx_mainnet_api_secret: SecretStr | None = None
 
     # ─── Market data ──────────────────────────────────────────────
     orderbook_snapshot_depth: int = 1000
@@ -129,7 +132,7 @@ class Settings(BaseSettings):
     # market data (2026-10-04) — no VIP level, no BNB discount. Since
     # 2026-10-07 the ROUTER uses the same table: every routing strategy ranks
     # venues by price + this fee (our children are IOC, so always taker).
-    arb_taker_fees_bps: str = "binance:10,bybit:10,okx:15,gate:20,coinbase:120"
+    arb_taker_fees_bps: str = "binance:10,bybit:10,okx:15,gate:20,htx:20,coinbase:120"
     arb_min_net_bps: float = 0.0  # "profitable" = net edge after fees above this
     arb_audit_cooldown_s: float = 60.0  # at most one audit per direction per this
 

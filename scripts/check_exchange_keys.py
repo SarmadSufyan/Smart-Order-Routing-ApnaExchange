@@ -2,9 +2,10 @@
 scripts/check_exchange_keys.py
 
 Checks the API keys in .env for EVERY enabled exchange (Binance, Bybit, OKX,
-Gate). Keys are read through the gateway's own Settings (SecretStr) and are
-never printed. Read-only: it reads balances and asks each exchange what the
-key may do; it never places an order.
+Gate, HTX - which has no sandbox, so only its real keys exist). Keys are read
+through the gateway's own Settings (SecretStr) and are never printed.
+Read-only: it reads balances and asks each exchange what the key may do; it
+never places an order.
 
 Usage (from the project root D:\\Sor-Fyp):
     python scripts/check_exchange_keys.py                 # the mode in .env (testnet / demo)
@@ -28,6 +29,7 @@ from backend.exchanges.binance.adapter import BinanceAdapter  # noqa: E402
 from backend.exchanges.bybit.adapter import BybitAdapter  # noqa: E402
 from backend.exchanges.fees import fetch_account_taker_bps  # noqa: E402
 from backend.exchanges.gate.adapter import GateAdapter  # noqa: E402
+from backend.exchanges.htx.adapter import HtxAdapter  # noqa: E402
 from backend.exchanges.key_permissions import fetch_key_permissions, key_warnings, real_money_problem  # noqa: E402
 from backend.exchanges.okx.adapter import OkxAdapter  # noqa: E402
 from backend.exchanges.registry import EXCHANGE_CATALOG  # noqa: E402
@@ -41,7 +43,8 @@ ENV_NAME = {"bybit": "demo", "okx": "demo"}  # what each exchange calls its fake
 # "fetchMarkets": ["spot"], this check failed whenever Binance's FUTURES testnet was down,
 # although the spot testnet ApnaSOR trades on was fine.
 CCXT_OPTIONS = {"binance": BinanceAdapter.ccxt_options, "bybit": BybitAdapter.ccxt_options,
-                "okx": OkxAdapter.ccxt_options, "gate": GateAdapter.ccxt_options}
+                "okx": OkxAdapter.ccxt_options, "gate": GateAdapter.ccxt_options, "htx": HtxAdapter.ccxt_options}
+NO_SANDBOX = {"htx"}  # real money only: no test environment exists
 PAD = " " * 19
 
 
@@ -83,6 +86,9 @@ async def check(exchange_id: str, cfg: Settings) -> str:
     creds = cfg.exchange_credentials(exchange_id)
     if exchange_id == "coinbase":
         return f"  {label:16s} data-only venue - no keys needed"
+    if exchange_id in NO_SANDBOX and cfg.exchange_mode == "testnet":
+        return (f"  {label:16s} no sandbox exists - data-only here; its real keys are checked with "
+                f"--mode mainnet")
     if not creds:
         prefix = f"{exchange_id.upper()}_{cfg.exchange_mode.upper()}_API"
         extra = f" / {prefix}_PASSPHRASE" if exchange_id == "okx" else ""

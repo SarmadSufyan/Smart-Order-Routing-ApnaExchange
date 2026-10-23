@@ -10,6 +10,8 @@ Every venue was checked against its real testnet before being added
                  its separate TESTNET does not (BTC ~+170 bps) -> we use demo
     V5 OKX       demo trading executes; tracks the real market (~3 bps)
     V6 Gate      testnet executes; tracks the real market (0-10 bps)
+    V7 HTX       NO sandbox at all -> data-only on testnet, trades on real money
+                 only (added 2026-10-24 for Phase D: PVARA NOC in Pakistan)
 """
 
 import asyncio
@@ -77,6 +79,12 @@ def _gate(settings) -> ExchangeAdapter:
     return GateAdapter(**_ccxt_venue_kwargs(settings, "gate", "V6", "Gate"))
 
 
+def _htx(settings) -> ExchangeAdapter:
+    from backend.exchanges.htx import HtxAdapter
+
+    return HtxAdapter(**_ccxt_venue_kwargs(settings, "htx", "V7", "HTX"))
+
+
 EXCHANGE_CATALOG: dict[str, ExchangeSpec] = {
     "binance": ExchangeSpec("V1", "Binance", phase=1, factory=_binance),
     "coinbase": ExchangeSpec("V2", "Coinbase", phase=2, factory=_coinbase, note="data-only: no usable sandbox"),
@@ -84,6 +92,7 @@ EXCHANGE_CATALOG: dict[str, ExchangeSpec] = {
     "bybit": ExchangeSpec("V4", "Bybit", phase=3, factory=_bybit),
     "okx": ExchangeSpec("V5", "OKX", phase=3, factory=_okx),
     "gate": ExchangeSpec("V6", "Gate", phase=3, factory=_gate),
+    "htx": ExchangeSpec("V7", "HTX", phase=8, factory=_htx, note="real money only: no sandbox (data-only on testnet)"),
 }
 
 
