@@ -99,6 +99,7 @@ jobs:
 
       - name: "A5: the copilot's AI is Claude but off until a key - a key Anthropic refuses is removed again"
         run: |
+          set -o pipefail  # the step's shell has no pipefail: without it `| tee` would hide ai-key's exit code
           sudo grep -q "^LLM_PROVIDER='claude'" /opt/apnasor/shared/real.env
           if printf 'sk-ant-api03-ci-not-a-real-key-0000\n' | $DEPLOY ai-key 2>&1 | tee ai.out; then
             echo "Anthropic accepted a made-up key?"; exit 1
