@@ -45,17 +45,24 @@ if stage == "live":
     need(not settings.lab_auto_resume, "LAB_AUTO_RESUME must be off on real money")
     if not settings.mainnet_require_ip_lock:
         print("   WARNING: MAINNET_REQUIRE_IP_LOCK=false - keys without an IP lock will trade")
+    # Decision A5: on real money the copilot's AI is Claude or nothing - never a free tier that may use real balances.
+    need(settings.llm_provider in ("claude", "off"),
+         f"LLM_PROVIDER={settings.llm_provider} on real money - decision A5 allows claude or off")
     caps = (settings.mainnet_max_order_usdt, settings.mainnet_max_algo_usdt, settings.mainnet_max_exposure_usdt,
             settings.mainnet_max_trading_loss_usdt)
     summary = (f"LIVE - real money on {', '.join(traded) or 'nothing'}; caps ${caps[0]:g} per order, ${caps[1]:g} "
                f"per algo, ${caps[2]:g} exposure, ${caps[3]:g} loss limit; cycle bots "
-               f"{'ON' if settings.mainnet_cycle_bots else 'off'}; copilot AI {settings.llm_provider}")
+               f"{'ON' if settings.mainnet_cycle_bots else 'off'}")
 else:
     need(settings.exchange_mode == "testnet" and not settings.allow_mainnet,
          "a rehearsal runs on the sandbox: EXCHANGE_MODE=testnet, ALLOW_MAINNET=false")
     traded = [e for e in settings.enabled_exchange_list if settings.exchange_credentials(e)]
     staged = f"; real keys staged for go-live: {len(real_keys)}" if real_keys else ""
     summary = f"REHEARSAL - sandbox keys for {', '.join(traded) or 'nothing'}{staged}"
+ai_key = settings.copilot_claude_api_key.get_secret_value().strip() if settings.copilot_claude_api_key else ""
+summary += ("; copilot AI off" if settings.llm_provider == "off" else
+            f"; copilot AI {settings.llm_provider} ({'key set' if ai_key else 'no key yet - off until deploy.py ai-key'})"
+            if settings.llm_provider == "claude" else f"; copilot AI {settings.llm_provider}")
 missing = [u for u in sorted(USERS) if settings.password_hash_for(u) is None]
 need(not missing, f"no real login password for {', '.join(missing)} (deploy.py passwords, then deploy.py env)")
 if problems:

@@ -8,6 +8,7 @@
     python deploy/real-server/deploy.py keys                  # D3: type the REAL keys (hidden) -> the server only
     python deploy/real-server/deploy.py check-keys            # D3: what the exchanges say about them (read-only)
     python deploy/real-server/deploy.py telegram              # phone alerts and /stop (token hidden -> the server)
+    python deploy/real-server/deploy.py ai-key [--remove]     # the copilot's Claude key (hidden -> the server; A5)
     python deploy/real-server/deploy.py go-live               # D4: real money on (asks you to type REAL MONEY)
     python deploy/real-server/deploy.py release [--ref <commit>] [--reason "..."] [--test]
 
@@ -58,6 +59,7 @@ EXCHANGE_KEYS = {
     "gate": ["API_KEY", "API_SECRET"],
 }
 LOGIN_KEYS = ["AUTH_PASSWORD_HASH_ADMIN", "AUTH_PASSWORD_HASH_TRADER1", "AUTH_PASSWORD_HASH_RISK_MGR"]
+AI_KEY = "COPILOT_CLAUDE_API_KEY"  # decision A5: the copilot's Claude key lives in keys.env, typed with ai-key
 # Copied from this laptop's .env when set: the same universe, fee table and (if you set them) real-money caps.
 COPIED_IF_SET = ["SYMBOLS", "ARB_TAKER_FEES_BPS", "MAINNET_MAX_ORDER_USDT", "MAINNET_MAX_ALGO_USDT",
                  "MAINNET_MAX_EXPOSURE_USDT", "MAINNET_MAX_TRADING_LOSS_USDT"]
@@ -66,7 +68,10 @@ COMMON_SETTINGS = {
     "DEBUG": "false",
     "ARB_ENABLED": "false",  # the detector isn't needed here (it saves CPU)
     "RISK_POOL_WORKERS": "1",
-    "LLM_PROVIDER": "off",  # decision A5: no outside AI sees real balances (the quick analysis still works)
+    # Decision A5 (2026-10-23): the copilot's AI on real money is Claude (its API data isn't used for training). It
+    # stays off until a key is typed with `deploy.py ai-key` - without one the copilot says so and its quick
+    # analysis still works. Never the free Gemini tier here: it may use what it is sent, i.e. real balances.
+    "LLM_PROVIDER": "claude",
     "RAFT_ENABLED": "false",
     "LAB_AUTO_RESUME": "false",  # on real money nothing resumes by itself after a restart
     "MAINNET_REQUIRE_IP_LOCK": "true",  # each real key must be locked to this server's IP
@@ -201,7 +206,8 @@ def build_env(stage: str, exchanges: list[str]) -> tuple[Path, list[str]]:
     out.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     caps = ", ".join(f"{k.removeprefix('MAINNET_MAX_').lower()} {values[k]}" for k in COPIED_IF_SET[2:] if k in values)
     return out, [f"stage {stage}: EXCHANGE_MODE={values['EXCHANGE_MODE']}, exchanges {', '.join(exchanges)}",
-                 f"caps: {caps or 'the defaults (25 / 100 / 150 / 10 USDT)'}; copilot AI off; cycle bots off",
+                 f"caps: {caps or 'the defaults (25 / 100 / 150 / 10 USDT)'}; copilot AI Claude (off until "
+                 "deploy.py ai-key); cycle bots off",
                  "real login passwords for admin, trader1, risk_mgr"]
 
 
@@ -476,6 +482,39 @@ def cmd_telegram(args) -> None:
     print("done: the gateway restarted with alerts on - your phone gets 'Gateway started' in a minute.")
 
 
+def cmd_ai_key(args) -> None:
+    """Decision A5: the copilot's Claude key (hidden) -> the server's root-only keys.env; checked, or removed again."""
+    cfg = load_config()
+    remote(cfg, f"rm -rf {KIT} && mkdir -p {KIT}/deploy && cp -r {BASE}/current/deploy/real-server {KIT}/deploy/")
+    writer = f"sudo python3 {KIT}/deploy/real-server/write_keys.py {BASE}/shared/keys.env"
+    if args.remove:
+        remote(cfg, f"{writer} --remove {AI_KEY} </dev/null && sudo systemctl restart apnasor-real")
+        print("done: the key is removed and the gateway restarted - the copilot's AI is off "
+              "(its quick analysis still works).")
+        return
+    print("The copilot's AI on the real-money server is Claude (decision A5). Make a key at console.anthropic.com\n"
+          "(API keys) and type it here - hidden; it goes straight to the server's root-only keys.env.\n"
+          "With it on, what you ask the copilot - and the real balances and orders it looks up to answer - go to\n"
+          "Anthropic's API (not used for training). Without it the copilot's quick analysis still works.\n")
+    key = getpass.getpass("Claude API key: ").strip()
+    if not key:
+        fail("empty - nothing was sent")
+    if not key.startswith("sk-ant-"):
+        fail("that doesn't look like a Claude API key (they start with sk-ant-) - nothing was sent")
+    send_keys(cfg, [f"{AI_KEY}={key}"])
+    verdict = remote(cfg, f"cd {BASE}/current && sudo bash -c 'source deploy/lab-server/versions.env; "
+                          f"source deploy/real-server/lib.sh; as_app_with_keys .venv/bin/python "
+                          f"deploy/real-server/check_ai_key.py' </dev/null", capture=True, check=False).strip()
+    if not verdict.startswith(("OK", "UNREACHABLE")):
+        remote(cfg, f"{writer} --remove {AI_KEY} </dev/null")
+        fail(f"Anthropic didn't accept the key ({verdict or 'no answer from the check'}) - it was removed again; "
+             "nothing changed")
+    remote(cfg, "sudo systemctl restart apnasor-real")
+    print(f"{verdict}\ndone: the gateway restarted with the copilot's AI on (Claude)."
+          + (" Anthropic couldn't be reached just now; the copilot tries again on its own."
+             if verdict.startswith("UNREACHABLE") else ""))
+
+
 def cmd_check_keys(args) -> None:
     """What the exchanges say about the real keys - from the server's own address (read-only)."""
     remote(load_config(), f"cd {BASE}/current && sudo bash -c 'source deploy/lab-server/versions.env; "
@@ -602,6 +641,8 @@ def main() -> None:
     p.add_argument("--exchanges", **exchanges)
     sub.add_parser("check-keys", help="what the exchanges say about the real keys (read-only)")
     sub.add_parser("telegram", help="phone alerts: the bot token (hidden) and your chat -> the server")
+    p = sub.add_parser("ai-key", help="the copilot's Claude key (hidden) -> the server (decision A5)")
+    p.add_argument("--remove", action="store_true", help="remove the key: the copilot's AI goes off")
     p = sub.add_parser("go-live", help="turn real money on (removes the sandbox keys)")
     p.add_argument("--exchanges", **exchanges)
     p = sub.add_parser("release", help="put a commit on the server (the promotion gate when live)")
@@ -619,7 +660,8 @@ def main() -> None:
     sub.add_parser("ssh", help="a shell on the server")
     args = parser.parse_args()
     {"init": cmd_init, "replace-ssh-key": cmd_replace_ssh_key, "passwords": cmd_passwords, "setup": cmd_setup,
-     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "telegram": cmd_telegram, "go-live": cmd_go_live,
+     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "telegram": cmd_telegram, "ai-key": cmd_ai_key,
+     "go-live": cmd_go_live,
      "release": cmd_release, "rollback": cmd_rollback, "status": cmd_status, "logs": cmd_logs,
      "tunnel": cmd_tunnel, "backup-pull": cmd_backup_pull, "ssh": cmd_ssh}[args.command](args)
 

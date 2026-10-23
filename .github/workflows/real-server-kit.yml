@@ -97,6 +97,17 @@ jobs:
           fi
           $DEPLOY status
 
+      - name: "A5: the copilot's AI is Claude but off until a key - a key Anthropic refuses is removed again"
+        run: |
+          sudo grep -q "^LLM_PROVIDER='claude'" /opt/apnasor/shared/real.env
+          if printf 'sk-ant-api03-ci-not-a-real-key-0000\n' | $DEPLOY ai-key 2>&1 | tee ai.out; then
+            echo "Anthropic accepted a made-up key?"; exit 1
+          fi
+          grep -q "removed again" ai.out
+          if grep -q "not-a-real-key" ai.out; then echo "the whole key was printed"; exit 1; fi
+          if sudo grep -q COPILOT_CLAUDE_API_KEY /opt/apnasor/shared/keys.env; then echo "a refused key stayed"; exit 1; fi
+          systemctl is-active apnasor-real
+
       - name: "D3: deploy.py keys - real keys typed into the hidden prompt reach the server only"
         run: |
           printf '%s\n' binance-real-key-AAAA binance-real-secret-BBBB bybit-real-key-CCCC bybit-real-secret-DDDD \

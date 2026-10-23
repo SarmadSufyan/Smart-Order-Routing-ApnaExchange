@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from backend.gateway.config import PROJECT_ROOT, Settings
+from backend.services.agents.llm import build_llm_client
 
 KIT = PROJECT_ROOT / "deploy" / "real-server"
 spec = importlib.util.spec_from_file_location("real_deploy", KIT / "deploy.py")
@@ -55,7 +56,10 @@ class SettingsTest(unittest.TestCase):
                 with mock.patch.dict(os.environ, {}, clear=False):
                     s = Settings(_env_file=str(path))
                 self.assertEqual((s.exchange_mode, s.allow_mainnet), (mode, stage == "live"))
-                self.assertEqual(s.llm_provider, "off")  # decision A5
+                self.assertEqual(s.llm_provider, "claude")  # decision A5 (2026-10-23)
+                client, why = build_llm_client(s)  # ... but dormant: no key yet, so the copilot's AI is off
+                self.assertIsNone(client)
+                self.assertIn("COPILOT_CLAUDE_API_KEY", why)
                 self.assertFalse(s.mainnet_cycle_bots)  # decision A6
                 self.assertTrue(s.mainnet_require_ip_lock)
                 self.assertFalse(s.lab_auto_resume)
@@ -72,6 +76,21 @@ class SettingsTest(unittest.TestCase):
         with mock.patch.dict(os.environ, keys):  # what systemd's EnvironmentFile does
             s = Settings(_env_file=str(path))
         self.assertEqual(s.exchange_credentials("binance"), {"apiKey": "k1", "secret": "s1"})
+
+    def test_the_copilots_claude_key_turns_its_ai_on(self) -> None:
+        self.logins()
+        path, _ = deploy.build_env("live", ["binance"])
+        with mock.patch.dict(os.environ, {deploy.AI_KEY: "sk-ant-test-0000"}):  # typed with deploy.py ai-key
+            s = Settings(_env_file=str(path))
+        client, why = build_llm_client(s)
+        self.assertIsNone(why)
+        self.assertEqual(client.provider, "claude")
+
+    def test_the_key_check_says_no_key_without_one(self) -> None:
+        env = {**os.environ, deploy.AI_KEY: ""}
+        out = subprocess.run([sys.executable, str(KIT / "check_ai_key.py")], cwd=self.dir, env=env,
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.stdout.strip(), "NO KEY", out.stderr)
 
     def test_rehearsal_takes_the_laptops_sandbox_keys_only(self) -> None:
         lines = deploy.sandbox_key_lines(["binance", "bybit"])
@@ -114,6 +133,16 @@ class KeyWriterTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(self.stored(), {"TELEGRAM_BOT_TOKEN": "123456:AAbbCCdd", "TELEGRAM_CHAT_ID": "-1001234"})
         self.assertNotIn("AAbb", out.stdout)
+
+    def test_the_copilots_claude_key_is_accepted_and_can_be_removed(self) -> None:
+        out = self.write("BYBIT_MAINNET_API_KEY=realkey1111\nCOPILOT_CLAUDE_API_KEY=sk-ant-api03-secretXYZW\n")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn("secret", out.stdout)
+        self.assertIn("...XYZW", out.stdout)
+        out = self.write("", "--remove", "COPILOT_CLAUDE_API_KEY")  # deploy.py ai-key --remove
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(sorted(self.stored()), ["BYBIT_MAINNET_API_KEY"])  # only that one went
+        self.assertNotEqual(self.write("", "--remove", "PATH").returncode, 0)
 
     def test_only_exchange_keys_and_plain_values(self) -> None:
         self.assertNotEqual(self.write("PATH=/tmp\n").returncode, 0)
