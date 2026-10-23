@@ -2346,3 +2346,48 @@ So the whole chain works from Zurich: keys reach only the server's root-only fil
 server's address, and the permission parsers read each exchange's real answer. Next: the final keys (Read + Trade,
 withdraw off, IP `16.18.141.32`), deleting the read-only test keys, funding, Binance + Bybit keys, Telegram.
 
+
+---
+
+## 2026-10-25 — The frontend's design system ("Studio"), with the team's themes kept selectable
+
+**What.** Sarmad asked for a sleek, Apple-like UI (simple fonts, glass, minimal colours, shadcn-style icons) and to
+keep Mahnoor & Maham's Liquid Glass theme selectable so the team can choose. Built a design system, not a reskin of
+each page:
+- **Three looks** (`themeStore.ts`: `style` = studio | glass | terminal, `mode` = dark | light, both remembered per
+  browser; the palette button in the top bar). Every colour was already a `--c-*` variable, so one palette per look
+  restyles every page. `themeStyles.ts` holds the three palettes and a few rules per look.
+- **Studio** (the default): Inter (bundled with the app via `@fontsource-variable/inter`, so it works offline and
+  through the real-money tunnel) falling back to San Francisco / Segoe UI; tabular numbers everywhere; frosted cards
+  (`data-card`), frosted top bar / sidebar (`data-glass="chrome"`) and dialogs / menus / the copilot drawer
+  (`data-glass="float"`); the page blurs behind a dialog; one blue accent; rounded corners; sentence-case labels.
+- **Liquid Glass**: Mahnoor & Maham's palette and rules from `theme/liquid-glass` (`b4ebf21`), unchanged, only scoped
+  to their style. **Terminal**: the original monospace look; it re-capitalises the small letter-spaced labels with
+  one CSS rule, so the labels themselves are written once, in sentence case.
+- **Building blocks** in `components/shared.tsx`: `PageHeader` (large title, one-line purpose, actions, and the long
+  explanation folded behind "About this page" so pages open on their data), `Button` (primary / secondary / danger /
+  warning), `Stat`, `Pill`, `Card`, `CardTitle` (with a right-hand hint), `fmtAge` up to days ("3d ago", was
+  "5079m ago"), `sentence()` in `format.ts` for API words.
+- **Pages**: the shell (grouped sidebar with lucide icons, environment and server pills, venue status, UTC clock,
+  copilot and kill-switch buttons, user menu) and Login (what ApnaSOR does, the live exchange list, the sign-in card,
+  sandbox quick sign-in) were rebuilt; the Dashboard was rebuilt (six key figures; the order flow as a real table
+  with exchange names instead of V1/V4; best bid / ask with the exchange under each price and crossed books labelled;
+  exchanges; risk gauges + RAFT). Every other page got the shared header; the routing proof and the order dialog
+  show exchange names; the kill switch reads "Trading is running normally" / "Kill switch engaged".
+
+**Bugs found on the way.** Row separators were written `${C.border}40` (a hex-alpha suffix on a CSS variable), which
+is invalid CSS, so no table ever showed its hairlines — now `C.border2` / `tint()`. Four pages scrolled sideways on a
+phone (fixed grids, unwrapped tables, the trace controls): now they wrap or scroll inside their card.
+
+**Why this way.** The pages keep their inline styles and theme tokens (the project's convention, CLAUDE.md), so the
+three looks stay interchangeable and a teammate's page follows whichever look is chosen without extra work. Data
+attributes instead of matching style strings for Studio, because rows and inputs also use `C.surface` and must not
+become floating glass.
+
+**Checked.** Type-check and a production build; every page in Studio dark and light, Liquid Glass and Terminal;
+phone width (375 px) on all twelve pages; a 0.0002 BTC sandbox order through the new dialog filled on Binance's
+testnet and its routing proof rendered.
+
+**Files.** frontend: index.html, package.json (+ lock), main.tsx, themeStyles.ts, stores/themeStore.ts, format.ts,
+components/ (AppShell, shared, NewOrderModal, OrderProofModal, RoutingProof, CopilotPanel, RaftPanel, AuditTimeline,
+ResearchChart, TwapChart), pages/ (all).
