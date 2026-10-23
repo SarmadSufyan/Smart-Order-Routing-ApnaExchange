@@ -51,8 +51,9 @@ def main() -> None:
         if not NAME.match(name):
             sys.exit(f"refused: {name!r} is not an exchange key (or Telegram, or the copilot's Claude key) name")
         value = value.strip()
-        if not value or "'" in value or any(c.isspace() for c in value):
-            sys.exit(f"refused: the value for {name} is empty or has a space or a quote")
+        if not value or "'" in value or any(not 0x21 <= ord(c) <= 0x7E for c in value):
+            # 0x21-0x7E: printable, no space - a stray keystroke (Ctrl+V = 0x16, found live) is never part of a key
+            sys.exit(f"refused: the value for {name} is empty or has a space, a quote or an invisible character")
         values[name] = value
     body = "".join(f"{k}='{v}'\n" for k, v in sorted(values.items()))
     folder = os.path.dirname(path) or "."

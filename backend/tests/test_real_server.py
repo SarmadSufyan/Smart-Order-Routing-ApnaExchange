@@ -106,6 +106,39 @@ class SettingsTest(unittest.TestCase):
                          ["BINANCE_TESTNET_API_KEY=bk", "BINANCE_TESTNET_API_SECRET=bs"])
 
 
+class SecretInputTest(unittest.TestCase):
+    """Found 2026-10-24: pasting into Windows' hidden prompt stored Ctrl+V's keystroke and a 239-character jumble."""
+
+    def test_what_can_not_be_a_key(self) -> None:
+        self.assertIsNone(deploy.secret_problem("0a1b2c3d-4e5f6a7b-8c9d0e1f-2a3b4"))
+        for bad, words in (("", "nothing"), ("\x16", "0x16"), ("ab\x16cdefgh", "0x16"), ("has space", "0x20"),
+                           ("it's-a-key", "quote"), ("short", "length"), ("x" * 239, "length")):
+            with self.subTest(bad=bad[:12]):
+                self.assertIn(words, deploy.secret_problem(bad))
+
+    def test_a_bad_value_is_asked_again_and_never_sent(self) -> None:
+        with mock.patch.object(deploy.getpass, "getpass", side_effect=["\x16", "0a1b2c3d4e5f"]), \
+             mock.patch.object(deploy.sys.stdin, "isatty", return_value=False), \
+             mock.patch("builtins.print"):
+            self.assertEqual(deploy.ask_secret("HTX Access Key"), "0a1b2c3d4e5f")
+        with mock.patch.object(deploy.getpass, "getpass", return_value="\x16"), \
+             mock.patch.object(deploy.sys.stdin, "isatty", return_value=False), \
+             mock.patch("builtins.print"), self.assertRaises(SystemExit) as stopped:
+            deploy.ask_secret("HTX Secret Key")
+        self.assertIn("nothing was sent", str(stopped.exception))
+
+    def test_windows_reads_the_clipboard(self) -> None:
+        with mock.patch.object(deploy.os, "name", "nt"), mock.patch.object(deploy.sys.stdin, "isatty", return_value=True), \
+             mock.patch("builtins.input", return_value=""), mock.patch("builtins.print"), \
+             mock.patch.object(deploy, "read_clipboard", return_value="  0a1b2c3d4e5f\r\n".strip()):
+            self.assertEqual(deploy.ask_secret("OKX API key"), "0a1b2c3d4e5f")
+
+    def test_labels_use_the_exchanges_own_words(self) -> None:
+        self.assertEqual(deploy.key_label("htx", "API_KEY"), "HTX Access Key")
+        self.assertEqual(deploy.key_label("okx", "API_PASSPHRASE"), "OKX passphrase (the one you chose)")
+        self.assertEqual(deploy.key_label("binance", "API_SECRET"), "Binance secret key")
+
+
 class KeyWriterTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp())
@@ -160,6 +193,7 @@ class KeyWriterTest(unittest.TestCase):
         self.assertNotEqual(self.write("PATH=/tmp\n").returncode, 0)
         self.assertNotEqual(self.write("BINANCE_MAINNET_API_KEY=has space\n").returncode, 0)
         self.assertNotEqual(self.write("BINANCE_MAINNET_API_KEY=it's\n").returncode, 0)
+        self.assertNotEqual(self.write("HTX_MAINNET_API_SECRET=\x16\n").returncode, 0)  # Ctrl+V's keystroke (found live)
         self.assertFalse(self.keys.exists())  # a refusal writes nothing
 
 

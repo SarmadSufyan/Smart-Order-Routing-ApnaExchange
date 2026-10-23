@@ -137,6 +137,62 @@ def git(*args: str) -> str:
     return out.stdout.strip()
 
 
+def secret_problem(value: str) -> str | None:
+    """Why this can't be an API key / token, or None. Found 2026-10-24: pasting into Windows' hidden prompt stored
+    Ctrl+V's own character (0x16) and a 239-character jumble - the exchange then said "incorrect access key"."""
+    if not value:
+        return "nothing was entered"
+    odd = sorted({f"0x{ord(c):02x}" for c in value if not 0x21 <= ord(c) <= 0x7E})
+    if odd:
+        return f"it contains characters a key never has ({', '.join(odd)}: spaces or keystrokes like Ctrl+V)"
+    if "'" in value:
+        return "it contains a quote"
+    if not 6 <= len(value) <= 200:
+        return f"{len(value)} characters is not a plausible key length"
+    return None
+
+
+def read_clipboard() -> str:
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"], capture_output=True, text=True)
+    return out.stdout.strip() if out.returncode == 0 and out.stdout else ""
+
+
+def clear_clipboard() -> None:
+    subprocess.run(["powershell", "-NoProfile", "-Command", "Set-Clipboard -Value ' '"], capture_output=True)
+
+
+def ask_secret(label: str, typed: bool = False, tries: int = 3) -> str:
+    """One key / secret / token, never shown. On Windows it is read from the clipboard (copy it, press Enter) -
+    pasting into a hidden prompt there types keystrokes instead; elsewhere, or with --type, a hidden prompt."""
+    from_clipboard = os.name == "nt" and not typed and sys.stdin.isatty()
+    for _ in range(tries):
+        if from_clipboard:
+            input(f"Copy the {label} (from the exchange's page or your password manager), then press Enter here ")
+            value = read_clipboard()
+        else:
+            value = getpass.getpass(f"{label}: ").strip()
+        problem = secret_problem(value)
+        if problem is None:
+            print(f"   got {len(value)} characters, ending ...{value[-4:]}")
+            return value
+        print(f"   not used: {problem} - try again")
+    fail(f"{label}: no usable value after {tries} tries - nothing was sent")
+
+
+def key_label(exchange: str, part: str) -> str:
+    """What the exchange's own page calls this value."""
+    names = {"htx": {"API_KEY": "Access Key", "API_SECRET": "Secret Key"}}
+    default = {"API_KEY": "API key", "API_SECRET": "secret key", "API_PASSPHRASE": "passphrase (the one you chose)"}
+    title = {"htx": "HTX", "okx": "OKX"}.get(exchange, exchange.capitalize())
+    return f"{title} {names.get(exchange, {}).get(part, default[part])}"
+
+
+def confirm_send(what: str) -> None:
+    """Interactive only: compare the lengths / endings with the exchange's page before anything leaves the laptop."""
+    if sys.stdin.isatty() and input(f"Send {what} to the server? [y/N] ").strip().lower() != "y":
+        fail("not confirmed - nothing was sent")
+
+
 def env_value(value: str) -> str:
     if "'" in value or "\n" in value:
         fail("a value contains a quote or a line break - fix it first")
@@ -433,15 +489,15 @@ def cmd_keys(args) -> None:
     """Type the REAL keys (hidden); they go straight to the server's root-only keys.env."""
     cfg = load_config()
     lines = []
-    print("REAL exchange keys for the real-money server. Typed here, they go over SSH straight into the server's\n"
-          "root-only keys.env - nothing is saved on this laptop. Make each key on the exchange as\n"
+    print("REAL exchange keys for the real-money server. They go over SSH straight into the server's root-only\n"
+          "keys.env - nothing is saved on this laptop. Make each key on the exchange as\n"
           "project-info/PHASE_D_PLAN.md section 7 says: trade-only, withdrawals OFF, locked to the server's IP.\n")
     for exchange in args.exchanges:
         for part in EXCHANGE_KEYS[exchange]:
-            value = getpass.getpass(f"{exchange} {part.lower().replace('api_', '')}: ").strip()
-            if not value:
-                fail(f"{exchange} {part}: empty - nothing was sent")
-            lines.append(f"{exchange.upper()}_MAINNET_{part}={value}")
+            lines.append(f"{exchange.upper()}_MAINNET_{part}={ask_secret(key_label(exchange, part), args.type)}")
+    confirm_send(f"these {len(lines)} values")
+    if os.name == "nt" and not args.type:
+        clear_clipboard()
     remote(cfg, f"rm -rf {KIT} && mkdir -p {KIT}/deploy && cp -r {BASE}/current/deploy/real-server {KIT}/deploy/")
     send_keys(cfg, lines)
     print("\nNext (read-only, nothing is traded):  deploy.py check-keys")
@@ -470,11 +526,11 @@ def cmd_telegram(args) -> None:
     import httpx
 
     cfg = load_config()
-    print("Phone alerts (Telegram). Make a bot with @BotFather (/newbot), send your bot one message, then paste\n"
-          "the bot's token here (hidden; it goes to the server only).\n")
-    token = getpass.getpass("Bot token: ").strip()
-    if not token:
-        fail("empty - nothing was sent")
+    print("Phone alerts (Telegram). Make a bot with @BotFather (/newbot) and send your bot one message; then give\n"
+          "the bot's token here (never shown; it goes to the server only).\n")
+    token = ask_secret("Telegram bot token", args.type)
+    if os.name == "nt" and not args.type:
+        clear_clipboard()
     chat, who = find_telegram_chat(token)
     if input(f"Alerts will go to the Telegram chat of {who} (id {chat}). Right? [y/N] ").strip().lower() != "y":
         fail("not confirmed - nothing was sent")
@@ -504,9 +560,9 @@ def cmd_ai_key(args) -> None:
           "(API keys) and type it here - hidden; it goes straight to the server's root-only keys.env.\n"
           "With it on, what you ask the copilot - and the real balances and orders it looks up to answer - go to\n"
           "Anthropic's API (not used for training). Without it the copilot's quick analysis still works.\n")
-    key = getpass.getpass("Claude API key: ").strip()
-    if not key:
-        fail("empty - nothing was sent")
+    key = ask_secret("Claude API key", args.type)
+    if os.name == "nt" and not args.type:
+        clear_clipboard()
     if not key.startswith("sk-ant-"):
         fail("that doesn't look like a Claude API key (they start with sk-ant-) - nothing was sent")
     send_keys(cfg, [f"{AI_KEY}={key}"])
@@ -646,12 +702,17 @@ def main() -> None:
     p = sub.add_parser("env", help="send fresh settings (caps, symbols, passwords) and restart")
     p.add_argument("--exchanges", **exchanges)
     p.add_argument("--no-restart", action="store_true")
-    p = sub.add_parser("keys", help="type the REAL keys (hidden) - straight to the server")
+    typed = {"action": "store_true",
+             "help": "type into a hidden prompt instead of copying from the clipboard (Windows reads the clipboard)"}
+    p = sub.add_parser("keys", help="the REAL keys (never shown) - straight to the server")
     p.add_argument("--exchanges", **exchanges)
+    p.add_argument("--type", **typed)
     sub.add_parser("check-keys", help="what the exchanges say about the real keys (read-only)")
-    sub.add_parser("telegram", help="phone alerts: the bot token (hidden) and your chat -> the server")
-    p = sub.add_parser("ai-key", help="the copilot's Claude key (hidden) -> the server (decision A5)")
+    p = sub.add_parser("telegram", help="phone alerts: the bot token (never shown) and your chat -> the server")
+    p.add_argument("--type", **typed)
+    p = sub.add_parser("ai-key", help="the copilot's Claude key (never shown) -> the server (decision A5)")
     p.add_argument("--remove", action="store_true", help="remove the key: the copilot's AI goes off")
+    p.add_argument("--type", **typed)
     p = sub.add_parser("go-live", help="turn real money on (removes the sandbox keys)")
     p.add_argument("--exchanges", **exchanges)
     p = sub.add_parser("release", help="put a commit on the server (the promotion gate when live)")
