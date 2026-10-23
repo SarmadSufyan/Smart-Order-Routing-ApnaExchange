@@ -89,6 +89,7 @@ python deploy/real-server/deploy.py replace-ssh-key     # a key made on this lap
 python deploy/real-server/deploy.py passwords           # the server's own login passwords (no demo login there)
 python deploy/real-server/deploy.py setup --test        # machine, settings, this laptop's SANDBOX keys, first release
 python deploy/real-server/deploy.py telegram            # phone alerts + /stop (optional now, needed before go-live)
+python deploy/real-server/deploy.py ai-key              # the copilot's Claude key (decision A5; optional, any time)
 python deploy/real-server/deploy.py status
 ```
 

@@ -156,6 +156,7 @@ scripts/                check_exchange_keys.py (all venues; --mode mainnet = you
                         backup_databases.py (online SQLite copies, gzipped, kept N days)
 deploy/real-server/     the REAL-MONEY server (Phase D): deploy.py (init, replace-ssh-key, passwords, setup = rehearsal with
                         sandbox keys, keys = real keys via a hidden prompt -> root-only keys.env, check-keys, telegram,
+                        ai-key = the copilot's Claude key (decision A5; off until typed),
                         go-live, release with the promotion gate, status, tunnel 28000, backup-pull, rollback),
                         check_settings.sh (each stage's rules), install_release.sh, write_keys.py, systemd/ units
                         (project-info/REAL_MONEY_GUIDE.md parts 3-7, PHASE_D_PLAN.md)
@@ -183,7 +184,7 @@ cd frontend; npm install; cd ..
 copy .env.example .env                           # then add YOUR OWN testnet/demo keys (project-info/API_KEYS_GUIDE.md)
 python scripts/check_exchange_keys.py            # which venues authenticate, with test balances
 python start_all.py                              # gateway :8000 (/docs) + frontend :5173
-python -m unittest discover -s backend/tests -t .   # all backend tests (569 as of 2026-10-20)
+python -m unittest discover -s backend/tests -t .   # all backend tests (572 as of 2026-10-23)
 npx --prefix frontend tsc --noEmit -p frontend   # frontend type-check
 python -m ruff check backend scripts start_all.py  # lint (rules: backend/pyproject.toml)
 python scripts/raft_demo.py                      # RAFT: 3 nodes, kill the leader, nothing lost (standalone)

@@ -111,6 +111,11 @@ runs without the click — through the same confirm path (fresh price check, ris
 - Answers: numbers only from the facts; the verdict is never upgraded ("never upgrade it" is in the instructions).
 - Every proposal, answer, confirm and refusal is audited with your original words.
 - Real money: Auto off, bots refused unless `MAINNET_CYCLE_BOTS=true`, and the `.env` caps apply to everything.
+- **Which AI on real money** (decision A5, 2026-10-23): **Claude**, never the free Gemini tier (it may use what it is
+  sent - there, real balances and orders). The real-money server is set up with `LLM_PROVIDER=claude` but stays off
+  until a key is typed with `python deploy/real-server/deploy.py ai-key` (hidden prompt → the server's root-only
+  `keys.env`; Anthropic is asked with one free call and a refused key is removed again; `--remove` turns it off).
+  Without a key the copilot says so and its quick analysis still works. The sandbox (laptop) keeps Gemini.
 
 ## 8. API
 

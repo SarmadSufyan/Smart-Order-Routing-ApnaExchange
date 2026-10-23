@@ -30,7 +30,7 @@ widen one step at a time: more exchanges, higher limits, and bots only if the la
 | Gate | ⚠️ not proven | its spot test wallet can't be funded (test funds go to futures only) |
 | Fees | ⚠️ public base rate (0.10 %) | the account's real rate is not read yet |
 | Bots | ⚠️ lab verdict 2026-10-23: **no bot makes money on its own yet** | 11.2 days, $1,700: −$23.57 (−1.4 %). Cycle bots: every one of 326 sales profitable after real fees (+$20), but the coins they hold lost $34 as ETH fell 5.8 % and BTC 2.2 %; −1.5 % net vs −4.3 % for simply holding. Only **BTC 1 %** ended positive (+$1.65); no threshold proven better than another. Advisor (loose rule): −0.28 % per trade, proven loser; strict advisor: 0 trades. Details: journal 2026-10-23 |
-| Copilot | ✅ works (Gemini) | asks before every action; Auto is sandbox-only |
+| Copilot | ✅ works (Gemini, sandbox) | asks before every action; Auto is sandbox-only. Real money: **Claude** (A5, 2026-10-23) — set up, off until Sarmad's key (`deploy.py ai-key`) |
 | Real-money server | ✅ created 2026-10-18, **empty** | Maham's AWS account, Zurich: `apnasor-real`, Elastic IP `16.18.141.32`; nothing installed, no keys — §5 C |
 | Real orders | ❌ none yet | Sarmad places the first ones (stage D4) |
 
@@ -289,7 +289,7 @@ If the gateway refuses a key, **make a new key** with the right settings — nev
 | Profit-cycle bot | ⏳ only after the lab verdict (D6), `MAINNET_CYCLE_BOTS=true`, small budget, sub-account |
 | Advisor | ❌ until the lab shows an edge after costs; even then it always asks |
 | Lab bots | ❌ never (they stay on the lab server) |
-| Copilot | per decision A5; **Auto never** (code-enforced); every proposal waits for your confirm |
+| Copilot | **Claude** (decision A5, 2026-10-23): `LLM_PROVIDER=claude` on the real server, **off until a key is typed** with `deploy.py ai-key` (checked with Anthropic, a refused key is removed again); without a key the quick analysis still works; never the free Gemini tier (the safety check refuses it on a live server). **Auto never** (code-enforced); every proposal waits for your confirm |
 
 ---
 
@@ -375,6 +375,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 | A3 | Starting money | ~$50 USDT on each of Binance and Bybit; caps at step 1 | 2026-10-20 |
 | A4 | Alerts | Telegram, with `/stop` (engage only) from the phone | 2026-10-20 |
 | A5 | Copilot on real money | AI off at first (`LLM_PROVIDER=off` on the real server; the quick analysis still works) | 2026-10-20 |
+| A5 (changed) | Copilot on real money | **Claude** (Sarmad: the chat should work on real money too; its API data isn't used for training). Set up now, **not functional until Sarmad provides a key** (`deploy.py ai-key`, hidden prompt → root-only `keys.env`); `anthropic` added to the servers' package lock | 2026-10-23 |
 | A6 | Bots on real money | none until the lab's verdict; then at most the BTC 1 % cycle bot with $30 | 2026-10-20 |
 | A7 | M3 date | — | — |
 | — | Lab extended run | until ≈ 2026-10-22, or until Sarmad stops it; no release to the lab before then | 2026-10-15 |

@@ -2243,3 +2243,27 @@ Step 2 (access to the real-money server) written up for Sarmad in `REAL_MONEY_GU
 **Files.** Docs only: project-info/PHASE_D_PLAN.md (§1, D6, §15), project-info/REAL_MONEY_GUIDE.md (part 3),
 PROGRESS.md, this journal.
 
+**Later the same day: Claude for the copilot on real money, set up but off (decision A5 changed).** Sarmad wants the
+chat to work on real money as well as in the sandbox, and chose **Claude** for real money ("just set it up for now;
+not functional until I provide a key"). Why Claude there: what the copilot sends includes real balances and orders,
+and Anthropic's API data isn't used for training; the free Gemini tier may use what it gets. Built:
+- the real-money server's settings now say `LLM_PROVIDER=claude`; with no key the copilot's `build_llm_client` returns
+  "no key" and the copilot says its AI is off — the quick analysis and every algorithm work as before;
+- `deploy.py ai-key` (`--remove` to turn it off again): a hidden prompt → the server's root-only `keys.env`
+  (`write_keys.py` now accepts `COPILOT_CLAUDE_API_KEY` and `--remove NAME`), then `check_ai_key.py` on the server asks
+  Anthropic with one free call (list models — nothing generated or billed, address pinned to api.anthropic.com):
+  accepted → the gateway restarts with Claude on; refused → the key is removed again and nothing changes; no answer →
+  the key stays and the copilot retries by itself;
+- `check_settings.sh` refuses any other AI provider on a live server and reports the AI's state in every summary;
+- `anthropic` was in `backend/requirements.txt` but not in the servers' package lock, so a key typed later would have
+  found no library: the lock gains `anthropic` and its 7 helpers **without moving any existing pin** (`uv pip compile
+  -c` with the old pins; arm64 = x86_64; only additions);
+- tests: the settings follow A5 and stay dormant without a key, a key turns the AI on, the check says NO KEY without
+  one, the key writer accepts / masks / removes the Claude key (15 in `test_real_server.py`); CI deploys the kit and
+  types a made-up key — Anthropic refuses it, the kit removes it. Checked live from the laptop: a made-up key →
+  `REFUSED: AuthenticationError`.
+
+Files: deploy/real-server/deploy.py, write_keys.py, check_ai_key.py (new), check_settings.sh,
+deploy/lab-server/requirements.lock, backend/tests/test_real_server.py, .github/workflows/real-server-kit.yml;
+docs PHASE_D_PLAN (§1, §9, §15), REAL_MONEY_GUIDE, COPILOT_GUIDE, CLAUDE.md, PROGRESS.
+
