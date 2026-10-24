@@ -9,6 +9,7 @@ import { useDataStore } from '../stores/dataStore'
 import { backendOrderToUi, backendVenueToUi, fmtRate, LATENCY_WARN_MS } from '../adapters'
 import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtQty, fmtUsd, spreadBps } from '../format'
+import { Loading } from '../components/Orb'
 
 // Depth-sweep preset: an order big enough to walk past the best level on a
 // thin book, small enough to stay under the default $10k per-order limit.
@@ -181,7 +182,7 @@ export function Dashboard() {
                     return (
                       <tr key={s}>
                         <td style={{ ...td, fontWeight: 600 }}>{s}</td>
-                        <td colSpan={3} style={{ ...td, color: C.dim, textAlign: 'center' }}>waiting for books…</td>
+                        <td colSpan={3} style={{ ...td, textAlign: 'center' }}><Loading state="connecting" label="Waiting for the order books…" /></td>
                       </tr>
                     )
                   }

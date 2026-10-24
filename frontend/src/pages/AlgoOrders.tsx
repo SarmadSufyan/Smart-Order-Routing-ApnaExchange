@@ -9,6 +9,7 @@ import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { ALGO_KINDS, ROUTING_STRATEGIES, algoKindLabel, api, routingStrategyLabel, PREFLIGHT_MAX_ORDERS } from '../services/api'
 import type { AlgoKind, AlgoParams, AlgoRecommendation, AlgoStatus, PreflightResponse, RoutingStrategyName, TwapState, Urgency } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
+import { Orb } from '../components/Orb'
 
 const MIN_INTERVAL_S = 3        // mirrors the backend (a slice + balance refresh take ~1-2 s)
 const TYPICAL_MIN_ORDER_USD = 5 // most venues' minimum order value
@@ -538,7 +539,7 @@ export function AlgoOrders() {
                 {preview.mid && (
                   <div>≈ {preview.slice !== null ? `${fmtUsd(preview.slice * preview.mid)} per ${kind === 'ICEBERG' ? 'piece' : 'slice'} · ` : ''}{fmtUsd(preview.total)} total at mid {fmtPrice(preview.mid)}</div>
                 )}
-                {preview.warnings.map((w) => <div key={w} style={{ color: C.orange }}>⚠ {w}</div>)}
+                {preview.warnings.map((w) => <div key={w} style={{ color: C.orange }}>{w}</div>)}
               </div>
             )}
 
@@ -546,9 +547,13 @@ export function AlgoOrders() {
             <div style={{ padding: '8px 10px', borderRadius: 4, border: `1px dashed ${C.border}` }}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button onClick={recommend} disabled={recBusy} style={{
-                  padding: '6px 12px', borderRadius: 4, border: `1px solid ${C.purple}`, background: tint(C.purple, 12),
-                  color: C.purple, fontFamily: 'inherit', fontSize: F.sm, fontWeight: 700, cursor: recBusy ? 'wait' : 'pointer',
-                }}>{recBusy ? 'Thinking…' : '✦ Auto — recommend'}</button>
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  padding: '6px 12px', borderRadius: 4, border: `1px solid ${C.border}`, background: C.surface2,
+                  color: C.text, fontFamily: 'inherit', fontSize: F.sm, fontWeight: 600, cursor: recBusy ? 'wait' : 'pointer',
+                }}>
+                  {recBusy && <Orb state="solving" size={20} label="Choosing an algorithm" style={{ margin: '-3px 0' }} />}
+                  {recBusy ? 'Thinking…' : 'Auto — recommend'}
+                </button>
                 <select value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={{ ...input, width: 'auto', padding: '5px 7px', fontSize: F.sm }}>
                   <option value="LOW">low urgency</option>
                   <option value="MEDIUM">medium urgency</option>
@@ -565,7 +570,7 @@ export function AlgoOrders() {
                     {rec.params?.participation_pct ? ` at ${rec.params.participation_pct}% of volume` : ''}
                   </div>
                   {rec.reasons.map((r) => <div key={r}>✓ {r}</div>)}
-                  {rec.warnings.map((w) => <div key={w} style={{ color: C.orange }}>⚠ {w}</div>)}
+                  {rec.warnings.map((w) => <div key={w} style={{ color: C.orange }}>{w}</div>)}
                   {rec.alternatives.length > 0 && (
                     <div style={{ color: C.dim, fontSize: F.xs, marginTop: 2 }}>Others: {rec.alternatives.join(' · ')}</div>
                   )}

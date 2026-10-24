@@ -112,7 +112,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
       {decision.is_split && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: F.xs, color: C.dim, letterSpacing: '.1em', marginBottom: 6 }}>
-            ⚡ MULTI-VENUE SPLIT · order swept {decision.winning_venues.length} venues
+            Multi-venue split · order swept {decision.winning_venues.length} venues
           </div>
           <div style={{
             display: 'flex', height: 28, borderRadius: 4, overflow: 'hidden',
@@ -125,7 +125,7 @@ export function RoutingProof({ decision, symbol, fillPrice }: Props) {
                 <div key={c.venue_id} style={{
                   width: `${pct}%`, background: colors[i % colors.length],
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: F.xs, color: '#fff', fontWeight: 600,
+                  fontSize: F.xs, color: C.bg, fontWeight: 600,
                   borderRight: i < decision.winning_venues.length - 1 ? `1px solid ${C.bg}` : undefined,
                   minWidth: pct < 8 ? 'auto' : undefined,
                 }}>

@@ -9,6 +9,7 @@ import { RealMoneyCheck, useRealMoney } from './shared'
 import { ROUTING_STRATEGIES, routingStrategyLabel } from '../services/api'
 import type { Order as BackendOrder, RoutingStrategyName } from '../services/api'
 import type { OrderSide } from '../types'
+import { Orb } from './Orb'
 
 interface NewOrderForm {
   symbol:    string
@@ -283,7 +284,7 @@ export function NewOrderModal({
               borderRadius: 4, padding: '8px 12px', marginBottom: 14,
               color: C.blue, fontSize: F.sm, letterSpacing: '.05em',
             }}>
-              ⚡ {banner}
+              {banner}
             </div>
           )}
 
@@ -293,7 +294,7 @@ export function NewOrderModal({
               borderRadius: 4, padding: '10px 12px', marginBottom: 14,
               color: C.red, fontSize: F.sm,
             }}>
-              ⚠ Kill switch is ACTIVE — orders will be rejected
+              Kill switch engaged — orders will be rejected
             </div>
           )}
 
@@ -380,7 +381,7 @@ export function NewOrderModal({
                 style={{ ...select, color: C.blue }}
                 title="Data-only venues count in the NBBO but can't receive orders"
               >
-                {ROUTING_STRATEGIES.map((s) => <option key={s.id} value={s.id}>⚡ {s.label}</option>)}
+                {ROUTING_STRATEGIES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </div>
             <div>
@@ -495,19 +496,21 @@ export function NewOrderModal({
                   border: `1px solid ${running ? C.blue : done ? tint(C.green, 24) : C.border}`,
                   transition: 'border .2s',
                 }}>
-                  <span style={{
-                    width: 16, height: 16, borderRadius: '50%',
-                    background: done ? C.green : running ? C.blue : C.surface2,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: F.xs, color: '#fff', flexShrink: 0, transition: 'background .2s',
-                  }}>
-                    {done ? '✓' : running ? '…' : ''}
-                  </span>
+                  {running ? <Orb state="solving" size={20} label={`Checking: ${check}`} style={{ margin: -2 }} /> : (
+                    <span style={{
+                      width: 16, height: 16, borderRadius: '50%',
+                      background: done ? C.green : C.surface2,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: F.xs, color: C.bg, flexShrink: 0, transition: 'background .2s',
+                    }}>
+                      {done ? '✓' : ''}
+                    </span>
+                  )}
                   <span style={{ color: done ? C.green : running ? C.text : C.dim }}>
                     {check}
                   </span>
-                  {done && <span style={{ marginLeft: 'auto', color: C.green, fontSize: 10 }}>PASS</span>}
-                  {running && <span style={{ marginLeft: 'auto', color: C.blue, fontSize: 10 }}>checking…</span>}
+                  {done && <span style={{ marginLeft: 'auto', color: C.green, fontSize: F.xs }}>Pass</span>}
+                  {running && <span style={{ marginLeft: 'auto', color: C.muted, fontSize: F.xs }}>checking…</span>}
                 </div>
               )
             })}
@@ -521,9 +524,9 @@ export function NewOrderModal({
   if (stage === 'routing') return (
     <div style={overlay}>
       <div style={{ ...modal, maxWidth: 400 }}>
-        <div style={{ padding: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: F.xxl, marginBottom: 12 }}>⚡</div>
-          <div style={{ fontSize: F.md, fontWeight: 700, marginBottom: 6 }}>Routing Order</div>
+        <div style={{ padding: 32, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Orb state="connecting" size={64} label="Routing the order to the exchanges" style={{ marginBottom: 16 }} />
+          <div style={{ fontSize: F.md, fontWeight: 700, marginBottom: 6 }}>Routing order</div>
           <div style={{ fontSize: F.sm, color: C.muted, marginBottom: 16 }}>
             All {RISK_CHECKS.length} pre-trade checks passed
           </div>
@@ -610,7 +613,7 @@ export function NewOrderModal({
                 onClick={onClose}
                 style={{
                   flex: 1, height: 38, border: 'none',
-                  borderRadius: 4, background: stateColor, color: '#fff',
+                  borderRadius: 4, background: stateColor, color: C.bg,
                   fontSize: F.base, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >

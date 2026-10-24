@@ -144,7 +144,7 @@ export function Button({ tone = 'secondary', icon, children, style, ...rest }: {
   icon?: React.ReactNode
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const look: Record<ButtonTone, React.CSSProperties> = {
-    primary:   { background: C.blue, color: '#fff', border: '1px solid transparent' },
+    primary:   { background: C.blue, color: C.onAccent, border: '1px solid transparent' },
     secondary: { background: C.surface2, color: C.text, border: `1px solid ${C.border}` },
     danger:    { background: C.red, color: '#fff', border: '1px solid transparent' },
     warning:   { background: tint(C.orange, 14), color: C.orange, border: `1px solid ${tint(C.orange, 40)}` },

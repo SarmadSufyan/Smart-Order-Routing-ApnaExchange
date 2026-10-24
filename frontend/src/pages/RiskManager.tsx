@@ -253,7 +253,7 @@ export function RiskManager() {
             {isAdmin ? (
               <button onClick={saveLimits} disabled={saving || !limits || Object.keys(draft).length === 0} style={{
                 marginTop: 4, padding: '6px 12px', borderRadius: 4, border: 'none',
-                background: C.blue, color: '#fff', fontSize: F.sm, fontFamily: 'inherit',
+                background: C.blue, color: C.onAccent, fontSize: F.sm, fontFamily: 'inherit',
                 cursor: saving ? 'wait' : 'pointer', opacity: Object.keys(draft).length === 0 ? 0.5 : 1,
               }}>
                 {saving ? 'Saving…' : 'Save limits'}

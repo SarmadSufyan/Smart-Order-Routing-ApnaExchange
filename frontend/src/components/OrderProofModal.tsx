@@ -115,7 +115,7 @@ export function OrderProofModal({ order, resolvedVenue, onClose }: Props) {
             onClick={onClose}
             style={{
               width: '100%', height: 40, marginTop: 14, border: 'none',
-              borderRadius: 4, background: stateColor, color: '#fff',
+              borderRadius: 4, background: stateColor, color: C.bg,
               fontSize: F.base, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >

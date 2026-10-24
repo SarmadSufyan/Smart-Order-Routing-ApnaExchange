@@ -5,8 +5,8 @@
  * (`html[data-theme]`). Every colour in the app is a `--c-*` variable (theme.ts), so one palette restyles every page:
  *
  *   studio   — the ApnaSOR design system (the default): Apple-style. Inter / San Francisco type with tabular numbers,
- *              frosted-glass surfaces, ONE accent (system blue), green / red / orange only where they carry meaning
- *              (profit, loss, warning), generous rounded corners, soft shadows, sentence-case labels.
+ *              black and grey surfaces, white as the accent, green and red the only colours (profit / loss,
+ *              buy / sell), generous rounded corners, soft shadows, sentence-case labels.
  *   glass    — "Liquid Glass" by Mahnoor & Maham (branch theme/liquid-glass), kept as they designed it so the team
  *              can compare and choose.
  *   terminal — the original look: monospace, cyan accent, square corners.
@@ -21,35 +21,34 @@ const STUDIO = `
 /* ── Studio: tokens ─────────────────────────────────────────── */
 :root,
 html[data-style="studio"][data-theme="dark"] {
-  --c-bg:       #0B0B0F;                       /* the page under the glass */
-  --c-surface:  rgba(255, 255, 255, 0.05);     /* a field, a tile or a row inside a card */
+  /* Neutral greys; white is the accent; green and red are the only colours (profit / loss, buy / sell, up / down). */
+  --c-bg:       #0E0E0F;                       /* fields, the page under the cards */
+  --c-surface:  rgba(255, 255, 255, 0.045);    /* a field, a tile or a row inside a card */
   --c-surface2: rgba(255, 255, 255, 0.07);     /* a chip, a quiet button */
   --c-border:   rgba(255, 255, 255, 0.10);
   --c-border2:  rgba(255, 255, 255, 0.06);
-  --c-text:     #F5F5F7;
-  --c-muted:    rgba(235, 235, 245, 0.64);
-  --c-dim:      rgba(235, 235, 245, 0.40);
-  --c-accent:   #0A84FF;
-  --c-blue:     #0A84FF;
+  --c-text:     #F2F2F2;
+  --c-muted:    rgba(242, 242, 242, 0.62);
+  --c-dim:      rgba(242, 242, 242, 0.40);
+  --c-accent:   #F2F2F2;
+  --c-blue:     #F2F2F2;                       /* "the accent" in the components: white, not blue */
+  --c-on-accent: #0E0E0F;                      /* text on an accent background */
   --c-green:    #30D158;
   --c-red:      #FF453A;
-  --c-orange:   #FF9F0A;
-  --c-purple:   #BF5AF2;
-  --c-gold:     #FFD60A;
+  --c-orange:   #C7C7CC;                       /* warnings: a light grey, not a third colour */
+  --c-purple:   #8E8E93;                       /* chart series: a grey ramp */
+  --c-gold:     #AEAEB2;
 
-  --card-bg:     rgba(28, 28, 32, 0.58);       /* frosted card (data-card) */
-  --card-border: rgba(255, 255, 255, 0.08);
-  --chrome-bg:   rgba(14, 14, 18, 0.70);       /* top bar and sidebar */
-  --float-bg:    rgba(34, 34, 38, 0.90);       /* menus, dialogs, the copilot drawer */
-  --modal-overlay: rgba(0, 0, 0, 0.55);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 12px 32px rgba(0, 0, 0, 0.30);
-  --shadow-pop:  0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 28px 72px rgba(0, 0, 0, 0.55);
-  --focus-ring:  0 0 0 3px rgba(10, 132, 255, 0.35);
-  --page-bg:
-    radial-gradient(1100px 700px at 0% 0%,    rgba(10, 132, 255, 0.13), transparent 60%),
-    radial-gradient(900px 650px at 100% 0%,   rgba(191, 90, 242, 0.08), transparent 60%),
-    radial-gradient(1100px 800px at 60% 110%, rgba(100, 210, 255, 0.06), transparent 60%),
-    #050507;
+  --card-bg:     #151516;
+  --card-border: rgba(255, 255, 255, 0.07);
+  --chrome-bg:   rgba(12, 12, 13, 0.88);       /* top bar and sidebar */
+  --float-bg:    rgba(26, 26, 28, 0.97);       /* menus, dialogs, the copilot drawer */
+  --modal-overlay: rgba(0, 0, 0, 0.60);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-pop:  0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 28px 72px rgba(0, 0, 0, 0.60);
+  --focus-ring:  0 0 0 3px rgba(255, 255, 255, 0.16);
+  --selection:   rgba(255, 255, 255, 0.22);
+  --page-bg:     #0A0A0B;
 
   color-scheme: dark;
 }
@@ -63,26 +62,25 @@ html[data-style="studio"][data-theme="light"] {
   --c-text:     #1D1D1F;
   --c-muted:    #6E6E73;
   --c-dim:      #8E8E93;
-  --c-accent:   #0071E3;
-  --c-blue:     #0071E3;
+  --c-accent:   #1D1D1F;
+  --c-blue:     #1D1D1F;                       /* the accent: black */
+  --c-on-accent: #FFFFFF;
   --c-green:    #1F8A3E;                       /* the "accessible" system colours: readable on white */
   --c-red:      #D70015;
-  --c-orange:   #C45500;
-  --c-purple:   #8944AB;
-  --c-gold:     #A05A00;
+  --c-orange:   #48484A;
+  --c-purple:   #8E8E93;
+  --c-gold:     #636366;
 
-  --card-bg:     rgba(255, 255, 255, 0.78);
-  --card-border: rgba(0, 0, 0, 0.06);
-  --chrome-bg:   rgba(255, 255, 255, 0.72);
-  --float-bg:    rgba(255, 255, 255, 0.94);
+  --card-bg:     #FFFFFF;
+  --card-border: rgba(0, 0, 0, 0.07);
+  --chrome-bg:   rgba(250, 250, 250, 0.88);
+  --float-bg:    rgba(255, 255, 255, 0.98);
   --modal-overlay: rgba(0, 0, 0, 0.25);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05);
   --shadow-pop:  0 0 0 1px rgba(0, 0, 0, 0.05), 0 28px 72px rgba(0, 0, 0, 0.18);
-  --focus-ring:  0 0 0 3px rgba(0, 113, 227, 0.25);
-  --page-bg:
-    radial-gradient(1100px 700px at 0% 0%,    rgba(0, 113, 227, 0.07), transparent 60%),
-    radial-gradient(900px 650px at 100% 0%,   rgba(175, 82, 222, 0.05), transparent 60%),
-    #F5F5F7;
+  --focus-ring:  0 0 0 3px rgba(0, 0, 0, 0.12);
+  --selection:   rgba(0, 0, 0, 0.14);
+  --page-bg:     #F5F5F7;
 
   color-scheme: light;
 }
@@ -174,7 +172,7 @@ html[data-style="studio"] th { font-weight: 500; }
 html[data-style="studio"] tbody tr { transition: background-color .12s ease; }
 html[data-style="studio"] tbody tr:hover { background-color: var(--c-surface2); }
 
-html[data-style="studio"] ::selection { background: rgba(10, 132, 255, 0.30); }
+html[data-style="studio"] ::selection { background: var(--selection); }
 html[data-style="studio"] ::-webkit-scrollbar { width: 10px; height: 10px; }
 html[data-style="studio"] ::-webkit-scrollbar-track { background: transparent; }
 html[data-style="studio"] ::-webkit-scrollbar-thumb {
@@ -201,6 +199,7 @@ html[data-style="glass"][data-theme="dark"] {
   --c-orange:   #A8956F;
   --c-purple:   #C7C7CC;
   --c-gold:     #E5E5EA;
+  --c-on-accent: #FFFFFF;
   --modal-overlay: rgba(0, 0, 0, 0.55);
   --glass-blur:      saturate(180%) blur(28px);
   --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.45);
@@ -228,6 +227,7 @@ html[data-style="glass"][data-theme="light"] {
   --c-orange:   #86724A;
   --c-purple:   #636366;
   --c-gold:     #48484A;
+  --c-on-accent: #FFFFFF;
   --modal-overlay: rgba(28, 28, 30, 0.35);
   --glass-blur:      saturate(180%) blur(28px);
   --glass-shadow:    0 8px 32px rgba(40, 40, 50, 0.14);
@@ -294,6 +294,7 @@ html[data-style="terminal"][data-theme="dark"] {
   --c-orange:   #EF9F27;
   --c-purple:   #7F77DD;
   --c-gold:     #FFC72C;
+  --c-on-accent: #FFFFFF;
   --modal-overlay: rgba(0, 0, 0, 0.7);
   color-scheme: dark;
 }
@@ -313,6 +314,7 @@ html[data-style="terminal"][data-theme="light"] {
   --c-orange:   #C26800;
   --c-purple:   #5C4FCC;
   --c-gold:     #B8860B;
+  --c-on-accent: #FFFFFF;
   --modal-overlay: rgba(20, 30, 45, 0.45);
   color-scheme: light;
 }
@@ -335,6 +337,11 @@ const COMMON = `
 html, body, #root { transition: background-color .15s ease, color .15s ease; }
 input, select, textarea, button { font-family: inherit; color: var(--c-text); }
 input::placeholder, textarea::placeholder { color: var(--c-dim); }
+/* Thinking orbs (components/Orb.tsx): fade in; the copilot's thinking line shimmers. */
+@keyframes orbIn      { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes orbShimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes riseIn     { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
 /* A field drawn as a box around an icon and an input (data-field): the box shows the focus. */
 [data-field]:focus-within { border-color: var(--c-blue) !important; }
 html[data-style="studio"] [data-field]:focus-within { box-shadow: var(--focus-ring); }
@@ -353,6 +360,7 @@ select option { background: var(--c-bg); color: var(--c-text); }
 }
 @media (prefers-reduced-motion: reduce) {
   button { transition: none !important; }
+  [role="status"] *, [data-rise] { animation: none !important; }
 }
 `
 

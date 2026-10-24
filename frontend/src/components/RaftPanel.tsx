@@ -3,6 +3,7 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle } from './shared'
 import { useDataStore } from '../stores/dataStore'
 import type { ConsensusNode } from '../services/api'
+import { Loading } from './Orb'
 
 // The gateway re-reads the cluster every 0.5 s (RAFT_POLL_INTERVAL_S);
 // there is no WebSocket channel for it, so the panel polls while it is shown.
@@ -57,7 +58,7 @@ export function RaftPanel({ style, compact = false }: { style?: React.CSSPropert
       <Card style={style}>
         <CardTitle>RAFT consensus nodes</CardTitle>
         {!status ? (
-          <div style={{ padding: 10, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : 'Loading…'}</div>
+          <div style={{ padding: 10, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : <Loading state="connecting" label="Asking the RAFT nodes…" />}</div>
         ) : !status.enabled ? (
           <div style={{ fontSize: F.sm, color: C.muted, lineHeight: 1.5 }}>{status.message}</div>
         ) : (
@@ -113,7 +114,7 @@ export function RaftPanel({ style, compact = false }: { style?: React.CSSPropert
       )}
 
       {!status ? (
-        <div style={{ padding: 20, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : 'Loading…'}</div>
+        <div style={{ padding: 20, textAlign: 'center', color: C.dim, fontSize: F.sm }}>{error ? 'No status yet.' : <Loading state="connecting" label="Asking the RAFT nodes…" />}</div>
       ) : !status.enabled ? (
         <div style={{ fontSize: F.sm, color: C.muted, lineHeight: 1.6 }}>
           {status.message}

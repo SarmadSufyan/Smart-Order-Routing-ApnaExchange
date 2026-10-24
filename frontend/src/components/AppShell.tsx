@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import {
   AlertOctagon, ArrowLeftRight, BookOpen, Bot, CandlestickChart, Check, ChevronLeft, ChevronRight,
-  LayoutDashboard, LineChart, LogOut, Menu, Moon, Network, Palette, ScrollText, ShieldCheck, Sparkles, Sun,
-  Wallet, Workflow, X, Zap,
+  LayoutDashboard, LineChart, LogOut, Menu, Moon, Network, Palette, ScrollText, ShieldCheck, Sun,
+  Wallet, Workflow, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { C, F, tint } from '../theme'
@@ -189,22 +189,14 @@ export function AppShell() {
   const displayName = user?.name || user?.username || ''
 
   const brand = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-      <span style={{
-        width: 30, height: 30, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, boxShadow: `0 4px 14px ${tint(C.blue, 35)}`,
-      }}>
-        <Zap size={17} color="#fff" strokeWidth={2.2} fill="#fff" />
-      </span>
-      {!isPhone && <span style={{ fontSize: F.md, fontWeight: 650, letterSpacing: '-0.01em' }}>ApnaSOR</span>}
-    </span>
+    <span style={{ fontSize: F.lg, fontWeight: 700, letterSpacing: '-0.02em', color: C.text }}>ApnaSOR</span>
   )
 
   const userBlock = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
       <span title={displayName} style={{
         width: 32, height: 32, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        background: tint(C.blue, 20), color: C.blue, fontSize: F.xs, fontWeight: 700,
+        background: C.surface2, border: `1px solid ${C.border}`, color: C.text, fontSize: F.xs, fontWeight: 700,
       }}>
         {initials(displayName)}
       </span>
@@ -297,11 +289,10 @@ export function AppShell() {
 
           {/* The copilot: ask, analyze, propose — every action waits for a confirm */}
           <button onClick={() => setCopilotOpen((o) => !o)} aria-expanded={copilotOpen} style={{
-            ...ghostButton, border: `1px solid ${tint(C.blue, 40)}`,
-            background: copilotOpen ? C.blue : tint(C.blue, 12), color: copilotOpen ? '#fff' : C.blue, fontWeight: 600,
+            ...ghostButton, fontWeight: 600, border: `1px solid ${C.border}`,
+            background: copilotOpen ? C.blue : C.surface2, color: copilotOpen ? C.onAccent : C.text,
           }}>
-            <Sparkles size={15} strokeWidth={2} />
-            {!isPhone && <span>Copilot</span>}
+            Copilot
           </button>
 
           <button onClick={() => navigate('/killswitch')} title="Kill switch" style={{

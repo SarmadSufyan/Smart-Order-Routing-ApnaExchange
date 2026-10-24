@@ -10,6 +10,7 @@ import { fmtPnl, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { api } from '../services/api'
 import type { FundView, ReconStatus } from '../services/api'
 import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
+import { Loading } from '../components/Orb'
 
 const BAR_COLORS = [C.blue, C.green, C.orange, C.gold, C.purple, C.red]
 
@@ -189,7 +190,7 @@ export function Wallet() {
           background: tint(C.orange, 10), border: `1px solid ${tint(C.orange, 45)}`,
           color: C.text, fontSize: F.sm, display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-          {alerts.map((a) => <div key={a}>⚠ {a}</div>)}
+          {alerts.map((a) => <div key={a}>{a}</div>)}
         </div>
       )}
 
@@ -204,9 +205,9 @@ export function Wallet() {
             </div>
 
             {assets.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.base }}>
-                {wallet?.as_of ? 'No balances in the tracked assets.' : 'Loading balances…'}
-              </div>
+              wallet?.as_of ? (
+                <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.base }}>No balances in the tracked assets.</div>
+              ) : <Loading block state="connecting" label="Reading the balances from the exchanges…" />
             ) : (
               <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -244,7 +245,7 @@ export function Wallet() {
                         </td>
                         <td style={{ ...right, color: lim?.breached ? C.red : C.muted, fontWeight: lim?.breached ? 700 : 400 }}
                             title={lim ? `Concentration limit ${lim.limit_pct}%` : undefined}>
-                          {share.toFixed(1)}%{lim?.breached ? ' ⚠' : ''}
+                          {share.toFixed(1)}%{lim?.breached ? ' !' : ''}
                         </td>
                         <td style={{ ...right, color: C.muted }}>{isCash ? '—' : fmtPrice(p?.avg_cost)}</td>
                         <td style={{ ...right, color: pnlColor(p?.total_pnl), fontWeight: 600 }} title={tip}>
@@ -411,7 +412,7 @@ export function Wallet() {
                 )
               })}
               {recon.length === 0 && (
-                <div style={{ padding: 12, textAlign: 'center', color: C.dim, fontSize: F.sm }}>Loading…</div>
+                <div style={{ padding: 12, textAlign: 'center' }}><Loading state="connecting" /></div>
               )}
             </div>
           </Card>
@@ -448,7 +449,7 @@ export function Wallet() {
                         {lim && (
                           <span style={{ fontSize: F.xs, color: lim.breached ? C.red : C.muted }}
                                 title="Share of the portfolio held on this exchange (counterparty risk)">
-                            {lim.share_pct.toFixed(1)}% of portfolio{lim.breached ? ` ⚠ > ${lim.limit_pct}%` : ''}
+                            {lim.share_pct.toFixed(1)}% of portfolio{lim.breached ? ` — over the ${lim.limit_pct}% limit` : ''}
                           </span>
                         )}
                       </div>

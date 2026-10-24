@@ -24,6 +24,7 @@ export const C = {
   orange:   'var(--c-orange)',
   purple:   'var(--c-purple)',
   gold:     'var(--c-gold)',
+  onAccent: 'var(--c-on-accent)',
 } as const
 
 /** Font sizes — second bump for projector readability. */

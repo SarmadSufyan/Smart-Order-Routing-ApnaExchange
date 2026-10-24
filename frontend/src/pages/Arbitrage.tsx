@@ -5,6 +5,7 @@ import { useDataStore } from '../stores/dataStore'
 import { wsClient } from '../services/websocket'
 import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtSize } from '../format'
 import type { ArbSymbolStats, ArbWindow } from '../services/api'
+import { Loading } from '../components/Orb'
 
 // Display order of the bucket labels (backend: DURATION_BUCKETS / GROSS_BUCKETS
 // in services/arbitrage/detector.py). The API sends them in first-seen order.
@@ -158,7 +159,7 @@ export function Arbitrage() {
     return {
       padding: '5px 12px', borderRadius: 14, fontSize: F.xs, fontFamily: 'inherit', cursor: 'pointer',
       border: `1px solid ${active ? C.blue : C.border}`,
-      background: active ? C.blue : C.surface, color: active ? '#fff' : C.muted,
+      background: active ? C.blue : C.surface, color: active ? C.onAccent : C.muted,
     }
   }
 
@@ -201,9 +202,9 @@ export function Arbitrage() {
 
       {!arb ? (
         <Card>
-          <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.base }}>
-            {error ? 'No data from the detector yet.' : 'Loading the arbitrage detector…'}
-          </div>
+          {error ? (
+            <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.base }}>No data from the detector yet.</div>
+          ) : <Loading block label="Loading the arbitrage detector…" />}
         </Card>
       ) : !arb.enabled ? (
         <Card>
@@ -432,9 +433,11 @@ export function Arbitrage() {
               </label>
             </div>
             {windowRows.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: F.sm }}>
-                {!arbWindows ? 'Loading…' : profitableOnly ? 'No profitable window seen yet.' : 'No windows in the last few minutes.'}
-              </div>
+              !arbWindows ? <Loading block label="Loading the windows…" /> : (
+                <div style={{ padding: 24, textAlign: 'center', color: C.dim, fontSize: F.sm }}>
+                  {profitableOnly ? 'No profitable window seen yet.' : 'No windows in the last few minutes.'}
+                </div>
+              )
             ) : (
               <div style={{ overflow: 'auto', maxHeight: 440 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>

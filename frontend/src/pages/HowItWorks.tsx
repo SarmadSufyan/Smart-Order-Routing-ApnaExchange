@@ -7,6 +7,14 @@ import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtUsd, sentence, spreadBps } from '../format'
 import { LATENCY_WARN_MS } from '../adapters'
 import type { OrderSide } from '../types'
+import { Orb } from '../components/Orb'
+import type { OrbState } from '../components/Orb'
+
+// The motion for each step while it runs (components/Orb.tsx: one verb per kind of work).
+const STAGE_ORB: Record<string, OrbState> = {
+  input: 'working', risk: 'solving', md: 'searching', sor: 'solving', route: 'connecting', exec: 'connecting',
+  position: 'working',
+}
 
 type StepStatus = 'pending' | 'active' | 'done' | 'failed' | 'skipped'
 
@@ -340,10 +348,9 @@ export function HowItWorks() {
                   border: `1.5px solid ${borderColor}`,
                   fontSize: F.md, fontWeight: 700,
                   color: borderColor === C.border ? C.muted : borderColor,
-                  animation: isActive ? 'pocPulse 1s infinite' : undefined,
                   flexShrink: 0,
                 }}>
-                  {idx + 1}
+                  {isActive ? <Orb state={STAGE_ORB[def.key] ?? 'working'} size={20} label={def.title} /> : idx + 1}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: F.lg, color: C.text, fontWeight: 600 }}>

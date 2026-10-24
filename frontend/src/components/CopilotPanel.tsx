@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { confirmRealMoney, useRealMoney } from './shared'
+import { Loading, Orb, Thinking } from './Orb'
 import { api } from '../services/api'
 import type { AnalysisCard, CopilotStatus, CopilotTurn } from '../services/api'
 import { SYMBOLS } from '../mockData'
-import { fmtPct, fmtPrice, fmtQty, fmtUsd } from '../format'
+import { fmtPct, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
 
 // The copilot: ask in plain English. Answers and analyses come from the system's own numbers (the language model
 // only words them); every order, algorithm or bot it proposes waits for Confirm — except, in the sandbox with Auto
@@ -19,7 +20,10 @@ const EXAMPLES = [
   'What is RSI?',
 ]
 
-type Entry = { id: string; question: string; turn: CopilotTurn | null; error?: string; analysisOnly?: AnalysisCard }
+type Entry = {
+  id: string; question: string; turn: CopilotTurn | null; error?: string; analysisOnly?: AnalysisCard
+  kind: 'chat' | 'analysis'
+}
 
 const STATUS_COLOR: Record<string, string> = {
   PROPOSED: C.blue, ANSWERED: C.green, CLARIFY: C.orange, REFUSED: C.red, CONFIRMED: C.green,
@@ -59,7 +63,7 @@ function Verdict({ a }: { a: AnalysisCard }) {
             {a.techniques.map((r) => (
               <tr key={r.name} title={r.why}>
                 <td style={{ padding: '2px 4px', color: C.text }}>{r.name}</td>
-                <td style={{ padding: '2px 4px', color: r.signal === 'in' ? C.green : C.muted }}>{r.signal.toUpperCase()}</td>
+                <td style={{ padding: '2px 4px', color: r.signal === 'in' ? C.green : C.muted }}>{sentence(r.signal)}</td>
                 <td style={{ padding: '2px 4px', textAlign: 'right', color: C.muted }}>{fmtPct(r.return_recent)} recent</td>
                 <td style={{ padding: '2px 4px', color: r.verdict === 'worked' ? C.green : r.verdict === 'mixed' ? C.orange : C.dim }}>{r.verdict}</td>
               </tr>
@@ -86,6 +90,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
   const [busy, setBusy] = useState(false)
   const [auto, setAuto] = useState(true)
   const [quickCoin, setQuickCoin] = useState<string>(SYMBOLS[0])
+  const [acting, setActing] = useState<string | null>(null)  // the entry whose Confirm / Cancel is being sent
   const bottom = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -101,7 +106,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
     const q = message.trim()
     if (!q || busy) return
     const id = `${Date.now()}`
-    setEntries((list) => [...list, { id, question: q, turn: null }])
+    setEntries((list) => [...list, { id, question: q, turn: null, kind: 'chat' }])
     setText('')
     setBusy(true)
     try {
@@ -114,7 +119,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
 
   async function quickAnalysis() {
     const id = `${Date.now()}`
-    setEntries((list) => [...list, { id, question: `Quick analysis of ${quickCoin} (no AI)`, turn: null }])
+    setEntries((list) => [...list, { id, question: `Quick analysis of ${quickCoin} (no AI)`, turn: null, kind: 'analysis' }])
     setBusy(true)
     try {
       update(id, { analysisOnly: await api.copilotAnalysis(quickCoin) })
@@ -127,11 +132,13 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
   async function act(entry: Entry, confirm: boolean) {
     const t = entry.turn!
     if (confirm && !confirmRealMoney(realMoney, t.message)) return
+    setActing(entry.id)
     try {
       update(entry.id, { turn: confirm ? await api.copilotConfirm(t.id) : await api.copilotCancel(t.id) })
     } catch (e) {
       update(entry.id, { error: (e as Error).message })
     }
+    setActing(null)
   }
 
   if (!open) return null
@@ -147,8 +154,9 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
       background: C.surface, borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column',
       boxShadow: '-8px 0 24px rgba(0, 0, 0, .35)',
     }}>
-      <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: C.blue, fontSize: F.lg }}>✦</span>
+      <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Orb size={32} state={busy || acting ? 'working' : 'breathing'} speed={busy || acting ? 1 : 0.7}
+             label={busy ? 'The copilot is working' : 'The copilot is ready'} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: F.md, fontWeight: 700 }}>Copilot</div>
           <div style={{ fontSize: F.xs, color: available ? C.muted : C.orange, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
@@ -162,13 +170,23 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {entries.length === 0 && (
-          <div style={{ fontSize: F.sm, color: C.muted, lineHeight: 1.6 }}>
-            Ask about a coin, your portfolio, risk, the research or a trading idea; or tell it to trade
-            ({!status || available ? 'it proposes, you confirm' : 'needs an AI key — the quick analysis below works without one'}).
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+            padding: '36px 8px 8px', fontSize: F.sm, color: C.muted, lineHeight: 1.6,
+          }}>
+            <Orb size={64} state="breathing" speed={0.8} label="The copilot is ready" />
+            <div style={{ fontSize: F.lg, fontWeight: 600, color: C.text, margin: '18px 0 6px' }}>How can I help?</div>
+            <div style={{ maxWidth: 340 }}>
+              Ask about a coin, your portfolio, risk, the research or a trading idea; or tell it to trade
+              ({!status || available ? 'it proposes, you confirm' : 'needs an AI key — the quick analysis below works without one'}).
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 16 }}>
               {EXAMPLES.map((ex) => (
-                <button key={ex} disabled={!available || busy} onClick={() => send(ex)}
-                        style={{ ...button(C.blue), fontWeight: 400, fontSize: F.xs, opacity: available ? 1 : 0.5 }}>{ex}</button>
+                <button key={ex} disabled={!available || busy} onClick={() => send(ex)} style={{
+                  padding: '6px 12px', borderRadius: 2, border: `1px solid ${C.border}`, background: C.surface2,
+                  color: C.text, fontFamily: 'inherit', fontSize: F.xs, cursor: available ? 'pointer' : 'default',
+                  opacity: available ? 1 : 0.5,
+                }}>{ex}</button>
               ))}
             </div>
           </div>
@@ -176,29 +194,37 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
         {entries.map((e) => {
           const t = e.turn
           return (
-            <div key={e.id} style={{ marginBottom: 14 }}>
+            <div key={e.id} data-rise="" style={{ marginBottom: 14, animation: 'riseIn .25s ease both' }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <div style={{ background: tint(C.blue, 14), color: C.text, borderRadius: 6, padding: '6px 10px', fontSize: F.sm, maxWidth: '85%' }}>
+                <div style={{ background: C.surface2, color: C.text, borderRadius: 6, padding: '7px 11px', fontSize: F.sm, maxWidth: '85%' }}>
                   {e.question}
                 </div>
               </div>
               <div style={{ marginTop: 6, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 6, padding: 10 }}>
                 {e.error ? <div style={{ fontSize: F.sm, color: C.red }}>{e.error}</div>
                   : e.analysisOnly ? <Verdict a={e.analysisOnly} />
-                  : !t ? <div style={{ fontSize: F.sm, color: C.dim }}>Thinking — checking the live data…</div>
+                  : !t ? (e.kind === 'analysis'
+                    ? <Thinking label="Reading the research…" states={['searching', 'solving']} />
+                    : <Thinking label="Checking the live data…" />)
                   : <>
-                    <div style={{ fontSize: F.xs, fontWeight: 700, color: STATUS_COLOR[t.status] ?? C.muted, letterSpacing: '.06em' }}>
-                      {t.status}{t.auto_executed ? ' · RAN AUTOMATICALLY (SANDBOX)' : ''}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Orb size={20} state="composing" paused label="Copilot" />
+                      <span style={{ fontSize: F.xs, fontWeight: 700, color: STATUS_COLOR[t.status] ?? C.muted, letterSpacing: '.06em' }}>
+                        {sentence(t.status)}{t.auto_executed ? ' · ran automatically (sandbox)' : ''}
+                      </span>
                     </div>
                     {t.answer && <div style={{ fontSize: F.sm, color: C.text, whiteSpace: 'pre-wrap', lineHeight: 1.55, marginTop: 4 }}>{t.answer}</div>}
                     {(!t.answer || t.kind) && <div style={{ fontSize: F.sm, color: C.text, marginTop: 4, lineHeight: 1.5 }}>{t.message}</div>}
                     {t.analysis && <Verdict a={t.analysis} />}
                     {t.conversion && <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4 }}>{t.conversion}</div>}
-                    {t.warnings.map((w) => <div key={w} style={{ fontSize: F.xs, color: C.orange, marginTop: 4 }}>⚠ {w}</div>)}
+                    {t.warnings.map((w) => <div key={w} style={{ fontSize: F.xs, color: C.orange, marginTop: 4 }}>{w}</div>)}
                     {t.result_message && (
                       <div style={{ fontSize: F.xs, marginTop: 6, color: t.status === 'FAILED' ? C.red : C.green }}>{t.result_message}</div>
                     )}
-                    {t.status === 'PROPOSED' && (
+                    {t.status === 'PROPOSED' && acting === e.id && (
+                      <div style={{ marginTop: 8 }}><Loading label="Sending it through the order path…" state="connecting" /></div>
+                    )}
+                    {t.status === 'PROPOSED' && acting !== e.id && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                         <button onClick={() => act(e, true)} style={button(realMoney ? C.red : C.green)}>
                           {realMoney ? 'Confirm (REAL MONEY)' : 'Confirm'}
@@ -230,7 +256,7 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
                  placeholder={!status ? 'Connecting…' : available ? 'Ask or instruct… e.g. "should I buy SOL?"' : 'Add an AI key in .env to chat'}
                  style={{ flex: 1, padding: '8px 10px', borderRadius: 4, background: C.bg, border: `1px solid ${C.border}`,
                           color: C.text, fontFamily: 'inherit', fontSize: F.sm, outline: 'none' }} />
-          <button type="submit" disabled={!available || busy || !text.trim()} style={button(C.blue)}>{busy ? '…' : 'Send'}</button>
+          <button type="submit" disabled={!available || busy || !text.trim()} style={button(C.blue)}>Send</button>
         </form>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: F.xs,
                         color: status?.auto_allowed ? C.muted : C.dim }}

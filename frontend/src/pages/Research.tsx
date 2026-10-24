@@ -10,6 +10,7 @@ import type {
   ResearchTf, ScoreboardRow, TechniqueStudy, TradePlanResponse,
 } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
+import { Loading } from '../components/Orb'
 
 const TF_LABEL: Record<ResearchTf, string> = { '1m': '1 minute', '1h': '1 hour', '1d': '1 day' }
 const TF_PLURAL: Record<ResearchTf, string> = { '1m': 'minutes', '1h': 'hours', '1d': 'days' }
@@ -306,7 +307,7 @@ export function Research() {
         {forecast
           ? forecast.horizons.map((h) => <ForecastCard key={h.horizon} f={h} />)
           : (['1m', '1h', '1d'] as ResearchTf[]).map((h) => (
-            <Card key={h}><CardTitle>Next {TF_LABEL[h].replace('1 ', '')}</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
+            <Card key={h}><CardTitle>Next {TF_LABEL[h].replace('1 ', '')}</CardTitle><Loading label="Fitting the forecast…" state="solving" /></Card>
           ))}
       </div>
 
@@ -320,7 +321,7 @@ export function Research() {
             </div>
           </div>
           {chart && chart.symbol === symbol && chart.timeframe === tf ? <ResearchChart data={chart} />
-            : <div style={{ padding: 40, textAlign: 'center', color: C.dim, fontSize: F.sm }}>Loading the chart…</div>}
+            : <Loading block label="Loading the chart…" />}
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <Card>
@@ -349,7 +350,7 @@ export function Research() {
                 <br />Spread {book.spread_bps?.toFixed(2)} bps across {book.venues?.join(', ')}{(book.spread_bps ?? 0) < 0 ? ' (the exchanges\' prices overlap)' : ''}
                 <br /><span style={{ color: C.dim }}>{book.note}</span>
               </div>
-            </> : <div style={{ fontSize: F.sm, color: C.dim }}>{book?.text ?? 'Loading…'}</div>}
+            </> : book?.text ? <div style={{ fontSize: F.sm, color: C.dim }}>{book.text}</div> : <Loading label="Reading the indicators…" />}
           </Card>
         </div>
       </div>

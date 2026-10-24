@@ -64,7 +64,7 @@ export function AuditLog() {
           <button key={f.label} onClick={() => setFilter(f)} style={{
             padding: '5px 12px', borderRadius: 14, fontSize: F.xs, fontFamily: 'inherit', cursor: 'pointer',
             border: `1px solid ${f === filter ? C.blue : C.border}`,
-            background: f === filter ? C.blue : C.surface, color: f === filter ? '#fff' : C.muted,
+            background: f === filter ? C.blue : C.surface, color: f === filter ? C.onAccent : C.muted,
           }}>{f.label}</button>
         ))}
       </div>

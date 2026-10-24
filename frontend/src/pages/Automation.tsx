@@ -7,6 +7,7 @@ import { api } from '../services/api'
 import { wsClient } from '../services/websocket'
 import type { AdvisorParams, AdvisorProposal, BotState, CycleParams, FundView, LabReport, Lot } from '../services/api'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
+import { Loading } from '../components/Orb'
 
 // Bots & Lab (Phase C): the automation fund, the profit-cycle bot, the advisor agent and the
 // practice lab. Every bot order goes through the same order path as the order button.
@@ -103,8 +104,8 @@ function FundCard({ fund, onChange }: { fund: FundView | null; onChange: () => v
           </div>
         </div>
         {error && <div style={{ fontSize: F.sm, color: C.orange, marginTop: 6 }}>{error}</div>}
-        {fund.warnings.map((w) => <div key={w} style={{ fontSize: F.xs, color: C.orange, marginTop: 6 }}>⚠ {w}</div>)}
-      </> : <div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div>}
+        {fund.warnings.map((w) => <div key={w} style={{ fontSize: F.xs, color: C.orange, marginTop: 6 }}>{w}</div>)}
+      </> : <Loading label="Loading the fund…" />}
     </Card>
   )
 }
@@ -324,7 +325,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
 function LabSection({ lab, onStarted }: { lab: LabReport | null; onStarted: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  if (!lab) return <Card><CardTitle>Practice lab</CardTitle><div style={{ fontSize: F.sm, color: C.dim }}>Loading…</div></Card>
+  if (!lab) return <Card><CardTitle>Practice lab</CardTitle><Loading label="Loading the lab…" state="working" /></Card>
   const start = async (name: string, budget: number) => {
     if (!window.confirm(`Start this lab experiment? It moves ${fmtUsd(budget)} of sandbox funds from the wallet into the automation fund and starts its bots.`)) return
     setBusy(name); setError(null)

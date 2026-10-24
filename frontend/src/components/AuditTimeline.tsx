@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { api, type AuditEvent } from '../services/api'
+import { Loading } from './Orb'
 
 /** Colour per audit event type (rejections / reverse outcomes turn red below). */
 export function auditColor(e: AuditEvent): string {
@@ -64,7 +65,7 @@ export function AuditTimeline({ orderId }: { orderId: string }) {
   }, [orderId])
 
   if (error) return <div style={{ fontSize: F.sm, color: C.red }}>Audit trail unavailable: {error}</div>
-  if (!events) return <div style={{ fontSize: F.sm, color: C.dim }}>Loading audit trail…</div>
+  if (!events) return <Loading label="Loading the audit trail…" />
   if (events.length === 0) {
     return <div style={{ fontSize: F.sm, color: C.dim }}>No audit records for this order (placed before the audit log existed).</div>
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Lock, User, Zap } from 'lucide-react'
+import { ArrowRight, Lock, User } from 'lucide-react'
 import { C, F, tint } from '../theme'
 import { useAuthStore } from '../stores/authStore'
 import { api, API_BASE, SERVER_LABEL } from '../services/api'
@@ -8,6 +8,7 @@ import type { GatewayHealth } from '../services/api'
 import { environmentLabel } from '../adapters'
 import { sentence } from '../format'
 import { MQ, useMediaQuery } from '../hooks/useMediaQuery'
+import { Loading } from '../components/Orb'
 
 // Quick sign-in, shown only for users the gateway says still accept the sandbox login
 // (password = user name; GET /api/auth/demo-logins) — none on a machine with real passwords.
@@ -103,12 +104,6 @@ export function Login() {
   const hero = (
     <div style={{ flex: '1 1 420px', maxWidth: 520, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <span style={{
-          width: 44, height: 44, borderRadius: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, boxShadow: `0 8px 24px ${tint(C.blue, 35)}`,
-        }}>
-          <Zap size={24} color="#fff" strokeWidth={2.2} fill="#fff" />
-        </span>
         <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>ApnaSOR</span>
         {envPill}
       </div>
@@ -132,7 +127,7 @@ export function Login() {
           </div>
           {exchanges.length === 0 ? (
             <div style={{ padding: '10px 16px', fontSize: F.sm, color: reachable === false ? C.red : C.muted }}>
-              {reachable === false ? 'Gateway not reachable' : 'Connecting…'}
+              {reachable === false ? 'Gateway not reachable' : <Loading state="connecting" label="Connecting to the gateway…" />}
             </div>
           ) : exchanges.map(([vid, x]) => (
             <div key={vid} style={{
@@ -192,7 +187,7 @@ export function Login() {
 
         <button type="submit" disabled={loading || !user || !pass} style={{
           width: '100%', height: 44, border: 'none', borderRadius: 4, marginTop: 4,
-          background: C.blue, color: '#fff', fontSize: F.md, fontWeight: 600, fontFamily: 'inherit',
+          background: C.blue, color: C.onAccent, fontSize: F.md, fontWeight: 600, fontFamily: 'inherit',
           cursor: loading ? 'wait' : 'pointer', opacity: !user || !pass ? 0.5 : 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
