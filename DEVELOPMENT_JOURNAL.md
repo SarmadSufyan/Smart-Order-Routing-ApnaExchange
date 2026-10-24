@@ -2391,3 +2391,44 @@ testnet and its routing proof rendered.
 **Files.** frontend: index.html, package.json (+ lock), main.tsx, themeStyles.ts, stores/themeStore.ts, format.ts,
 components/ (AppShell, shared, NewOrderModal, OrderProofModal, RoutingProof, CopilotPanel, RaftPanel, AuditTimeline,
 ResearchChart, TwapChart), pages/ (all).
+
+---
+
+## 2026-10-24 (morning) — Sarmad's review: a neutral Studio, thinking orbs, RAFT on the laptop
+
+**Neutral palette.** Sarmad asked for no blue at all, black / grey backgrounds "like the Claude Code app", and only
+two or three colours. Studio's palette (`themeStyles.ts`) is now: greys for every surface, **white as the accent**
+(black in light mode), and **green and red only** (buy / sell, profit / loss, connected / disconnected, the kill
+switch). The tokens the pages already use keep their names, so no page changed for it: `--c-blue` (the accent) is
+white, `--c-orange` (warnings) a light grey, `--c-purple` / `--c-gold` (chart series) a grey ramp. A new token
+`C.onAccent` is the text on an accent background (black on the white buttons; white in the other two looks), used
+where buttons had `color: '#fff'` on the accent. The page's blue glow is gone (a flat near-black), the logo mark
+(gradient square with a bolt) and the Copilot button's sparkle icon are gone (the wordmark "ApnaSOR" only), and the
+coloured emoji (lightning, sparkle, warning sign) were removed. Liquid Glass and Terminal are unchanged. Checked by
+reading the computed colours of every element on all pages: nothing outside grey, green and red.
+
+**Thinking orbs.** Sarmad asked for Jakub Antalik's thinking-orbs (github.com/Jakubantalik/thinking-orbs) in the
+copilot and the loading states. It is a published npm package (MIT, no dependencies, React >= 18; pinned to
+0.3.2, a month old): nine dotted, monochrome canvas animations that follow `data-theme` on `<html>` by themselves,
+pause offscreen and show a still frame under reduced motion. `components/Orb.tsx` wraps it: `Orb` (fades in),
+`Loading` (inline, or `block` for an empty card), `Thinking` (the copilot's line: the orb steps through searching ->
+solving -> composing every 2.4 s while the text shimmers). One motion per kind of work, so the same animation always
+means the same thing: searching = reading data, solving = deciding, connecting = exchanges / RAFT / gateway,
+composing = the language model writing, breathing = idle. Where: the copilot (header orb idle / busy, a 64 px orb on
+the empty screen with "How can I help?", the thinking line, a still orb beside each answer's status, an orb while a
+confirmed proposal is sent), the order dialog (the running risk check; the routing screen), Auto recommend, the
+running step of How It Works, and every "Loading…" (Research, Arbitrage, Wallet, Bots & Lab, RAFT, audit trail,
+Dashboard books, Login). Verified live: "What is RSI?" to the sandbox copilot showed the thinking line, the orb
+changed motion after 2.4 s, the answer arrived and the header orb went back to idle.
+
+**RAFT on the laptop.** The Dashboard said RAFT was off because the laptop's `.env` never had `RAFT_ENABLED=true`
+(nor a secret). Added both (the secret made with `secrets.token_hex(32)`, written straight into `.env`, never shown);
+`python start_all.py` now starts the 3 nodes first: leader in 1.7 s, 3 of 3 up, 0 refused messages. Found on the way:
+when the desktop app that runs our coding sessions launches the backend as a "preview", it probes every port of that
+process tree about 3 times a second, RAFT's included; the nodes correctly refuse those unsigned probes, but the
+refused counter climbs. Running `start_all.py` in an ordinary terminal (as on the demo laptop) has no such probes.
+
+**Files.** frontend/package.json (+ lock: thinking-orbs 0.3.2), src/components/Orb.tsx (new), themeStyles.ts,
+theme.ts (`onAccent`), components (AppShell, CopilotPanel, NewOrderModal, OrderProofModal, RoutingProof, RaftPanel,
+AuditTimeline, shared), pages (AlgoOrders, Arbitrage, AuditLog, Automation, Dashboard, HowItWorks, Login, Research,
+RiskManager, Wallet); CLAUDE.md (repo map), PROGRESS.md.

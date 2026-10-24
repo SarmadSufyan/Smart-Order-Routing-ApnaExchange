@@ -142,8 +142,8 @@ backend/
 frontend/src/
   pages/                Dashboard, MarketData, Research, AlgoOrders, Automation (Bots & Lab), Wallet, HowItWorks, VenueHealth, RiskManager,
                         KillSwitch, AuditLog, Login (OrderTicket is unrouted legacy)
-  components/           AppShell (nav), CopilotPanel (the ✦ COPILOT drawer), NewOrderModal, OrderProofModal, RoutingProof, AuditTimeline,
-                        TwapChart, shared.tsx
+  components/           AppShell (nav), CopilotPanel (the Copilot drawer), NewOrderModal, OrderProofModal, RoutingProof, AuditTimeline,
+                        TwapChart, shared.tsx (Card, PageHeader, Button, Stat, Pill), Orb.tsx (thinking orbs: Orb, Loading, Thinking)
   services/api.ts       every REST call + response types      services/websocket.ts  one multiplexed WS
   stores/dataStore.ts   Zustand: all server state; WS events trigger refetches
   theme.ts / format.ts  colour + font tokens (C, F), number formatting (fmtPrice, fmtQty, fmtUsd, fmtPnl)
