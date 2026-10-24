@@ -2432,3 +2432,35 @@ refused counter climbs. Running `start_all.py` in an ordinary terminal (as on th
 theme.ts (`onAccent`), components (AppShell, CopilotPanel, NewOrderModal, OrderProofModal, RoutingProof, RaftPanel,
 AuditTimeline, shared), pages (AlgoOrders, Arbitrage, AuditLog, Automation, Dashboard, HowItWorks, Login, Research,
 RiskManager, Wallet); CLAUDE.md (repo map), PROGRESS.md.
+
+---
+
+## 2026-10-24 (midday) — The copilot chooses the algorithm the way the Algo page does, and takes a routing strategy
+
+**What.** Two things the copilot could not do from chat although the system could: (1) **Auto** — "buy $30 of BTC,
+pick the best algorithm" now asks the algo engine's existing `recommend()` (the Algo Orders page's Auto button) and
+proposes its choice: one order now, TWAP, VWAP, implementation shortfall or POV, with the engine's reasons attached
+(`Proposal.algo_reasons`; the drawer lists them under the proposal); "can't be done" comes back as a refusal with
+the reasons. (2) **Routing** — "with smart routing", "sweep", "best price" set `OrderCreate.strategy`, or
+`AlgoCreate.routing` for every child of an algorithm; the proposal says which, in words.
+
+**Design.** The model's form gained `algo_kind: "AUTO"` and a nullable `routing` (the hand-written schema and
+`Intent` stay in step; a unit test checks it). The model only marks that the choice was left open — the choice is
+the engine's pure `choose_algo` over the live book, the recent volume and the limits, so the copilot and the Algo
+page can never disagree. The engine's params (duration, slices, participation, urgency) then go through the same
+checks as a named algorithm (slice minimums, per-order and algo limits), and a confirm takes the same path.
+
+**Found live.** "sweep 0.05 SOL across all exchanges" (no side) was read by the model as a BUY; the code only
+catches a *missing* side. The instructions now say routing and algorithm words ("sweep", "smart", "route", "work",
+"execute", "auto") say how to trade, never whether to buy or sell — re-tested: it asks "buy or sell?". The confirm
+screen would have shown "BUY", but guessing a side is exactly what the copilot must not do.
+
+**Verified live** (Gemini, real-market books; propose only, each proposal cancelled): "$30 of BTC, pick the best"
+-> one order now (the books take it at -0.3 bps vs the mid); "0.3 BTC, pick the best, up to 30 minutes" (~$24k,
+above the per-order limit) -> VWAP in 4 slices with its four reasons; "0.0004 BTC with smart routing" -> smart;
+"$40 of ETH over 3 minutes with smart routing" -> a TWAP whose 12 children use smart routing. 592 tests pass.
+
+**Files.** backend/shared/models/copilot.py, backend/services/agents/copilot.py, backend/tests/test_copilot/
+(test_copilot.py: `StubTwap.recommend`; test_copilot_v2.py: `AutoAlgorithmTest`, `RoutingChoiceTest`),
+frontend/src/services/api.ts, frontend/src/components/CopilotPanel.tsx (reasons, a new example),
+project-info/COPILOT_GUIDE.md, PROGRESS.md.

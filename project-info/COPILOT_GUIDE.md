@@ -8,7 +8,7 @@
 
 ## 1. What it does, in one line each
 
-Open **✦ COPILOT** in the top bar on any page and type in plain English:
+Open **Copilot** in the top bar on any page and type in plain English:
 
 | You type | It does |
 |---|---|
@@ -16,6 +16,8 @@ Open **✦ COPILOT** in the top bar on any page and type in plain English:
 | "How is my portfolio doing?" · "What's BTC at?" · "Is the kill switch on?" | answers from the **live numbers** (wallet, prices, risk, bots, exchanges) |
 | "Which techniques worked on ETH?" · "What does the forecast say?" | answers from the **research** (technique study, forecasts and their track record) |
 | "Buy $20 of ETH over 2 minutes" · "Sell 0.01 BTC with VWAP over an hour" · "Iceberg 0.05 ETH, show 0.01, limit 2500" | proposes the **order or execution algorithm** (TWAP, VWAP, implementation shortfall, POV, iceberg) — **you confirm** |
+| "Buy $30 of BTC, pick the best algorithm" · "Sell 0.3 BTC, auto, within 30 minutes" | asks the **algo engine's Auto** (the same as on Algo Orders) to choose: one order now, TWAP, VWAP, implementation shortfall or POV — and proposes that **with its reasons** (cost of doing it all now, the per-order limit, the market's volume per minute, the urgency) — **you confirm** |
+| "Buy 0.001 BTC with smart routing" · "Sell 0.05 SOL, sweep all exchanges" | sets the **routing strategy** on the order, or on every child of an algorithm: best price after fees (the default), liquidity sweep or smart (adds each exchange's measured fill reliability) |
 | "Start a profit-cycle bot on BTC with $40" · "Start the advisor" | proposes the **bot** with its settings — **you confirm** |
 | "What is RSI?" | explains the concept (general knowledge, labelled as such) |
 
@@ -137,5 +139,9 @@ runs without the click — through the same confirm path (fresh price check, ris
   live results every time you ask.
 - *"Can it trade by itself?"* In the sandbox, small orders with Auto on; with real money, never — every action
   waits for a person.
+- *"When I say 'pick the best algorithm', does the AI choose?"* No. The language model only marks that you left
+  the choice open; the algo engine's Auto chooses — a pure function over the live order book, the market's recent
+  volume and the risk limits (`choose_algo` in `backend/services/algos/schedules.py`) — and the proposal shows its
+  reasons. The same choice the Algo Orders page's Auto button makes.
 - *"Why does it so often say no trade?"* Because on real data, after fees, most signals don't beat simply holding.
   A tool that always says "buy" would be the dishonest one.
