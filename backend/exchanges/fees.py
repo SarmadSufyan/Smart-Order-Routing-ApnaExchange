@@ -3,7 +3,8 @@
 The router, the bots and the profit numbers start from each exchange's public base-tier taker fee
 (``ARB_TAKER_FEES_BPS``). A real account can pay less (a VIP level) or, rarely, more. On real money each adapter
 asks its exchange for the account's rate (one read-only call, ccxt ``fetch_trading_fees`` — or
-``fetch_trading_fee`` per symbol where only that exists, as on OKX) and :class:`LiveFees` then answers with that
+``fetch_trading_fee`` per symbol where only that exists, as on OKX, or where the all-markets call refuses spot, as on
+Bybit) and :class:`LiveFees` then answers with that
 rate instead of the public one, so routing and the bots judge with the fee you actually pay.
 
 What this can't see: Binance's BNB discount (applied when the fee is charged) — the fill reports, which are
@@ -12,6 +13,8 @@ recorded, stay the truth for what was paid.
 
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any
+
+from ccxt.base.errors import NotSupported
 
 
 def taker_bps_from_ccxt(raw: Any, symbols: list[str]) -> float | None:
@@ -35,7 +38,10 @@ async def fetch_account_taker_bps(client: Any, symbols: list[str]) -> float | No
     """Ask the exchange for this account's taker fee (read-only). Raises whatever the call raises."""
     has = getattr(client, "has", {}) or {}
     if has.get("fetchTradingFees"):
-        return taker_bps_from_ccxt(await client.fetch_trading_fees(), symbols)
+        try:
+            return taker_bps_from_ccxt(await client.fetch_trading_fees(), symbols)
+        except NotSupported:
+            pass  # Bybit answers the all-markets call for derivatives only; its per-symbol call covers spot
     if has.get("fetchTradingFee"):
         return taker_bps_from_ccxt({s: await client.fetch_trading_fee(s) for s in symbols}, symbols)
     return None

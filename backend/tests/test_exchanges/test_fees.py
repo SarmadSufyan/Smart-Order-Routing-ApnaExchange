@@ -68,6 +68,13 @@ class FetchTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await fetch_account_taker_bps(client, SYMBOLS), 10.0)
         self.assertEqual(client.calls, SYMBOLS)
 
+    async def test_per_symbol_when_the_all_markets_call_refuses_spot(self) -> None:  # Bybit
+        client = FeeClient([ccxt.NotSupported("bybit fetchTradingFees() is not supported for spot market"),
+                            {"taker": 0.001}, {"taker": 0.001}],
+                           has={"fetchTradingFees": True, "fetchTradingFee": True})
+        self.assertEqual(await fetch_account_taker_bps(client, SYMBOLS), 10.0)
+        self.assertEqual(client.calls, ["all", *SYMBOLS])
+
     async def test_no_fee_call_at_all(self) -> None:
         self.assertIsNone(await fetch_account_taker_bps(FeeClient([], has={}), SYMBOLS))
 
