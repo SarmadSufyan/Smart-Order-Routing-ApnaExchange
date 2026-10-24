@@ -18,6 +18,14 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get install -y -q curl ca-certificates sqlite3 >/dev/null
 # Ubuntu's unattended-upgrades already installs security fixes daily (and never reboots by itself).
+# ...but after updating a library, needrestart restarts every service that uses it - on 2026-10-24 a zlib fix
+# restarted both gateways at 06:55 UTC. A restart is chosen by a person instead (an order or an algorithm may be
+# running; with real money especially): fixes still install, and deploy.py status shows when a restart is waiting.
+mkdir -p /etc/needrestart/conf.d
+cat > /etc/needrestart/conf.d/90-apnasor.conf <<'NR'
+# ApnaSOR (deploy/lab-server/setup.sh): never restart our services automatically after an update.
+$nrconf{override_rc}{qr(^apnasor)} = 0;
+NR
 
 echo "== clock"
 # Exchanges refuse signed requests from a clock that is off by more than a few seconds.

@@ -13,6 +13,9 @@ echo "== machine: up $(uptime -p | sed 's/^up //'), load $(cut -d' ' -f1-3 /proc
      "clock synchronized: $(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
 free -m | awk '/^Mem:/ {printf "   memory %d of %d MB used", $3, $2} /^Swap:/ {printf ", swap %d MB used\n", $3}'
 df -h / | awk 'NR==2 {printf "   disk %s of %s used (%s)\n", $3, $2, $5}'
+pending="$(sudo -n needrestart -b -r l 2>/dev/null | sed -n 's/^NEEDRESTART-SVC: \(apnasor[^ ]*\)$/\1/p' | xargs)"
+echo "   security updates: ${pending:+installed; a restart is waiting for $pending (choose a quiet moment)}${pending:-nothing waiting}$(
+     [[ -f /var/run/reboot-required ]] && echo '; the machine wants a reboot (kernel update)')"
 
 echo "== exchanges, as the gateway sees them"
 if health="$(curl -fsS --max-time 10 http://127.0.0.1:8000/api/health)"; then
