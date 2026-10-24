@@ -227,6 +227,7 @@ settings, uploads them and restarts the gateway.
 | Kill switch engaged | every bot pauses; **never** resumed automatically | release it and resume on the page |
 | Binance spot testnet's monthly reset | balances go back to their defaults and the order history is wiped; the bots usually carry on | if a bot pauses, read its reason |
 | Bybit demo key expires (**2026-12-29**: keys without an IP list last 90 days) | Bybit orders refused | new key → laptop `.env` → `deploy.py env` |
+| Ubuntu installs a security fix (daily) | installed; the gateway is **not** restarted (since 2026-10-24: a zlib fix had restarted it at 06:55 UTC) | `status` says "a restart is waiting" or "the machine wants a reboot": restart / reboot at a quiet moment |
 | Your home IP changes | SSH from the laptop is refused; **the bots keep running** | security group → edit the SSH rule → "My IP", or use EC2 Instance Connect |
 | Disk | the databases grow a few MB a day; 14 days of backups; the log is capped at 500 MB | nothing (20 GB lasts years) |
 | Credits / Free plan end | the account closes | section 2: RDS decision now, upgrade or wind down before 2026-12-05 |

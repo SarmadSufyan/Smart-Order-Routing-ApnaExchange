@@ -2464,3 +2464,32 @@ above the per-order limit) -> VWAP in 4 slices with its four reasons; "0.0004 BT
 (test_copilot.py: `StubTwap.recommend`; test_copilot_v2.py: `AutoAlgorithmTest`, `RoutingChoiceTest`),
 frontend/src/services/api.ts, frontend/src/components/CopilotPanel.tsx (reasons, a new example),
 project-info/COPILOT_GUIDE.md, PROGRESS.md.
+
+---
+
+## 2026-10-24 (evening) — Update restarts off, the real-money server on the latest commit, and the feed drops
+
+**Restarts nobody chose.** Both gateways restarted at 06:55 UTC: Ubuntu's daily unattended upgrade installed a
+zlib fix and needrestart then restarted every service using the library — ours included, while nothing was asked
+of it. In the sandbox that only pauses running algorithms; with real money a restart could land in the middle of
+an order. `deploy/lab-server/setup.sh` (which the real-money server's setup runs too) now writes
+`/etc/needrestart/conf.d/90-apnasor.conf` (`$nrconf{override_rc}{qr(^apnasor)} = 0`): fixes still install every
+day, our services are never restarted by them, and both `status.sh` show "a restart is waiting for …" (from
+`needrestart -b`) or "the machine wants a reboot" (a kernel update). Verified on the lab: the file parses and
+needrestart reads `apnasor-lab.service` -> 0. Both machines now report a pending kernel reboot (6.17 running, 7.0
+installed), to be done at a quiet moment.
+
+**The real-money server on `eb93a97`.** `setup --test` again (safe to repeat: keys are merged, the market history
+kept, the release tested before it is switched): 592 tests on the server, backup first, healthy; then `env` with
+OKX and HTX back as data-only venues. It now has today's frontend, the orbs and the copilot's Auto / routing.
+
+**Feed drops.** On the real server 13 WebSocket drops in 24 h, most on HTX (8; 4 of them HTX closing the line
+because our answer to its heartbeat came late), roughly an hour apart and moving between exchanges; each
+reconnected in about 2 s. The lab (Binance and Bybit only) had 2 in 48 h, one at the same second as the real
+server's — that one is Bybit's side. An hourly freeze of the gateway would explain the rest, but the gateway logs
+too little when idle to show one. A read-only probe on the real server asks `/api/health` every second for six
+hours and writes every answer slower than 1 s to `/tmp/apnasor-lag.log`: slow answers at the drop times mean a
+freeze on our side (and a fix before real money); no slow answers mean the exchanges.
+
+**Files.** deploy/lab-server/setup.sh, deploy/lab-server/status.sh, deploy/real-server/status.sh,
+project-info/LAB_SERVER_GUIDE.md, PROGRESS.md.
