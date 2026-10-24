@@ -375,6 +375,7 @@ export interface CopilotTurn {
   kind: 'order' | 'twap' | 'algo' | 'bot' | null
   answer: string | null; analysis: AnalysisCard | null; topic: string | null
   warnings: string[]; conversion: string | null; estimated_notional_usdt: number | null
+  algo_reasons?: string[]  // Auto algorithm: why the engine chose this way to execute
   expires_at: string | null; auto: boolean; auto_executed: boolean; model: string | null
   result_message: string | null; result_order_id: string | null; result_algo_id: string | null
   result_bot_id: string | null

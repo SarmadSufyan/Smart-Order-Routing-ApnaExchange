@@ -2,6 +2,8 @@
 
     "buy $50 of BTC over 2 minutes"          -> a TWAP proposal                    (confirm to run)
     "work 0.01 ETH with VWAP over an hour"   -> an execution-algorithm proposal    (confirm to run)
+    "sell 0.02 ETH, pick the best algorithm" -> Auto: the algo engine's choice, with its reasons
+    "buy 0.001 BTC with smart routing"       -> the order, split by the smart routing strategy
     "should I buy SOL?"  /  "any good trade?" -> the analyst's verdict with its evidence, and an
                                                 order proposal when the verdict is BUY  (confirm to run)
     "how is my portfolio doing?"             -> an answer from the live numbers
@@ -53,8 +55,20 @@ from backend.shared.models.copilot import (
     Topic,
 )
 from backend.shared.models.market_data import split_symbol
-from backend.shared.models.order import OrderCreate, OrderSide, OrderStatus, OrderType
-from backend.shared.models.strategy import AlgoCreate, AlgoKind, TwapCreate, Urgency
+from backend.shared.models.order import (
+    OrderCreate,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    RoutingStrategy,
+)
+from backend.shared.models.strategy import (
+    AlgoCreate,
+    AlgoKind,
+    RecommendRequest,
+    TwapCreate,
+    Urgency,
+)
 from backend.shared.utils.logger import get_logger
 
 from .analyst import compact_forecast
@@ -104,6 +118,8 @@ action:
   pattern), "IS" (implementation shortfall: front-loaded, urgency LOW / MEDIUM / HIGH), "POV" (a share of the
   market's volume, participation_pct) or "ICEBERG" (shows only display_qty coins at a time; needs limit_price).
   duration_s = the window (POV / ICEBERG: the longest it may run).
+  algo_kind "AUTO" when the trader leaves the choice to the system ("pick the best way", "whatever executes it
+  cheapest", "auto", "choose the algorithm"): duration_s = the longest it may take if given, urgency if said.
 - "analyze": the trader wants a view or a trade suggestion ("should I buy SOL?", "what do you think of ETH?",
   "analyze BTC", "any good trade now?"). base_asset = the coin, or null for all coins.
 - "question": a question to answer from live data or general knowledge. topic: "market" (prices, spreads,
@@ -124,9 +140,13 @@ Fields (null when not given):
   trade. For start_bot, notional_usdt is the size of each buy or trade.
 - order_type: "LIMIT" only if a price is named ("at 60000"), with limit_price = that price; otherwise "MARKET".
 - duration_s: seconds ("2 minutes" -> 120). slices: only if the request says how many parts.
+- routing: how each order is split across the exchanges, ONLY if the trader names it: "best_price" ("best
+  price", "cheapest"), "liquidity_sweep" ("sweep", "all exchanges at once", "in proportion to depth") or
+  "smart" ("smart routing", "most reliable fills"). Otherwise null.
 
 Rules:
-- Never guess a missing side, coin or amount for a trade: use "clarify".
+- Never guess a missing side, coin or amount for a trade: use "clarify". Routing and algorithm words ("sweep",
+  "smart", "route", "work", "execute", "auto") say HOW to trade, never whether to buy or sell.
 - "all", "everything", "max" or a percentage of a balance is not an amount: "clarify" and ask for one.
 - The message may follow earlier turns of the conversation; use them only to resolve references like
   "and ETH?" or "do it".
@@ -213,6 +233,16 @@ def choose_slices(duration_s: float, quantity: float, min_slice_qty: float, lot_
     while n >= 2 and floor_to_step(quantity / n, lot_step) < max(min_slice_qty, lot_step):
         n -= 1
     return n if n >= 2 else 0
+
+
+def routing_phrase(routing: RoutingStrategy) -> str:
+    """How an order is split across the exchanges, in the words a proposal uses."""
+    return {
+        RoutingStrategy.BEST_PRICE: "split across the exchanges at the best prices after fees",
+        RoutingStrategy.LIQUIDITY_SWEEP: "swept across every exchange at once, in proportion to depth, under one "
+                                         "price cap (liquidity sweep)",
+        RoutingStrategy.SMART: "split by price and each exchange's measured fill reliability (smart routing)",
+    }[routing]
 
 
 def fmt_duration(seconds: float) -> str:
@@ -427,9 +457,11 @@ class Copilot:
             return self._ask(p, f"Give either an amount of {base} or a USDT value, not both.")
         if intent.order_type == OrderType.LIMIT and intent.limit_price is None:
             return self._ask(p, "At what limit price, in USDT?")
+        auto = intent.action == IntentAction.ALGO and intent.algo_kind == "AUTO"
         kind = (AlgoKind.TWAP if intent.action == IntentAction.TWAP else
-                AlgoKind(intent.algo_kind) if intent.action == IntentAction.ALGO and intent.algo_kind else None)
-        if intent.action == IntentAction.ALGO and kind is None:
+                AlgoKind(intent.algo_kind) if intent.action == IntentAction.ALGO and intent.algo_kind and not auto
+                else None)
+        if intent.action == IntentAction.ALGO and kind is None and not auto:
             return self._ask(p, "Which algorithm: TWAP, VWAP, implementation shortfall (IS), POV or iceberg?")
         if kind in (AlgoKind.POV, AlgoKind.ICEBERG) and not intent.duration_s:
             return self._ask(p, "How long may it keep working at most (e.g. 'for up to 10 minutes')?")
@@ -482,10 +514,33 @@ class Copilot:
                             "market is already there.")
         limits = self._risk.limits
         value = quantity * mid
+        routing = RoutingStrategy(intent.routing) if intent.routing else RoutingStrategy.BEST_PRICE
+        duration, slices = intent.duration_s, intent.slices
+        urgency = Urgency(intent.urgency) if intent.urgency else None
+        participation = intent.participation_pct
+        reasons: list[str] = []
+        if auto:
+            # The algo engine chooses (one order now, or which algorithm over how long) from the live book, the
+            # recent volume and the limits; the copilot only turns its choice into a proposal.
+            try:
+                rec = await self._twap.recommend(RecommendRequest(
+                    symbol=symbol, side=side, quantity=quantity, urgency=urgency or Urgency.MEDIUM,
+                    max_duration_s=min(max(duration or 3_600, 60), 86_400), routing=routing))
+            except (AlgoRejectedError, ValidationError, ValueError) as exc:
+                return self._refuse(p, f"Auto couldn't choose a way to execute this: {exc}")
+            reasons = list(rec.reasons)
+            warnings += [w for w in rec.warnings if w not in warnings]
+            if rec.choice == "NONE" or (rec.choice != "SINGLE" and rec.params is None):
+                return self._refuse(p, "Auto: this can't be executed as asked. " + " ".join(reasons))
+            if rec.choice != "SINGLE":
+                kind = AlgoKind(rec.choice)
+                duration, slices = rec.params.duration_s, rec.params.slices
+                participation, urgency = rec.params.participation_pct, rec.params.urgency
         # round(): the API showed float noise like 2747.2650000000003
         update = {"reference_mid": round(mid, 8), "conversion": conversion, "warnings": warnings,
-                  "status": ProposalStatus.PROPOSED}
+                  "status": ProposalStatus.PROPOSED, "algo_reasons": reasons}
         at = f" at limit {fmt_price(limit_price)}" if limit_price else " at market"
+        chose = "Auto chose " if auto else ""
 
         if kind is None:
             if quantity < smallest and not is_close(quantity, smallest):
@@ -502,16 +557,14 @@ class Copilot:
             return p.model_copy(update={
                 **update, "kind": "order", "estimated_notional_usdt": round(estimate, 2),
                 "order": OrderCreate(symbol=symbol, side=side, quantity=quantity, order_type=order_type,
-                                     limit_price=limit_price),
-                "message": (f"{side.value} {fmt_qty(quantity)} {base}{at} (~${estimate:,.2f}; mid "
-                            f"{fmt_price(mid)}), split across the exchanges at the best prices"),
+                                     limit_price=limit_price, strategy=routing),
+                "message": (f"{chose + 'one order now: ' if auto else ''}{side.value} {fmt_qty(quantity)} {base}{at} "
+                            f"(~${estimate:,.2f}; mid {fmt_price(mid)}), {routing_phrase(routing)}"),
             })
 
         # An execution algorithm
-        duration = intent.duration_s
         min_slice = smallest * SLICE_MINIMUM_HEADROOM
         min_interval = strategy_models.MIN_SLICE_INTERVAL_S
-        slices = intent.slices
         scheduled = kind in (AlgoKind.TWAP, AlgoKind.VWAP, AlgoKind.IS)
         if scheduled and slices is None:
             slices = choose_slices(duration, quantity, min_slice, step, min_interval)
@@ -526,11 +579,11 @@ class Copilot:
                                 "minimum order size")
         try:
             params = dict(kind=kind, symbol=symbol, side=side, quantity=quantity, duration_s=duration,
-                          slices=slices if scheduled else None, limit_price=limit_price)
-            if kind == AlgoKind.IS and intent.urgency:
-                params["urgency"] = Urgency(intent.urgency)
+                          slices=slices if scheduled else None, limit_price=limit_price, routing=routing)
+            if kind == AlgoKind.IS and urgency:
+                params["urgency"] = urgency
             if kind == AlgoKind.POV:
-                params["participation_pct"] = intent.participation_pct
+                params["participation_pct"] = participation
             if kind == AlgoKind.ICEBERG:
                 params["display_qty"] = floor_to_step(intent.display_qty, step)
             algo = AlgoCreate(**params)
@@ -562,8 +615,10 @@ class Copilot:
             how = f"trading {algo.participation_pct:g}% of the market's volume as it happens"
         else:
             how = f"showing ~{fmt_qty(algo.display_qty or 0)} {base} at a time"
-        message = (f"{name}: {side.value} {fmt_qty(quantity)} {base}{at} over {fmt_duration(duration)} {how} "
+        message = (f"{chose}{name}: {side.value} {fmt_qty(quantity)} {base}{at} over {fmt_duration(duration)} {how} "
                    f"(~${value:,.2f} at the mid {fmt_price(mid)})")
+        if routing != RoutingStrategy.BEST_PRICE:
+            message += f"; each child {routing_phrase(routing)}"
         if kind == AlgoKind.TWAP:
             return p.model_copy(update={**update, "kind": "twap", "twap": TwapCreate(**algo.model_dump()),
                                         "estimated_notional_usdt": round(value, 2), "message": message})

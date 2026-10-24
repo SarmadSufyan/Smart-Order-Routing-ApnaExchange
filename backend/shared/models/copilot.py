@@ -55,10 +55,11 @@ class Intent(BaseModel):
     limit_price: float | None = Field(None, gt=0)
     duration_s: float | None = Field(None, gt=0)
     slices: int | None = Field(None, ge=2, le=500)
-    algo_kind: Literal["VWAP", "IS", "POV", "ICEBERG"] | None = None
+    algo_kind: Literal["VWAP", "IS", "POV", "ICEBERG", "AUTO"] | None = None  # AUTO: the algo engine chooses
     urgency: Literal["LOW", "MEDIUM", "HIGH"] | None = None  # IS: how front-loaded
     participation_pct: float | None = Field(None, gt=0, le=50)  # POV
     display_qty: float | None = Field(None, gt=0)  # ICEBERG: coins shown at once
+    routing: Literal["best_price", "liquidity_sweep", "smart"] | None = None  # how each order is split; None = best price
     topic: Topic | None = None  # QUESTION
     bot_kind: Literal["cycle", "advisor"] | None = None  # START_BOT
     budget_usdt: float | None = Field(None, gt=0)  # START_BOT: taken from the automation fund
@@ -86,10 +87,11 @@ INTENT_SCHEMA: dict = {
         "limit_price": _nullable("number"),
         "duration_s": _nullable("number"),
         "slices": _nullable("integer"),
-        "algo_kind": _nullable("string", enum=["VWAP", "IS", "POV", "ICEBERG", None]),
+        "algo_kind": _nullable("string", enum=["VWAP", "IS", "POV", "ICEBERG", "AUTO", None]),
         "urgency": _nullable("string", enum=["LOW", "MEDIUM", "HIGH", None]),
         "participation_pct": _nullable("number"),
         "display_qty": _nullable("number"),
+        "routing": _nullable("string", enum=["best_price", "liquidity_sweep", "smart", None]),
         "topic": _nullable("string", enum=[t.value for t in Topic] + [None]),
         "bot_kind": _nullable("string", enum=["cycle", "advisor", None]),
         "budget_usdt": _nullable("number"),
@@ -98,7 +100,7 @@ INTENT_SCHEMA: dict = {
     },
     "required": ["action", "side", "base_asset", "quantity", "notional_usdt", "order_type",
                  "limit_price", "duration_s", "slices", "algo_kind", "urgency", "participation_pct",
-                 "display_qty", "topic", "bot_kind", "budget_usdt", "threshold_pct", "message"],
+                 "display_qty", "routing", "topic", "bot_kind", "budget_usdt", "threshold_pct", "message"],
 }
 
 
@@ -146,6 +148,7 @@ class Proposal(BaseModel):
     reference_mid: float | None = None  # NBBO mid used for conversion and estimates
     estimated_notional_usdt: float | None = None
     conversion: str | None = None  # "$50 / mid $85,070.02 = 0.00058775 -> 0.00058 BTC (lot 0.00001)"
+    algo_reasons: list[str] = []  # Auto algorithm: why the engine chose this way to execute
     warnings: list[str] = []
     model: str | None = None  # which LLM read the request
     result_order_id: str | None = None

@@ -19,7 +19,8 @@ from backend.services.risk_engine.kill_switch import KillSwitch
 from backend.services.risk_engine.position_tracker import PositionTracker
 from backend.services.risk_engine.pre_trade import PreTradeRiskEngine
 from backend.shared.models.copilot import ProposalStatus
-from backend.shared.models.strategy import AlgoKind
+from backend.shared.models.order import RoutingStrategy
+from backend.shared.models.strategy import AlgoCreate, AlgoKind, AlgoRecommendation
 from backend.tests.test_copilot.test_copilot import (
     CopilotTestBase,
     StubEntry,
@@ -244,6 +245,71 @@ class AutoTest(V2Base):
         self.assertEqual((p.status, p.auto), (ProposalStatus.PROPOSED, False))
         self.assertEqual(self.entry.submitted, [])
         self.assertFalse(cp.status().auto_allowed)
+
+
+class AutoAlgorithmTest(V2Base):
+    """"Pick the best algorithm": the algo engine chooses, the copilot proposes its choice with the reasons."""
+
+    def rec(self, choice: str, **params) -> AlgoRecommendation:
+        algo = None
+        if params:
+            algo = AlgoCreate(kind=AlgoKind(choice), symbol="BTC/USDT", side="SELL", quantity=0.01, **params)
+        return AlgoRecommendation(choice=choice, params=algo, reasons=[f"why {choice}"], warnings=[])
+
+    async def test_the_engines_algorithm_is_proposed_with_its_reasons(self) -> None:
+        cp = self.make2(intent(action="algo", algo_kind="AUTO", side="SELL", base_asset="BTC", quantity=0.01,
+                               duration_s=900, urgency="HIGH"))
+        self.twap.recommendation = self.rec("VWAP", duration_s=600, slices=10)
+        p = await cp.propose("sell 0.01 btc, pick the best algorithm, within 15 minutes, urgent", "trader1")
+        req = self.twap.recommend_requests[0]
+        self.assertEqual((req.symbol, req.quantity, req.max_duration_s, req.urgency.value), ("BTC/USDT", 0.01, 900, "HIGH"))
+        self.assertEqual((p.status, p.kind, p.algo.kind, p.algo.slices), (ProposalStatus.PROPOSED, "algo", AlgoKind.VWAP, 10))
+        self.assertTrue(p.message.startswith("Auto chose VWAP"))
+        self.assertEqual(p.algo_reasons, ["why VWAP"])
+        p = await cp.confirm(p.id, "trader1")
+        self.assertEqual(self.twap.created[0][0].kind, AlgoKind.VWAP)
+
+    async def test_one_order_now_and_a_twap_and_no_way(self) -> None:
+        cases = [("SINGLE", {}, ProposalStatus.PROPOSED, "order"),
+                 ("TWAP", dict(duration_s=300, slices=5), ProposalStatus.PROPOSED, "twap"),
+                 ("NONE", {}, ProposalStatus.REFUSED, None)]
+        for choice, params, status, kind in cases:
+            with self.subTest(choice=choice):
+                cp = self.make2(intent(action="algo", algo_kind="AUTO", side="SELL", base_asset="BTC", quantity=0.01))
+                self.twap.recommendation = self.rec(choice, **params)
+                p = await cp.propose("sell 0.01 btc, auto", "trader1")
+                self.assertEqual((p.status, p.kind), (status, kind))
+                self.assertIn(f"why {choice}", " ".join(p.algo_reasons) + p.message)
+                # without a duration, Auto may take up to an hour
+                self.assertEqual(self.twap.recommend_requests[0].max_duration_s, 3_600)
+
+    async def test_a_named_algorithm_never_asks_auto(self) -> None:
+        cp = self.make2(intent(action="algo", algo_kind="VWAP", side="BUY", base_asset="BTC", quantity=0.01,
+                               duration_s=600))
+        p = await cp.propose("vwap", "trader1")
+        self.assertEqual((p.algo.kind, p.algo_reasons, self.twap.recommend_requests), (AlgoKind.VWAP, [], []))
+
+
+class RoutingChoiceTest(V2Base):
+    """"With smart routing" / "sweep it": the routing strategy rides on the order or on every child."""
+
+    async def test_an_orders_routing_strategy(self) -> None:
+        for routing, words in (("liquidity_sweep", "liquidity sweep"), ("smart", "smart routing"),
+                               (None, "best prices after fees")):
+            with self.subTest(routing=routing):
+                cp = self.make2(intent(side="BUY", base_asset="BTC", quantity=0.0004, routing=routing))
+                p = await cp.propose("buy", "trader1")
+                self.assertEqual(p.order.strategy, RoutingStrategy(routing or "best_price"))
+                self.assertIn(words, p.message)
+                await cp.confirm(p.id, "trader1")
+                self.assertEqual(self.entry.submitted[0][0].strategy, RoutingStrategy(routing or "best_price"))
+
+    async def test_an_algorithms_children_use_it(self) -> None:
+        cp = self.make2(intent(action="twap", side="BUY", base_asset="BTC", quantity=0.01, duration_s=120,
+                               routing="smart"))
+        p = await cp.propose("twap with smart routing", "trader1")
+        self.assertEqual((p.kind, p.twap.routing), ("twap", RoutingStrategy.SMART))
+        self.assertIn("each child split by price", p.message)
 
 
 class MemoryTest(V2Base):

@@ -164,6 +164,12 @@ class StubTwap:
     def __init__(self) -> None:
         self.created: list[tuple[TwapCreate, str]] = []
         self.reject: str | None = None
+        self.recommendation = None  # Auto: what recommend() answers
+        self.recommend_requests: list = []
+
+    async def recommend(self, req):
+        self.recommend_requests.append(req)
+        return self.recommendation
 
     async def create(self, params: TwapCreate, user: str):
         self.created.append((params, user))

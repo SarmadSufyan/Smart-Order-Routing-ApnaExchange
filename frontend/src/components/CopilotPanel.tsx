@@ -17,6 +17,7 @@ const EXAMPLES = [
   'How is my portfolio doing?',
   'Which techniques worked on ETH?',
   'Buy $20 of ETH over 2 minutes',
+  'Buy $30 of BTC, pick the best algorithm',
   'What is RSI?',
 ]
 
@@ -215,6 +216,11 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
                     </div>
                     {t.answer && <div style={{ fontSize: F.sm, color: C.text, whiteSpace: 'pre-wrap', lineHeight: 1.55, marginTop: 4 }}>{t.answer}</div>}
                     {(!t.answer || t.kind) && <div style={{ fontSize: F.sm, color: C.text, marginTop: 4, lineHeight: 1.5 }}>{t.message}</div>}
+                    {t.algo_reasons && t.algo_reasons.length > 0 && (
+                      <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: F.xs, color: C.muted, lineHeight: 1.5 }}>
+                        {t.algo_reasons.map((r) => <li key={r}>{r}</li>)}
+                      </ul>
+                    )}
                     {t.analysis && <Verdict a={t.analysis} />}
                     {t.conversion && <div style={{ fontSize: F.xs, color: C.dim, marginTop: 4 }}>{t.conversion}</div>}
                     {t.warnings.map((w) => <div key={w} style={{ fontSize: F.xs, color: C.orange, marginTop: 4 }}>{w}</div>)}
