@@ -1,5 +1,7 @@
 # PROJECT_STRUCTURE.md — Complete Repository Layout
 
+> **Historical document (June 2026).** Written for the first prototype, which routed orders across five simulated stock venues. The project moved to real crypto exchanges in July 2026; this page is kept as the record of milestone M1 and does not describe the current system. Current design: the root [README](../README.md) and the guides listed in [project-info/README.md](README.md).
+
 > Every folder and file in the monorepo, what it does, and why it's there.
 > This is the map Claude Code should consult before creating any new file.
 

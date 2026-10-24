@@ -1,5 +1,7 @@
 # Tests (cross-cutting)
 
+> **Historical (June 2026 prototype).** The running system's tests are in `backend/tests/` (run with `python -m unittest discover -s backend/tests -t .`); this folder held the plans for the simulated-venue prototype.
+
 This folder is for tests that span multiple services or processes. Unit tests live next to the code they test (in `backend/tests/` and `venues/tests/`).
 
 ## Layout

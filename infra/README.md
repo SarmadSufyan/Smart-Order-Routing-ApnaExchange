@@ -1,5 +1,7 @@
 # Infrastructure
 
+> **Historical (June 2026 prototype).** Deployment now lives in `deploy/lab-server/` and `deploy/real-server/` (see the root README, *Deployments*); this folder held the first plans.
+
 Docker configs, deployment recipes, monitoring stack.
 
 ## Layout
