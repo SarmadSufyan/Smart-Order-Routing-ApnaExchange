@@ -31,6 +31,7 @@ import getpass
 import gzip
 import json
 import os
+import re
 import shlex
 import shutil
 import sqlite3
@@ -550,6 +551,13 @@ def cmd_telegram(args) -> None:
 DISCORD_API = "https://discord.com/api/v10"
 
 
+def channel_id(text: str) -> str:
+    """The channel id from what was pasted: the id itself, or a channel link (``.../channels/<server>/<channel>``,
+    the last number). "" when there is none. Pure."""
+    parts = [p for p in re.split(r"[^0-9]+", (text or "").strip()) if len(p) >= 15]  # Discord ids: 17-20 digits
+    return parts[-1] if parts else ""
+
+
 def discord_owner(messages: list[dict]) -> tuple[str, str] | None:
     """The person who last wrote in the channel (not a bot): (user id, name). Pure."""
     for message in messages:  # Discord lists the newest first
@@ -570,9 +578,16 @@ def cmd_discord(args) -> None:
     token = ask_secret("Discord bot token", args.type)
     if os.name == "nt" and not args.type:
         clear_clipboard()
-    channel = (args.channel or input("Channel id (digits): ")).strip()
-    if not channel.isdigit():
-        fail("a channel id is digits only - Developer Mode on, right-click the channel, Copy Channel ID")
+    channel = channel_id(args.channel or "")
+    for _ in range(3):
+        if channel:
+            break
+        channel = channel_id(input("Channel id (Copy Channel ID, or the channel's Copy Link), then Enter: "))
+        if not channel:
+            print("   that wasn't a channel id - in Discord: right-click the channel -> Copy Channel ID (Developer "
+                  "Mode on) or Copy Link; paste it here")
+    if not channel:
+        fail("no channel id - or run:  python deploy/real-server/deploy.py discord --channel <the id>")
     headers = {"Authorization": f"Bot {token}"}
 
     def get(path: str, **params):

@@ -180,6 +180,13 @@ class KeyWriterTest(unittest.TestCase):
         self.assertEqual(sorted(self.stored()), ["DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID", "DISCORD_OWNER_ID"])
         self.assertNotIn("Secret", out.stdout)
 
+    def test_the_discord_channel_id_from_an_id_or_a_link(self) -> None:
+        self.assertEqual(deploy.channel_id(" 1430123456789012345\n"), "1430123456789012345")
+        self.assertEqual(deploy.channel_id("https://discord.com/channels/1220000000000000000/1430123456789012345"),
+                         "1430123456789012345")
+        self.assertEqual(deploy.channel_id(""), "")  # an empty line (Enter pressed before pasting)
+        self.assertEqual(deploy.channel_id("general"), "")
+
     def test_the_discord_owner_is_the_last_person_who_wrote(self) -> None:
         messages = [{"author": {"id": "9", "username": "ApnaSOR Alerts", "bot": True}},  # newest first
                     {"author": {"id": "7", "username": "sarmad", "global_name": "Sarmad"}},
