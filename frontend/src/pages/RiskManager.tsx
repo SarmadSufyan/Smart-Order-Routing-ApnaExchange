@@ -2,10 +2,9 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { C, F, tint } from '../theme'
 import { ArcGauge, Card, CardTitle, PageHeader } from '../components/shared'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { useAuthStore } from '../stores/authStore'
 import { backendRiskToPositions } from '../adapters'
-import { SYMBOLS } from '../mockData'
 import { fmtPnl, fmtPrice, fmtUsd } from '../format'
 import { MQ, useMediaQuery, useTileColumns } from '../hooks/useMediaQuery'
 
@@ -31,6 +30,7 @@ const PORTFOLIO_LIMITS = [
 type PortfolioLimitKey = typeof PORTFOLIO_LIMITS[number]['key']
 
 export function RiskManager() {
+  const SYMBOLS = useSymbols()
   const navigate = useNavigate()
   const isNarrow    = useMediaQuery(MQ.narrow)
   const tileColumns = useTileColumns(4)

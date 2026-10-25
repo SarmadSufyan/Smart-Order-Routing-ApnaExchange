@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, PageHeader } from '../components/shared'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { api, type NBBO, type Order, type ExecutionReport } from '../services/api'
-import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtUsd, sentence, spreadBps } from '../format'
 import { LATENCY_WARN_MS } from '../adapters'
 import type { OrderSide } from '../types'
@@ -80,6 +79,7 @@ const SPEEDS = [
 ]
 
 export function HowItWorks() {
+  const SYMBOLS = useSymbols()
   const fetchAll = useDataStore((s) => s.fetchAll)
 
   const [symbol, setSymbol] = useState<string>(SYMBOLS[0])

@@ -92,7 +92,8 @@ Design rules the code keeps (and the tests check):
 | V6 | Gate | live public feed | spot testnet | — (Pakistan is a restricted location in its terms) |
 | V2 | Coinbase | live public feed (optional) | — (data only) | — |
 
-Trading universe: **BTC, ETH, SOL, BNB, XRP against USDT**, decimal quantities. Decisions always use the **real
+Trading universe: **20 coins against USDT** — BTC, ETH, SOL, XRP, BNB, DOGE, ADA, TRX, LINK, AVAX, LTC, DOT, NEAR, SUI, UNI, AAVE, XLM, HBAR, APT, ARB — the most traded of the 147 USDT coins that Binance,
+Bybit, OKX and HTX all list (one setting, `SYMBOLS`; any other common pair works). Decimal quantities. Decisions always use the **real
 market's** order books; *where* orders execute (sandbox or real funds) is a separate setting.
 
 ## Run it locally

@@ -28,5 +28,6 @@ export const BOOT_LINES = [
   '[auth] awaiting operator credentials',
 ]
 
-// Trading universe — mirrors the backend's SYMBOLS setting.
-export const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT'] as const
+// The coins the app shows until the gateway's list arrives (GET /api/market-data/symbols, the SYMBOLS setting),
+// and the advisor bot's default coins. Pages read the live list with useSymbols() (stores/dataStore.ts).
+export const DEFAULT_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT'] as const

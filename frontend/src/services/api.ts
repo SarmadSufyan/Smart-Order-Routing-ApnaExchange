@@ -1037,6 +1037,9 @@ export const api = {
   getNBBO: (symbol: string) =>
     request<NBBO>(`/api/market-data/nbbo?symbol=${encodeURIComponent(symbol)}`),
 
+  getSymbols: () =>
+    request<{ symbols: string[] }>('/api/market-data/symbols'),
+
   getAllNBBO: () =>
     request<{ nbbo: Record<string, NBBO> }>('/api/market-data/nbbo/all'),
 

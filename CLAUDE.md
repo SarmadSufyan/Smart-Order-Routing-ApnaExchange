@@ -89,7 +89,7 @@ Internal events flow over an in-process async event bus (`backend/shared/events/
 | V2 | Coinbase | mainnet public feed | none (no real testnet) — data-only, off by default | — |
 | V3 | Kraken | — | no spot testnet | not possible |
 
-Trading universe: **BTC, ETH, SOL, BNB, XRP vs USDT**, decimal quantities. `MARKET_DATA_MODE=mainnet` (real-market books for decisions) is independent of `EXCHANGE_MODE=testnet` (where orders execute); the coherence monitor excludes a venue+symbol whose test book drifts > 50 bps from the real market.
+Trading universe (since 2026-10-25): **20 coins vs USDT** — BTC, ETH, SOL, XRP, BNB, DOGE, ADA, TRX, LINK, AVAX, LTC, DOT, NEAR, SUI, UNI, AAVE, XLM, HBAR, APT, ARB — the most traded of the 147 USDT coins all four real-money exchanges list (`SYMBOLS`; the web app reads it from `GET /api/market-data/symbols`), decimal quantities. `MARKET_DATA_MODE=mainnet` (real-market books for decisions) is independent of `EXCHANGE_MODE=testnet` (where orders execute); the coherence monitor excludes a venue+symbol whose test book drifts > 50 bps from the real market.
 
 ---
 

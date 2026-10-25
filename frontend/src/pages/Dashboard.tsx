@@ -5,9 +5,8 @@ import { ArcGauge, Button, Card, CardTitle, ConnDot, PageHeader, Stat, StateBadg
 import { NewOrderModal } from '../components/NewOrderModal'
 import { OrderProofModal } from '../components/OrderProofModal'
 import { RaftPanel } from '../components/RaftPanel'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { backendOrderToUi, backendVenueToUi, fmtRate, LATENCY_WARN_MS } from '../adapters'
-import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtQty, fmtUsd, spreadBps } from '../format'
 import { Loading } from '../components/Orb'
 
@@ -16,6 +15,7 @@ import { Loading } from '../components/Orb'
 const DEMO_NOTIONAL_USD = 4_000
 
 export function Dashboard() {
+  const SYMBOLS = useSymbols()
   const backendVenues   = useDataStore((s) => s.venues)
   const backendOrders   = useDataStore((s) => s.orders)
   const nbbos           = useDataStore((s) => s.nbbos)

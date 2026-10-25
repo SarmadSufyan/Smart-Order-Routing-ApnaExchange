@@ -3,9 +3,8 @@ import { C, F, tint } from '../theme'
 import { Pause, Play } from 'lucide-react'
 import { Button, Card, CardTitle, PageHeader } from '../components/shared'
 import { api, NBBO, VenueQuote } from '../services/api'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { venueName, dataFeedLabel } from '../adapters'
-import { SYMBOLS } from '../mockData'
 import { fmtPrice, fmtSize, spreadBps } from '../format'
 
 type FlashMap = Record<string, 'up' | 'down' | null>
@@ -22,6 +21,7 @@ function priceChange(curr: number, prev: number): 'up' | 'down' | null {
 }
 
 export function MarketData() {
+  const SYMBOLS = useSymbols()
   const [allNbbo, setAllNbbo] = useState<Record<string, NBBO>>({})
   const [prevNbbo, setPrevNbbo] = useState<Record<string, NBBO>>({})
   const [selectedSymbol, setSelectedSymbol] = useState<string>(SYMBOLS[0])

@@ -18,11 +18,13 @@ import {
   type RoutingStrategyName,
 } from '../services/api'
 import { wsClient } from '../services/websocket'
+import { DEFAULT_SYMBOLS } from '../mockData'
 
 // setupWebSocket can run again after a re-login; handlers must be wired once.
 let wsWired = false
 
 interface DataState {
+  symbols: string[]  // the trading universe, from the gateway's SYMBOLS setting
   venues: VenueHealth[]
   nbbos: Record<string, NBBO>
   orders: Order[]
@@ -57,6 +59,7 @@ interface DataState {
   // Operator actions below resolve to an error message, or null on success.
   resetBaseline: (venueId?: string) => Promise<string | null>
   updateRiskLimits: (limits: RiskLimits) => Promise<string | null>
+  fetchSymbols: () => Promise<void>
   fetchVenues: () => Promise<void>
   fetchAllNBBO: () => Promise<void>
   fetchOrders: () => Promise<void>
@@ -77,6 +80,7 @@ interface DataState {
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
+  symbols: [...DEFAULT_SYMBOLS],
   venues: [],
   nbbos: {},
   orders: [],
@@ -191,6 +195,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
 
+  fetchSymbols: async () => {
+    try {
+      const r = await api.getSymbols()
+      if (r.symbols.length > 0) set({ symbols: r.symbols })
+    } catch (e) {
+      set({ lastError: (e as Error).message })
+    }
+  },
+
   fetchVenues: async () => {
     try {
       const res = await api.getVenues()
@@ -248,6 +261,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true })
     await Promise.all([
+      get().fetchSymbols(),
       get().fetchVenues(),
       get().fetchAllNBBO(),
       get().fetchOrders(),
@@ -372,3 +386,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     })
   },
 }))
+
+/** The coins the system trades (the gateway's SYMBOLS setting); the five defaults until it answers. */
+export function useSymbols(): string[] {
+  return useDataStore((s) => s.symbols)
+}

@@ -4,7 +4,7 @@ import { confirmRealMoney, useRealMoney } from './shared'
 import { Loading, Orb, Thinking } from './Orb'
 import { api } from '../services/api'
 import type { AnalysisCard, CopilotStatus, CopilotTurn } from '../services/api'
-import { SYMBOLS } from '../mockData'
+import { useSymbols } from '../stores/dataStore'
 import { fmtPct, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
 
 // The copilot: ask in plain English. Answers and analyses come from the system's own numbers (the language model
@@ -84,6 +84,7 @@ function Verdict({ a }: { a: AnalysisCard }) {
 
 /** `top`: where the panel starts — below the top bar on wide screens, so the kill switch stays in view. */
 export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClose: () => void; top?: number }) {
+  const SYMBOLS = useSymbols()
   const realMoney = useRealMoney()
   const [status, setStatus] = useState<CopilotStatus | null>(null)
   const [entries, setEntries] = useState<Entry[]>([])

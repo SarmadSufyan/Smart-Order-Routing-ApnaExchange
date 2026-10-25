@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     # Default = every venue where orders really execute. Coinbase (data-only,
     # no real testnet) can be added for reference data: "...,coinbase".
     enabled_exchanges: str = "binance,bybit,okx,gate"
-    symbols: str = "BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT"
+    # The trading universe: 20 established coins that Binance, Bybit, OKX and HTX all list against USDT (147 do;
+    # these are the most traded of them, chosen 2026-10-25 from live volumes). Any other common USDT pair works too.
+    symbols: str = "BTC/USDT,ETH/USDT,SOL/USDT,XRP/USDT,BNB/USDT,DOGE/USDT,ADA/USDT,TRX/USDT,LINK/USDT,AVAX/USDT,LTC/USDT,DOT/USDT,NEAR/USDT,SUI/USDT,UNI/USDT,AAVE/USDT,XLM/USDT,HBAR/USDT,APT/USDT,ARB/USDT"
 
     binance_testnet_api_key: SecretStr | None = None
     binance_testnet_api_secret: SecretStr | None = None

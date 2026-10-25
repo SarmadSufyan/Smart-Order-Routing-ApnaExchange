@@ -3,8 +3,7 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle, PageHeader, RealMoneyCheck, useRealMoney } from '../components/shared'
 import { TwapChart } from '../components/TwapChart'
 import { OrderProofModal } from '../components/OrderProofModal'
-import { useDataStore } from '../stores/dataStore'
-import { SYMBOLS } from '../mockData'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { ALGO_KINDS, ROUTING_STRATEGIES, algoKindLabel, api, routingStrategyLabel, PREFLIGHT_MAX_ORDERS } from '../services/api'
 import type { AlgoKind, AlgoParams, AlgoRecommendation, AlgoStatus, PreflightResponse, RoutingStrategyName, TwapState, Urgency } from '../services/api'
@@ -187,6 +186,7 @@ function num(v: unknown): number | null {
 }
 
 export function AlgoOrders() {
+  const SYMBOLS = useSymbols()
   const algos      = useDataStore((s) => s.algos)
   const nbbos      = useDataStore((s) => s.nbbos)
   const orders     = useDataStore((s) => s.orders)

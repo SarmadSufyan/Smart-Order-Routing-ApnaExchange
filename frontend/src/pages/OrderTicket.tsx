@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle, StateBadge, fmtAge } from '../components/shared'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
 import { backendOrderToUi } from '../adapters'
-import { SYMBOLS } from '../mockData'
 import { fmtPrice } from '../format'
 import type { OrderSide } from '../types'
 
 export function OrderTicket() {
+  const SYMBOLS = useSymbols()
   const orders            = useDataStore((s) => s.orders)
   const nbbos             = useDataStore((s) => s.nbbos)
   const executionReports  = useDataStore((s) => s.executionReports)

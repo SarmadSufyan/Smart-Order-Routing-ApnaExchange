@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { C, F, tint } from '../theme'
 import { Card, CardTitle, PageHeader, confirmRealMoney, useRealMoney } from '../components/shared'
 import { baseAsset, fmtBps, fmtPnl, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
-import { SYMBOLS } from '../mockData'
+import { useSymbols } from '../stores/dataStore'
+import { DEFAULT_SYMBOLS } from '../mockData'
 import { api } from '../services/api'
 import { wsClient } from '../services/websocket'
 import type { AdvisorParams, AdvisorProposal, BotState, CycleParams, FundView, LabReport, Lot } from '../services/api'
@@ -116,12 +117,13 @@ const CYCLE_DEFAULTS: CycleParams = {
   max_drawdown_pct: 10,
 }
 const ADVISOR_DEFAULTS: AdvisorParams = {
-  symbols: [...SYMBOLS], budget_usdt: 50, trade_usdt: 10, mode: 'ASK', min_probability: 0.55, require_edge: false,
+  symbols: [...DEFAULT_SYMBOLS], budget_usdt: 50, trade_usdt: 10, mode: 'ASK', min_probability: 0.55, require_edge: false,
   min_expectancy_r: 0, k_atr: 1.5, rr: 2, max_hold_hours: 12, max_open: 2, max_trades_per_day: 6,
   scan_interval_s: 300, proposal_ttl_s: 600,
 }
 
 function StartBot({ mainnet, onStarted }: { mainnet: boolean; onStarted: () => void }) {
+  const SYMBOLS = useSymbols()
   const [kind, setKind] = useState<'cycle' | 'advisor'>('cycle')
   const [cycle, setCycle] = useState<CycleParams>(CYCLE_DEFAULTS)
   const [adv, setAdv] = useState<AdvisorParams>(ADVISOR_DEFAULTS)

@@ -3,7 +3,7 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle, PageHeader } from '../components/shared'
 import { EquityChart, ResearchChart } from '../components/ResearchChart'
 import { fmtPct, fmtPrice, fmtQty, fmtUsd, sentence } from '../format'
-import { SYMBOLS } from '../mockData'
+import { useSymbols } from '../stores/dataStore'
 import { api } from '../services/api'
 import type {
   BacktestResponse, BacktestRule, BookSignals, ForecastResponse, HorizonForecast, ResearchChart as ChartData,
@@ -181,6 +181,7 @@ function TechniquesCard({ symbol }: { symbol: string }) {
 }
 
 export function Research() {
+  const SYMBOLS = useSymbols()
   const isNarrow = useMediaQuery(MQ.narrow)
   const [symbol, setSymbol] = useState<string>(SYMBOLS[0])
   const [tf, setTf] = useState<ResearchTf>('1h')

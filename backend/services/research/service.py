@@ -48,6 +48,7 @@ BAR_WORD = {"1m": "minute", "1h": "hour", "1d": "day"}
 MODEL_BARS = {"1m": 5_000, "1h": 5_000, "1d": 1_500}
 RETRAIN_EVERY = {"1m": 60, "1h": 24, "1d": 7}  # new candles before the model is refitted
 MIN_BARS = 300
+STUDY_TIMEFRAMES = ("1h", "1d")  # the technique studies the analyst reads, kept current in the background
 FEATURE_TEXT = {
     "return_1": "last {bar}'s move", "return_3": "move over 3 {bar}s", "return_6": "move over 6 {bar}s",
     "return_12": "move over 12 {bar}s", "return_24": "move over 24 {bar}s", "rsi_14": "RSI",
@@ -93,6 +94,7 @@ class ResearchService:
         self._measured: Callable[[str], tuple[float, int] | None] | None = None
         self._models: dict[tuple[str, str], ModelState] = {}
         self._studies: dict[tuple[str, str], tuple[tuple, dict]] = {}  # technique studies by their candles
+        self._study_lock = asyncio.Lock()  # background study refreshes run one at a time
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     def set_cost_source(self, measured: Callable[[str], tuple[float, int] | None] | None) -> None:
@@ -135,6 +137,22 @@ class ResearchService:
                     continue
                 except Exception as exc:  # noqa: BLE001 — one failed model never stops the others
                     logger.error("research_warmup_failed", symbol=symbol, timeframe=tf, error=str(exc)[:160])
+        # The technique studies too: the copilot's "any good trade?" reads them for every coin, and computing 2 per
+        # coin on years of candles (about 1 s each) while the trader waits made the first question after a start
+        # take over a minute with 20 coins.
+        for symbol in self._symbols:
+            for tf in STUDY_TIMEFRAMES:
+                await self._refresh_study(symbol, tf)
+
+    async def _refresh_study(self, symbol: str, tf: str) -> None:
+        """Bring one technique study up to the newest candle, in the background (one at a time)."""
+        async with self._study_lock:
+            try:
+                await self.techniques(symbol, tf)
+            except ResearchUnavailableError:
+                pass
+            except Exception as exc:  # noqa: BLE001 — a failed study is computed again when someone asks
+                logger.warning("research_study_refresh_failed", symbol=symbol, timeframe=tf, error=str(exc)[:160])
 
     def _check_symbol(self, symbol: str) -> str:
         symbol = symbol.upper()
@@ -277,6 +295,8 @@ class ResearchService:
         r80 = pred["range80"] or [None, None]
         await asyncio.to_thread(self._store.log_forecast, symbol, tf, int(data["ts"][-1]), pred["price"],
                                 pred["p_up"], r80[0], r80[1], bool(state.oos and state.oos.edge))
+        if tf in STUDY_TIMEFRAMES:  # a new hour or day changes the study: redo it now, not when someone asks
+            await self._refresh_study(symbol, tf)
 
     def _score_due(self, symbol: str, tf: str) -> None:
         due = self._store.unscored(symbol, tf)

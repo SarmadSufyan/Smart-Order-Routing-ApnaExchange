@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { C, F, tint } from '../theme'
-import { useDataStore } from '../stores/dataStore'
+import { useDataStore, useSymbols } from '../stores/dataStore'
+import { DEFAULT_SYMBOLS } from '../mockData'
 import { backendVenueToUi } from '../adapters'
-import { SYMBOLS } from '../mockData'
 import { baseAsset, fmtPrice, fmtQty, fmtUsd } from '../format'
 import { RoutingProof } from './RoutingProof'
 import { RealMoneyCheck, useRealMoney } from './shared'
@@ -53,11 +53,12 @@ type Stage = 'form' | 'checking' | 'routing' | 'done' | 'rejected'
 
 export function NewOrderModal({
   open, onClose,
-  initialSymbol = SYMBOLS[0],
+  initialSymbol = DEFAULT_SYMBOLS[0],
   initialSide = 'BUY',
   initialQty = '',
   banner,
 }: NewOrderModalProps) {
+  const SYMBOLS = useSymbols()
   const submitOrder = useDataStore((s) => s.submitOrder)
   const backendVenues = useDataStore((s) => s.venues)
   const nbbos = useDataStore((s) => s.nbbos)
