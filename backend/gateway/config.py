@@ -209,6 +209,12 @@ class Settings(BaseSettings):
     # keys.env (deploy/real-server/deploy.py telegram).
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str = ""
+    # Discord instead (Telegram is blocked in Pakistan): a bot in the owner's private Discord server, the channel it
+    # reports to, and the owner's Discord user id - the only account whose /stop counts. Used when all three are set
+    # (deploy/real-server/deploy.py discord); it then replaces Telegram.
+    discord_bot_token: SecretStr | None = None
+    discord_channel_id: str = ""
+    discord_owner_id: str = ""
     alerts_summary_hour_utc: int = Field(default=3, ge=0, le=23)  # 03:00 UTC = 08:00 in Pakistan
     copilot_proposal_ttl_s: float = 120.0  # a proposal not confirmed in time expires
     # Confirm refuses if the mid moved further than this since the proposal:

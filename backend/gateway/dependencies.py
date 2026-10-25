@@ -5,7 +5,7 @@ from backend.exchanges.registry import ExchangeRegistry
 from backend.gateway.config import settings
 from backend.gateway.websocket.ws_manager import WebSocketManager
 from backend.services.agents import Analyst, Copilot, build_llm_client
-from backend.services.alerts import TelegramAlerts
+from backend.services.alerts import DiscordAlerts, TelegramAlerts
 from backend.services.algos import AlgoEngine
 from backend.services.arbitrage import ArbitrageDetector, parse_fee_schedule
 from backend.services.audit import AuditRecorder
@@ -61,7 +61,7 @@ class Services:
     risk_controls: RiskControls
     arbitrage: ArbitrageDetector
     automation: AutomationEngine
-    alerts: TelegramAlerts | None = None
+    alerts: DiscordAlerts | TelegramAlerts | None = None
 
 
 _services: Services | None = None
@@ -270,10 +270,12 @@ def init_services() -> Services:
 
 
 def _build_alerts(risk_controls, risk_engine, risk_monitor, wallet, venue_monitor, algo_engine,
-                  automation) -> TelegramAlerts | None:
-    """The phone alerts, when a Telegram bot and chat are configured."""
+                  automation) -> DiscordAlerts | TelegramAlerts | None:
+    """The phone alerts: Discord when its bot, channel and owner are configured, else Telegram, else none."""
+    discord_token = settings.discord_bot_token.get_secret_value().strip() if settings.discord_bot_token else ""
+    use_discord = bool(discord_token and settings.discord_channel_id.strip() and settings.discord_owner_id.strip())
     token = settings.telegram_bot_token.get_secret_value().strip() if settings.telegram_bot_token else ""
-    if not token or not settings.telegram_chat_id.strip():
+    if not use_discord and (not token or not settings.telegram_chat_id.strip()):
         return None
 
     def running(items) -> int:
@@ -293,6 +295,10 @@ def _build_alerts(risk_controls, risk_engine, risk_monitor, wallet, venue_monito
             f"Running: {running(algo_engine.list())} algos, {running(automation.list())} bots",
         ])
 
+    if use_discord:
+        return DiscordAlerts(discord_token, settings.discord_channel_id, settings.discord_owner_id,
+                             real_money=settings.is_real_money, engage_kill_switch=risk_controls.engage_kill_switch,
+                             status=status, summary_hour_utc=settings.alerts_summary_hour_utc)
     return TelegramAlerts(token, settings.telegram_chat_id, real_money=settings.is_real_money,
                           engage_kill_switch=risk_controls.engage_kill_switch, status=status,
                           summary_hour_utc=settings.alerts_summary_hour_utc)

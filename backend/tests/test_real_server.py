@@ -173,6 +173,20 @@ class KeyWriterTest(unittest.TestCase):
         self.assertEqual(self.stored(), {"TELEGRAM_BOT_TOKEN": "123456:AAbbCCdd", "TELEGRAM_CHAT_ID": "-1001234"})
         self.assertNotIn("AAbb", out.stdout)
 
+    def test_the_discord_alerts_are_accepted(self) -> None:
+        out = self.write("DISCORD_BOT_TOKEN=MTIz.abc.SecretWXYZ\nDISCORD_CHANNEL_ID=1300000000000000001\n"
+                         "DISCORD_OWNER_ID=700000000000000001\n")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(sorted(self.stored()), ["DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID", "DISCORD_OWNER_ID"])
+        self.assertNotIn("Secret", out.stdout)
+
+    def test_the_discord_owner_is_the_last_person_who_wrote(self) -> None:
+        messages = [{"author": {"id": "9", "username": "ApnaSOR Alerts", "bot": True}},  # newest first
+                    {"author": {"id": "7", "username": "sarmad", "global_name": "Sarmad"}},
+                    {"author": {"id": "8", "username": "older"}}]
+        self.assertEqual(deploy.discord_owner(messages), ("7", "Sarmad"))
+        self.assertIsNone(deploy.discord_owner([{"author": {"id": "9", "bot": True}}]))
+
     def test_the_copilots_claude_key_is_accepted_and_can_be_removed(self) -> None:
         out = self.write("BYBIT_MAINNET_API_KEY=realkey1111\nCOPILOT_CLAUDE_API_KEY=sk-ant-api03-secretXYZW\n")
         self.assertEqual(out.returncode, 0, out.stderr)

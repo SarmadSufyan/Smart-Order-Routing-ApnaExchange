@@ -381,6 +381,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 | A2 (widened) | Exchanges and order | **Binance, Bybit, OKX, HTX** for real money (Sarmad: two exchanges are too few). Gate dropped for real money (Pakistan restricted in its User Agreement); HTX added (PVARA NOC; new adapter V7); **Bitget** = backup (Sarmad's old KYC account; recent hack). OKX works from Zurich (tested); the laptop only needs DNS 8.8.8.8 to open okx.com | 2026-10-24 |
 | A3 | Starting money | ~$50 USDT on each of Binance and Bybit; caps at step 1 | 2026-10-20 |
 | A4 | Alerts | Telegram, with `/stop` (engage only) from the phone | 2026-10-20 |
+| A4 (changed) | Alerts | **Discord** (Telegram is blocked in Pakistan; tested 2026-10-25): a bot in Sarmad's private server, the same alerts; `/stop` / `!stop` only from his own Discord account (`deploy.py discord`) | 2026-10-25 |
 | A5 | Copilot on real money | AI off at first (`LLM_PROVIDER=off` on the real server; the quick analysis still works) | 2026-10-20 |
 | A5 (changed) | Copilot on real money | **Claude** (Sarmad: the chat should work on real money too; its API data isn't used for training). Set up now, **not functional until Sarmad provides a key** (`deploy.py ai-key`, hidden prompt → root-only `keys.env`); `anthropic` added to the servers' package lock | 2026-10-23 |
 | A6 | Bots on real money | none until the lab's verdict; then at most the BTC 1 % cycle bot with $30 | 2026-10-20 |

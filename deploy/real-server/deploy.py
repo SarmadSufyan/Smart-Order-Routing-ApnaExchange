@@ -8,6 +8,7 @@
     python deploy/real-server/deploy.py keys                  # D3: type the REAL keys (hidden) -> the server only
     python deploy/real-server/deploy.py check-keys            # D3: what the exchanges say about them (read-only)
     python deploy/real-server/deploy.py telegram              # phone alerts and /stop (token hidden -> the server)
+    python deploy/real-server/deploy.py discord               # the same through Discord (Telegram is blocked in PK)
     python deploy/real-server/deploy.py ai-key [--remove]     # the copilot's Claude key (hidden -> the server; A5)
     python deploy/real-server/deploy.py go-live               # D4: real money on (asks you to type REAL MONEY)
     python deploy/real-server/deploy.py release [--ref <commit>] [--reason "..."] [--test]
@@ -546,6 +547,73 @@ def cmd_telegram(args) -> None:
     print("done: the gateway restarted with alerts on - your phone gets 'Gateway started' in a minute.")
 
 
+DISCORD_API = "https://discord.com/api/v10"
+
+
+def discord_owner(messages: list[dict]) -> tuple[str, str] | None:
+    """The person who last wrote in the channel (not a bot): (user id, name). Pure."""
+    for message in messages:  # Discord lists the newest first
+        author = message.get("author") or {}
+        if author.get("id") and not author.get("bot"):
+            return str(author["id"]), author.get("global_name") or author.get("username") or "?"
+    return None
+
+
+def cmd_discord(args) -> None:
+    """Phone alerts through Discord: the bot token (hidden), the channel and its owner -> the root-only keys.env."""
+    import httpx
+
+    cfg = load_config()
+    print("Phone alerts (Discord). You need: a private Discord server, a bot in it (Developer Portal -> your app ->\n"
+          "Bot: token, Message Content Intent ON), the channel's id (Developer Mode -> right-click the channel ->\n"
+          "Copy Channel ID), and one message from you in that channel. The token is never shown.\n")
+    token = ask_secret("Discord bot token", args.type)
+    if os.name == "nt" and not args.type:
+        clear_clipboard()
+    channel = (args.channel or input("Channel id (digits): ")).strip()
+    if not channel.isdigit():
+        fail("a channel id is digits only - Developer Mode on, right-click the channel, Copy Channel ID")
+    headers = {"Authorization": f"Bot {token}"}
+
+    def get(path: str, **params):
+        try:
+            resp = httpx.get(f"{DISCORD_API}{path}", headers=headers, params=params, timeout=20)
+        except httpx.HTTPError as exc:  # never print the request: the token is in its headers
+            fail(f"could not reach Discord ({type(exc).__name__})")
+        if resp.status_code == 401:
+            fail("Discord refused the token - Developer Portal -> Bot -> Reset Token, and copy it again")
+        if resp.status_code in (403, 404):
+            fail("the bot can't see that channel - invite it to your server (OAuth2 -> URL Generator: bot; View "
+                 "Channels, Send Messages, Read Message History) and check the channel id")
+        if resp.status_code >= 400:
+            fail(f"Discord answered {resp.status_code}")
+        return resp.json()
+
+    bot = get("/users/@me")
+    name = get(f"/channels/{channel}").get("name", channel)
+    messages = get(f"/channels/{channel}/messages", limit=20)
+    owner = discord_owner(messages)
+    if owner is None:
+        fail(f"nobody has written in #{name} yet - send it any message (e.g. 'hi'), then run this again")
+    if not any((m.get("content") or "").strip() for m in messages if not (m.get("author") or {}).get("bot")):
+        fail("the bot can't read what people write - Developer Portal -> Bot -> Message Content Intent ON, save, "
+             "then run this again")
+    print(f"Bot {bot.get('username')} posts in #{name}; commands (/stop, /status) count only from {owner[1]} "
+          f"(id {owner[0]}).")
+    if input("Right? [y/N] ").strip().lower() != "y":
+        fail("not confirmed - nothing was sent")
+    remote(cfg, f"rm -rf {KIT} && mkdir -p {KIT}/deploy && cp -r {BASE}/current/deploy/real-server {KIT}/deploy/")
+    send_keys(cfg, [f"DISCORD_BOT_TOKEN={token}", f"DISCORD_CHANNEL_ID={channel}", f"DISCORD_OWNER_ID={owner[0]}"])
+    remote(cfg, "sudo systemctl restart apnasor-real")
+    try:
+        httpx.post(f"{DISCORD_API}/channels/{channel}/messages", headers=headers, timeout=20,
+                   json={"content": "ApnaSOR: alerts connected. /status (or !status) for a summary, /stop (or "
+                                    "!stop) to engage the kill switch."})
+    except httpx.HTTPError as exc:
+        print(f"note: the test message didn't go out ({type(exc).__name__}); the gateway will try at its start")
+    print(f"done: the gateway restarted with Discord alerts on - #{name} gets 'Gateway started' in a minute.")
+
+
 def cmd_ai_key(args) -> None:
     """Decision A5: the copilot's Claude key (hidden) -> the server's root-only keys.env; checked, or removed again."""
     cfg = load_config()
@@ -710,6 +778,9 @@ def main() -> None:
     sub.add_parser("check-keys", help="what the exchanges say about the real keys (read-only)")
     p = sub.add_parser("telegram", help="phone alerts: the bot token (never shown) and your chat -> the server")
     p.add_argument("--type", **typed)
+    p = sub.add_parser("discord", help="phone alerts through Discord: the bot token (never shown), channel, owner")
+    p.add_argument("--channel", help="the channel id (asked for when not given)")
+    p.add_argument("--type", **typed)
     p = sub.add_parser("ai-key", help="the copilot's Claude key (never shown) -> the server (decision A5)")
     p.add_argument("--remove", action="store_true", help="remove the key: the copilot's AI goes off")
     p.add_argument("--type", **typed)
@@ -730,7 +801,8 @@ def main() -> None:
     sub.add_parser("ssh", help="a shell on the server")
     args = parser.parse_args()
     {"init": cmd_init, "replace-ssh-key": cmd_replace_ssh_key, "passwords": cmd_passwords, "setup": cmd_setup,
-     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "telegram": cmd_telegram, "ai-key": cmd_ai_key,
+     "env": cmd_env, "keys": cmd_keys, "check-keys": cmd_check_keys, "telegram": cmd_telegram,
+     "discord": cmd_discord, "ai-key": cmd_ai_key,
      "go-live": cmd_go_live,
      "release": cmd_release, "rollback": cmd_rollback, "status": cmd_status, "logs": cmd_logs,
      "tunnel": cmd_tunnel, "backup-pull": cmd_backup_pull, "ssh": cmd_ssh}[args.command](args)
