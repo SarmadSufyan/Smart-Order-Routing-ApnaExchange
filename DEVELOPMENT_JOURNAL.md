@@ -2639,3 +2639,49 @@ projector or a phone shows them without a player setting). 133 cues, none overla
 **Files.** scripts/launch_video/ (lib.py, scenes.py, record.py, build.py, sample.py, check_locators.py,
 README.md — new), frontend/src/components/NewOrderModal.tsx (the refusal reason; every stage opaque), .gitignore,
 reports/launch-video/ (the video, not committed), PROGRESS.md.
+
+---
+
+## 2026-10-26 — Real money is on: the first real orders (D4)
+
+**Money.** $30 in all, moved by a friend: $15.00 USDT to Binance (landed in Spot) and $14.99 to Bybit (Funding
+-> Unified Trading Account by hand). Two exchanges, not four: Binance and Bybit are the two whose order path has
+run hundreds of sandbox orders; OKX's demo never accepted an order and HTX has no sandbox, so neither meets real
+money for the first time in front of a panel. Both stay enabled for their books (their proofs say "no USDT
+balance on this venue to fund the order").
+
+**Go-live.** Sarmad ran `deploy.py go-live --exchanges binance,bybit,okx,htx` at 20:00 UTC and typed REAL MONEY
+(the app refused to start it from the assistant's side, which is the intended split). The server switched to
+mainnet on release `261cd34`: sandbox keys removed, caps $25 per order / $100 per algorithm / $150 exposure /
+$10 loss limit, the safety check passed, each exchange re-confirmed from the server's address that the key can
+trade spot and cannot withdraw and is IP-locked, Discord got "Gateway started (mainnet …)", and a fresh
+`apnasor-mainnet.db` took the opening balances (15 USDT, 14.99 USDT) as its baseline.
+
+**The two orders.** The assistant filled each form on the 5190 screen in the Browser pane; Sarmad ticked the
+real-money box and pressed Submit (he places real orders, nobody else). The trick that makes a $22 sweep split
+with $30 of capital: the router never gives an exchange more than that exchange's balance, so an order larger
+than either balance must split.
+
+| | Order 1 — BUY 0.216 SOL, sweep | Order 2 — SELL 0.215 SOL, sweep |
+|---|---|---|
+| Split | Bybit 0.109 @ $101.79, Binance 0.107 @ $101.81 | Binance 0.106 @ $101.84, Bybit 0.1088 @ $101.83 |
+| Average | $101.7999 (expected VWAP $101.7999, 0.97 bps vs best) | $101.8349 (0.50 bps vs best) |
+| Risk | 7 checks APPROVED in 81.9 us | 7 checks APPROVED in 58.7 us |
+| Children | 2 IOC LIMIT, one cap $102.0956; back in 241 ms (Binance) / 643 ms (Bybit) | 2 IOC LIMIT, cap $101.5347; 241 / 689 ms |
+| Fees | $0.02 (Bybit 0.000109 SOL, Binance 1.1e-5 BNB) | $0.02 (0.0109 USDT + 0.0111 USDT) |
+| Status | FILLED | PARTIALLY_FILLED 0.2148 of 0.215 |
+
+The partial fill is the router being honest: Bybit held 0.108891 SOL and its lot step allowed 0.1088, Binance
+got the 50 % share rounded to its step, and "venue balances exhausted: 0.0002 SOL left unallocated" is in the
+routing notes. For a clean FILLED in front of the panel, sell the holdings minus one lot step (0.214).
+
+**After the round trip** the exchanges report Binance 14.9014 USDT + 0.001 SOL and Bybit 14.9629 USDT +
+0.000091 SOL: about four cents of fees and eleven cents of SOL dust. The Wallet values the book at $30.40 with
+trading P&L −$0.03 (fees $0.04, realized +$0.01), reconciliation **Matched on all four exchanges** before and
+after each order, and the audit log holds every step with the fees as the exchanges charged them. The risk
+monitor raised a concentration alert while 0.216 SOL was 72 % of a $30 book and cleared it after the sell —
+correct, and a good panel answer to "what happens when a limit is crossed".
+
+**Files.** reports/rehearsal-2026-10-26/ (21 screenshots of the real-money screen), reports/screenshots-sandbox/
+(17 pages at 1080p for the report), frontend/src/adapters.ts, pages/Login.tsx, Wallet.tsx, Arbitrage.tsx,
+Automation.tsx (`0560dc9`: no "sandbox" wording on a mainnet gateway), scripts/launch_video/shots.py, PROGRESS.md.
