@@ -98,7 +98,7 @@ async def do_record(only: list[str]) -> None:
             words = [tuple(w) for w in entry["words"]]
             print(f"--- {sc['name']} ({entry['audio_dur']:.1f} s)", flush=True)
             url = sc["url"] if sc["url"].startswith("http") else lib.APP + sc["url"]
-            for take in range(1, 4):   # a scene that depends on an outside service may need another take
+            for take in range(1, 6):   # a scene that depends on an outside service may need another take
                 try:
                     if sc["kind"] == "card":
                         res = await lib.record_scene(pw, sc["name"], None, sc["run"], entry["audio_dur"], words,
@@ -109,9 +109,9 @@ async def do_record(only: list[str]) -> None:
                     break
                 except Exception as e:
                     print(f"    take {take} failed: {str(e)[:300]}", flush=True)
-                    if take == 3:
+                    if take == 5:
                         raise
-                    await asyncio.sleep(20)
+                    await asyncio.sleep(45)   # the model's free tier recovers on its own after a while
             vdur = lib.media_duration(lib.CLIPS / f"{sc['name']}.webm")
             entry.update({"video": res["video"], "lead": res["lead"], "video_dur": vdur, "holds": res.get("holds", [])})
             if res.get("holds"):

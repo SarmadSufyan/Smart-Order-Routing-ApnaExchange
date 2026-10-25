@@ -2617,6 +2617,20 @@ sandbox ("okx requires password credential" on the Venues page and in every rout
 it correctly, but the demo would look better with OKX executable. Gemini's free tier answered HTTP 503 on four
 of about ten requests this evening.
 
+**The second cut (later that night).** Sarmad's review: at most eight minutes, an introduction first — what the
+system is, who uses it, how it helps, with an example — then the parts; light mode, because the demo is
+projected; and the "Order Filled" dialog was see-through. The cut is now 7:46: a 10-second title, "Who it is
+for" (trader, risk manager, administrator; the same coin on four exchanges), a worked example on a card that
+reveals on cue (one Bitcoin: Binance $80,700, Bybit $80,690, OKX $80,685, Gate $80,695; after taker fees Bybit
+wins and OKX, the cheapest-looking, is third — about $35 apart; then the seven checks and the funding check),
+"What ApnaSOR does", and then the live parts in 16 scenes. The dialog: Studio's `--c-surface` is
+rgba(255,255,255,.045) by design (a tile inside a card), and the form stage of the order dialog carried
+`data-glass="float"` (the opaque floating-panel background) while the checking, result and rejection stages did
+not — they now do. Light mode is chosen before the app paints (`poc.theme` / `poc.style` in localStorage from
+an init script), the cards are light, and the spotlight outline turns dark on light pages. Trimmed to fit: the
+copilot scene asks for the order only (the question is mentioned in a caption), one clause each off the safety
+and real-money narrations, and 0.3 s between scenes.
+
 **Files.** scripts/launch_video/ (lib.py, scenes.py, record.py, build.py, sample.py, check_locators.py,
-README.md — new), frontend/src/components/NewOrderModal.tsx, .gitignore, reports/launch-video/ (the video, not
-committed), PROGRESS.md.
+README.md — new), frontend/src/components/NewOrderModal.tsx (the refusal reason; every stage opaque), .gitignore,
+reports/launch-video/ (the video, not committed), PROGRESS.md.

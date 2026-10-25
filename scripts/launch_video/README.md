@@ -1,10 +1,12 @@
 # The launch video, recorded on the live sandbox
 
-`reports/launch-video/ApnaSOR-launch-video.mp4` (13.9 min, 1920×1080, voice-over) is made by these scripts
-from the real web app, not from slides: Playwright drives the pages and records them, a neural voice reads
-the narration, and ffmpeg joins the scenes. Every claim in the narration follows `README.md` and the guides in
-`project-info/` (sandbox = the exchanges' own test systems with play money; the arbitrage module detects only;
-forecasts are probabilities with a track record).
+`reports/launch-video/ApnaSOR-launch-video.mp4` (about eight minutes, 1920×1080, voice-over, Studio in light
+mode for a projector) is made by these scripts from the real web app, not from slides: Playwright drives the
+pages and records them, a neural voice reads the narration, and ffmpeg joins the scenes. The first two and a
+half minutes introduce the system (who it is for, a worked example of one Bitcoin across four exchanges after
+fees, what the system does); the rest shows the main parts live. Every claim in the narration follows
+`README.md` and the guides in `project-info/` (sandbox = the exchanges' own test systems with play money; the
+arbitrage module detects only; forecasts are probabilities with a track record).
 
 ## What you need
 
@@ -19,8 +21,8 @@ forecasts are probabilities with a track record).
 
 | File | Does |
 |---|---|
-| `scenes.py` | The 25 scenes: each one's narration and what happens on the screen (clicks, typing, captions, spotlights). Also the title cards. |
-| `lib.py` | Recording (1920×1080, the app zoomed 1.2× so it reads well), the cursor + caption overlay, the sandbox login, the voice (edge-tts with word timings), the scene clock. |
+| `scenes.py` | The 16 scenes: each one's narration and what happens on the screen (clicks, typing, captions, spotlights). Also the title cards and the worked example, revealed step by step on cue. |
+| `lib.py` | Recording (1920×1080, the app zoomed 1.2× so it reads well, Studio light mode set before the app paints), the cursor + caption overlay, the sandbox login, the voice (edge-tts with word timings), the scene clock. |
 | `record.py` | `tts` makes the narration and checks every cue phrase; `prep` accepts the exchange balances so the Wallet starts clean; `record [scene …]` records. |
 | `build.py` | One MP4: each scene's clip + narration, a title fade, the script with time stamps. |
 | `sample.py` | A four-frame contact sheet per scene in `out/review/`, to check a take without watching it. |
@@ -43,4 +45,5 @@ python scripts/launch_video/build.py               # -> reports/launch-video/Apn
 
 A changed narration needs `tts <scene>` again before `record <scene>`; `build.py` re-encodes only the scenes
 whose take or narration changed. Recording places real sandbox orders (about $50 of BTC, a $800 sweep, a
-0.0012 BTC TWAP, two $20 SOL buys), engages and releases the kill switch, and kills the RAFT leader once.
+0.0012 BTC TWAP, a $20 SOL buy), engages and releases the kill switch, and kills the RAFT leader once.
+Dark mode or another look: `THEME_MODE` / `THEME_STYLE` in `lib.py`.

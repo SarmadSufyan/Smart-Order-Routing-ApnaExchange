@@ -58,6 +58,8 @@ OVERLAY_JS = r"""
     .__spot { outline: 2px solid rgba(255,255,255,.95) !important; outline-offset: 3px !important;
               box-shadow: 0 0 0 6px rgba(255,255,255,.14), 0 0 28px rgba(255,255,255,.25) !important;
               border-radius: 8px; transition: box-shadow .25s ease; }
+    html[data-theme="light"] .__spot { outline: 2px solid rgba(20,20,22,.9) !important;
+              box-shadow: 0 0 0 6px rgba(20,20,22,.10), 0 0 28px rgba(20,20,22,.22) !important; }
   `;
   const cur = document.createElement('div'); cur.id = '__cur';
   cur.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 3l14 8.5-6.3 1.3L9.3 19z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
@@ -89,6 +91,18 @@ def login_token() -> tuple[str, dict]:
     r.raise_for_status()
     d = r.json()
     return d["access_token"], d["user"]
+
+
+THEME_MODE = "light"      # the video is projected: Studio in light mode
+THEME_STYLE = "studio"
+
+
+def theme_init_script() -> str:
+    """Pick the look before the app paints (the theme store reads these keys at start)."""
+    return (
+        "try { if (['5173', '5190'].includes(location.port)) { localStorage.setItem('poc.theme', "
+        + json.dumps(THEME_MODE) + "); localStorage.setItem('poc.style', " + json.dumps(THEME_STYLE) + "); } } catch (e) {}"
+    )
 
 
 def auth_init_script(token: str, user: dict) -> str:
@@ -233,6 +247,7 @@ async def new_recording_page(pw, name: str, token: str, user: dict, record: bool
     if record:
         kwargs.update(record_video_dir=str(CLIPS / "_raw" / name), record_video_size=REC)
     ctx = await browser.new_context(**kwargs)
+    await ctx.add_init_script(theme_init_script())
     await ctx.add_init_script(auth_init_script(token, user))
     await ctx.add_init_script(ZOOM_JS)
     await ctx.add_init_script(OVERLAY_JS)

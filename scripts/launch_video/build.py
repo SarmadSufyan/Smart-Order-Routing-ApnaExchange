@@ -12,7 +12,7 @@ from pathlib import Path
 import lib
 import scenes
 
-GAP = 0.5          # silence after each scene's narration (seconds)
+GAP = 0.3          # silence after each scene's narration (seconds)
 FPS = 30
 
 
