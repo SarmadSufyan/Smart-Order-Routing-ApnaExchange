@@ -90,7 +90,8 @@ export function CopilotPanel({ open, onClose, top = 0 }: { open: boolean; onClos
   const [entries, setEntries] = useState<Entry[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [auto, setAuto] = useState(true)
+  // Auto (sandbox only) starts unticked: a proposal waits for Confirm unless a person opts in for the session.
+  const [auto, setAuto] = useState(false)
   const [quickCoin, setQuickCoin] = useState<string>(SYMBOLS[0])
   const [acting, setActing] = useState<string | null>(null)  // the entry whose Confirm / Cancel is being sent
   const bottom = useRef<HTMLDivElement>(null)

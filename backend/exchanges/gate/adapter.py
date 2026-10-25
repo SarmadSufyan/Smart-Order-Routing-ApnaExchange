@@ -48,6 +48,22 @@ class GateAdapter(CcxtVenueAdapter):
         self._snapshot_tasks: dict[str, asyncio.Task] = {}
         self._http: httpx.AsyncClient | None = None
 
+    # ── sandbox: market data only ───────────────────────────────────
+    # Gate's documented test funds go to its *futures* testnet and cannot move to spot, so the
+    # spot testnet we would trade on is always empty. Rather than letting every routing proof say
+    # "no USDT balance on this venue", Gate is a data-only venue outside real money: its live
+    # book still counts in the NBBO, the router never sends it a child, and the reason is stated.
+    @property
+    def execution_available(self) -> bool:
+        return self.mode == "mainnet"
+
+    @property
+    def execution_note(self) -> str | None:
+        if not self.execution_available:
+            return (f"{self.name}: market data only in the sandbox - its spot testnet holds no test funds "
+                    f"(Gate gives them to its futures testnet only)")
+        return super().execution_note
+
     async def start(self) -> None:
         self._http = httpx.AsyncClient(base_url=REST_URLS[self.data_mode], timeout=15.0)
         await super().start()

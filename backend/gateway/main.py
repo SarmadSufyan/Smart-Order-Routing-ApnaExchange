@@ -274,7 +274,7 @@ async def health_check():
             "mode": adapter.mode,
             "feed_connected": feed.connected,
             "books_synced": f"{feed.books_synced}/{feed.books_total}",
-            "trading_enabled": adapter.has_credentials,
+            "trading_enabled": adapter.execution_available and adapter.has_credentials,
         }
     return {
         "status": "healthy",

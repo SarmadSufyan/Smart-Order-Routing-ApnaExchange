@@ -290,7 +290,9 @@ class CcxtVenueAdapter(ExchangeAdapter):
             mode=self.mode,
             data_mode=self.data_mode,
             symbols=self._requested_symbols,
-            trading_enabled=self.has_credentials,
+            # "trades here" means keys AND an execution environment: a data-only venue (Gate's empty
+            # spot testnet, HTX outside real money) shows "market data only" on screen
+            trading_enabled=self.execution_available and self.has_credentials,
         )
 
     async def stop(self) -> None:
