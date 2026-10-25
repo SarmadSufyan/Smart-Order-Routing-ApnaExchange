@@ -2573,3 +2573,50 @@ Discord, funding and open interest; R3 the copilot running the chain to a propos
 dataStore, api, ten pages/components), backend/services/alerts/discord.py (new), alerts/__init__.py,
 gateway/dependencies.py, deploy/real-server/deploy.py, write_keys.py, tests (test_alerts_discord.py new,
 test_real_server.py), README.md, CLAUDE.md, RESEARCH_GUIDE.md, REAL_MONEY_GUIDE.md, PHASE_D_PLAN.md, PROGRESS.md.
+
+---
+
+## 2026-10-25 (evening) — The launch video, recorded on the live sandbox
+
+**What.** A 13.9-minute launch / explanation video with a voice-over
+(`reports/launch-video/ApnaSOR-launch-video.mp4`, 1920×1080; a 720p copy for phones; the narration with time
+stamps in `ApnaSOR-launch-video-script.md`). Nothing in it is a slide of a screen: Playwright drives the real web
+app against the laptop sandbox and records it, scene by scene — a sandbox order with its routing proof, an order
+refused by the notional check, a liquidity sweep split across Binance and Bybit, Auto's recommendation, a
+pre-flight and a six-slice TWAP with its arrival-price and market-VWAP benchmarks, the research page with a
+moving-average backtest and the technique study, the copilot answering "should I buy SOL right now?" (REDUCE,
+evidence −2) and turning "buy $20 of SOL with smart routing" into a proposal that waits for Confirm, the wallet
+reconciling, the arbitrage detector's honest numbers, the kill switch engaged while the RAFT leader is killed (a
+new leader in seconds, the release agreed by 2 of 3, the node back 15 s later), the real-money server's screen
+through the tunnel, and the three themes. Title cards carry the problem, the real-money rails and the credits.
+
+**Why this way.** The panel will compare the video with the running system, so the video had to be the running
+system. The narration was written from README.md and the guides through a fact sheet with a source line per
+number, and every sentence was checked against what the screen showed at that moment: when the arbitrage page
+started showing two profitable windows out of seventy thousand, the words changed from "not one" to "only a
+handful, cents"; "MATCHED" is said as "matched" because the code's label is OK.
+
+**Design choices.** The voice comes first: edge-tts (`en-US-AndrewNeural`) returns word timings, so each click
+is placed at the moment a phrase is spoken (`S.cue("Submit")`), and the scenes are paced by the words, not by
+timers. When the app or the model is slower than the words — an order filling, Gemini thinking, a node
+restarting — the narration waits: the recorder notes the hold and `build.py` inserts that much silence at the
+cue. The app is recorded at a true 1920×1080 viewport with a 1.2× CSS zoom (Playwright does not scale a smaller
+viewport up; it pads it), with a drawn cursor, click ripples and a caption bar injected into the page. A mouse
+glide is eight steps, not twenty-eight: on the live dashboard every step is a round trip and the long glides
+alone put the actions three seconds behind the voice. The two copilot scenes abort and are retaken when the free
+Gemini tier answers 503, instead of showing the error; the Auto box is unticked only once the drawer's status
+has loaded (before that it is disabled and flips on by itself, which auto-ran two $20 proposals during a take).
+
+**A fix found by the video.** The order dialog showed "Order submission failed (no response)" for every refused
+order: the store returns `null` on the gateway's HTTP 400 and keeps the reason in `lastError`. The dialog now
+shows that reason ("Risk check failed: Order notional $16,114.45 exceeds the per-order limit $10,000.00") —
+`409191a`, type-check green.
+
+**Noticed on the way.** The laptop's `.env` has no `OKX_TESTNET_API_PASSPHRASE`, so OKX is data-only in the
+sandbox ("okx requires password credential" on the Venues page and in every routing proof); the gateway handles
+it correctly, but the demo would look better with OKX executable. Gemini's free tier answered HTTP 503 on four
+of about ten requests this evening.
+
+**Files.** scripts/launch_video/ (lib.py, scenes.py, record.py, build.py, sample.py, check_locators.py,
+README.md — new), frontend/src/components/NewOrderModal.tsx, .gitignore, reports/launch-video/ (the video, not
+committed), PROGRESS.md.

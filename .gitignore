@@ -78,3 +78,7 @@ SCRATCH.md
 notes/
 .obsidian/
 .trash/
+
+# the launch video's recordings and narration (scripts/launch_video), and the finished video
+scripts/launch_video/out/
+reports/launch-video/*.mp4
