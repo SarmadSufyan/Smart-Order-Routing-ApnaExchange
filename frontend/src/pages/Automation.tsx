@@ -93,7 +93,8 @@ function FundCard({ fund, onChange }: { fund: FundView | null; onChange: () => v
             hint={Object.entries(fund.coins).map(([a, q]) => `${fmtQty(q)} ${a}`).join(', ') || 'none'} />
           <Stat name="Value now" value={fund.value_usdt === null ? '—' : fmtUsd(fund.value_usdt)} />
           <Stat name="P&L (real-market fees)" value={fmtPnl(fund.pnl_market_usdt, 4)} color={pnlColor(fund.pnl_market_usdt)}
-            hint={`Fees as the sandbox environments charged them: ${fmtPnl(fund.pnl_usdt, 4)}. Binance's sandbox charges no fees, so results are shown at each exchange's real taker fee.`} />
+            hint={fund.mode === 'mainnet' ? `Fees as the exchanges charged them: ${fmtPnl(fund.pnl_usdt, 4)}.`
+              : `Fees as the sandbox environments charged them: ${fmtPnl(fund.pnl_usdt, 4)}. Binance's sandbox charges no fees, so results are shown at each exchange's real taker fee.`} />
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 10 }}>
           <div style={{ width: 140 }}><Num name="Amount (USDT)" value={amount} set={setAmount} min={0} /></div>
@@ -299,7 +300,7 @@ function BotCard({ bot, onChange }: { bot: BotState; onChange: () => void }) {
         <Stat name="Cash" value={fmtUsd(bot.pocket?.cash_usdt ?? 0)} />
         <Stat name="Value now" value={bot.value_usdt === null ? '—' : fmtUsd(bot.value_usdt)} />
         <Stat name="P&L (real fees)" value={fmtPnl(bot.pnl_market_usdt, 4)} color={(bot.pnl_market_usdt ?? 0) >= 0 ? C.green : C.red}
-          hint={`As charged in the sandbox: ${fmtPnl(bot.pnl_usdt, 4)}; closed: ${fmtPnl(bot.pocket?.realized_market_usdt, 4)}`} />
+          hint={`As charged ${realMoney ? 'by the exchanges' : 'in the sandbox'}: ${fmtPnl(bot.pnl_usdt, 4)}; closed: ${fmtPnl(bot.pocket?.realized_market_usdt, 4)}`} />
         <Stat name={bot.kind === 'CYCLE' ? 'CYCLES DONE' : 'Won / stopped / timed out'}
           value={bot.kind === 'CYCLE' ? s.lots_closed : `${s.wins} / ${s.losses} / ${s.timeouts}`} />
         <Stat name="Open" value={`${open.length} lot(s)`} />

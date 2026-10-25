@@ -143,7 +143,7 @@ export function Login() {
                 {x.feed_connected ? `${x.books_synced} books live` : 'Offline'}
               </span>
               <span style={{ marginLeft: 'auto', color: C.dim, fontSize: F.xs }}>
-                {x.trading_enabled ? `trades in ${environmentLabel(x.mode).toLowerCase()}` : 'market data only'}
+                {x.trading_enabled ? (x.mode === 'mainnet' ? 'trades with real funds' : `trades in ${environmentLabel(x.mode).toLowerCase()}`) : 'market data only'}
               </span>
             </div>
           ))}

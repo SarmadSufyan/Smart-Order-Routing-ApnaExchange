@@ -45,6 +45,7 @@ export function fmtRate(v: UiVenue, rate: number): string {
  *  balances, the exchange's order handling); mainnet = real funds. */
 export function environmentLabel(mode: string | null | undefined): string {
   if (mode === 'testnet') return 'sandbox'
+  if (mode === 'mainnet') return 'real funds'
   return mode || '—'
 }
 

@@ -275,7 +275,7 @@ export function Wallet() {
 
             {hiddenAssets > 0 && (
               <div style={{ marginTop: 10, fontSize: F.xs, color: C.dim }}>
-                ⓘ {hiddenAssets} other non-zero balance{hiddenAssets === 1 ? '' : 's'} (sandbox tokens outside the
+                ⓘ {hiddenAssets} other non-zero balance{hiddenAssets === 1 ? '' : 's'} ({isMainnet ? 'coins' : 'sandbox tokens'} outside the
                 trading universe) are hidden and excluded from the total.
               </div>
             )}
@@ -324,7 +324,7 @@ export function Wallet() {
               </div>
             )}
             <div style={{ marginTop: 10, fontSize: F.xs, color: C.dim, lineHeight: 1.6 }}>
-              Average-cost accounting per exchange. Sandbox coins have no purchase price, so each exchange's
+              Average-cost accounting per exchange. {isMainnet ? 'Coins held before the first read' : 'Sandbox coins'} have no purchase price here, so each exchange's
               balances are marked at our mid price when first read (the <i>opening balances</i>); every fill
               since then is applied on top. Total = realized + unrealized − fees. Trading P&L is what
               ApnaSOR's orders added compared with simply holding the opening balances.
