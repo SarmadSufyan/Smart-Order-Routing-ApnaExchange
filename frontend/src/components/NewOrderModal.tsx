@@ -195,7 +195,9 @@ export function NewOrderModal({
       if (order) {
         responseRef.current = order
       } else {
-        responseErrRef.current = 'Order submission failed (no response)'
+        // The store returns null when the gateway refused the order (HTTP 400: pre-trade risk, the
+        // funding gate, the kill switch); its message is the reason to show, not a generic line.
+        responseErrRef.current = useDataStore.getState().lastError ?? 'Order submission failed (no response)'
       }
     } catch (e) {
       responseErrRef.current = (e as Error).message
