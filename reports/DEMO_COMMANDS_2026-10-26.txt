@@ -1,0 +1,132 @@
+ApnaSOR - demo day commands (Monday 2026-10-26)
+=================================================
+Open every window in  D:\Sor-Fyp  (cmd:  cd /d D:\Sor-Fyp).  Plain "python" is the right Python on this laptop.
+Order of play: 1) laptop sandbox on localhost  2) the real-money server's screen through the tunnel.
+VPN OFF (Binance answers 451 / Bybit 403 through a VPN).  Phone: Discord open on #alerts.
+
+
+0. BEFORE LEAVING HOME (5 minutes)
+-------------------------------------
+cd /d D:\Sor-Fyp
+git pull
+python deploy/real-server/deploy.py status
+    expect: stage LIVE - REAL MONEY, mode mainnet, 4 exchanges "books 20/20 trading on",
+            every exchange "key_confirmed_trade_only ... withdraw: no, IP list: yes"
+    if SSH times out: your home / campus IP changed -> AWS console -> EC2 -> Security Groups ->
+    both groups (real-money server AND lab server) -> edit the SSH rule "My IP" to the current address.
+python deploy/real-server/deploy.py check-keys
+    expect: Binance ~14.90 USDT, Bybit ~14.96 USDT, both "OK for real money - trade-only key"
+python deploy/lab-server/deploy.py status
+    expect: 8 bots running, "Nothing needs attention."
+
+
+1. LAPTOP SANDBOX  (window 1 - keep open)
+------------------------------------------
+cd /d D:\Sor-Fyp
+python start_all.py
+    starts: 3 RAFT nodes -> gateway :8000 -> web app :5173   (leader elected in ~2 s, books synced in ~30 s)
+    web app:  http://localhost:5173      login  admin / admin   (sandbox demo login)
+    API docs: http://127.0.0.1:8000/docs
+    OKX in the sandbox needs Windows "DNS over HTTPS" (1.1.1.1) - set already on this laptop;
+    on campus Wi-Fi check once that the Dashboard shows 4 exchanges connected.
+    Ctrl+C in this window stops everything cleanly (gateway first, then the nodes and Vite).
+
+    if it refuses to start with "port in use":
+        netstat -ano | findstr ":8000 :5173 :9001 :9002 :9003"
+        taskkill /PID <pid> /T /F
+
+
+2. REAL-MONEY SERVER SCREEN  (windows 2 and 3 - keep both open)
+----------------------------------------------------------------
+window 2:
+cd /d D:\Sor-Fyp
+python deploy/real-server/deploy.py tunnel
+    "Tunnel open: http://127.0.0.1:28000 on this laptop = the REAL-MONEY server's gateway" - leave it running
+
+window 3:
+cd /d D:\Sor-Fyp
+npm --prefix frontend run dev:real-server
+    screen: http://localhost:5190     login  admin  + the REAL password (set with deploy.py passwords)
+    the page must say "Real money" (red pill) and "REAL MONEY SERVER - Connected to 127.0.0.1:28000";
+    the demo login does NOT work here (on purpose).
+
+    if 5190 is "already in use" (a Vite left from before):
+        netstat -ano | findstr ":5190"
+        taskkill /PID <pid> /T /F
+
+
+3. BEFORE THE PANEL ARRIVES: RELEASE THE OVERNIGHT KILL SWITCH
+---------------------------------------------------------------
+The real-money server was left with the kill switch ENGAGED (nothing can trade overnight).
+On http://localhost:5190 -> Kill Switch -> "Release kill switch".   The page shows "Trading is running normally".
+Discord posts the release.  (Engaging works from the phone with  /stop  - releasing never does: screen only.)
+
+
+4. THE ONE REAL ORDER IN FRONT OF THE PANEL  (on http://localhost:5190)
+------------------------------------------------------------------------
+BUY  - Dashboard -> New order -> Buy -> Symbol SOL/USDT -> Order Type Market -> Quantity 0.216
+       -> Routing strategy "Liquidity sweep" -> tick the red REAL MONEY box -> "Submit buy order"
+       It MUST split (Bybit + Binance): neither exchange holds $22 on its own.
+       Show: the proof (split bar, venue table with fees, routing notes), then Wallet (reconciliation Matched),
+       then Audit Log (submit -> 7 checks -> routing decision -> two fills with fees), then the phone: Discord fills
+       and the Binance / Bybit app showing the same trade.
+SELL - New order -> Sell -> SOL/USDT -> Market -> Quantity 0.214  (NOT 0.215: holdings minus a lot step = "Filled")
+       -> Liquidity sweep -> tick the red box -> "Submit sell order"
+       Wallet: P&L breakdown shows the round trip (fees ~4 cents).
+
+Costs nothing, worth showing on real money:
+  - an order above the cap: BUY 0.3 SOL (~$30 > $25 cap) -> refused before routing, nothing sent
+  - Kill Switch -> Engage (reason) -> New order button is locked -> Release
+  - Discord on the phone:  /status  (answers)   /stop  (engages the kill switch within seconds; release on the screen)
+  - Risk Manager: the caps ($25 / $100 / $150 / loss $10) cannot be raised from the screen (refused)
+
+NEVER on real money in front of the panel: a TWAP (6 orders), the Depth sweep button (~$4k), bots.
+Those live in the laptop sandbox (window 1) and in the video.
+
+
+5. SANDBOX DEMO ON THE LAPTOP  (http://localhost:5173, admin / admin)
+---------------------------------------------------------------------
+Dashboard -> New order (BUY 0.0006 BTC, best price) -> the proof
+Dashboard -> New order (BUY 0.2 BTC) -> refused by the notional check (limit $10,000)
+Dashboard -> New order (BUY 0.01 BTC, Liquidity sweep) -> split Binance + Bybit
+Algo Orders -> 0.0012 BTC, 1 min, 6 slices -> "Auto - recommend" -> "Pre-flight check" -> Start TWAP
+Research -> BTC: forecasts say "No proven edge" (the honest result) -> technique study
+Copilot (top bar) -> "Buy $20 of SOL with smart routing" -> Confirm   (free Gemini tier: if "HTTP 503", send again)
+Kill Switch -> Engage -> try an order (locked) -> kill the RAFT leader (window 4):
+    python scripts/raft_demo.py --gateway --twap 0.0006
+        against the running laptop system: starts a small TWAP, kills the leader node mid-way, shows the new leader
+        elected in ~2 s, the kill switch engaged + replicated, nothing lost; start_all.py restarts the killed node
+        after 15 s (the Kill Switch page shows 2 of 3, then 3 of 3).  -> then Release on the Kill Switch page.
+Wallet -> reconciliation;  Audit Log -> everything above with who did it;  Theme button -> Studio / Liquid Glass / Terminal.
+
+
+6. AFTER THE DEMO: CLOSE THE REAL MONEY FOR THE DAY
+---------------------------------------------------
+http://localhost:5190 -> Kill Switch -> Engage kill switch (reason: "closed after the demo") -> Confirm
+    (or  /stop  from Discord).  The gateway stays up (books, alerts); nothing can trade.
+Ctrl+C in window 2 closes the tunnel (the server keeps running), Ctrl+C in window 3 stops the 5190 screen,
+Ctrl+C in window 1 stops the laptop sandbox.
+
+
+7. CHECKS (any time)
+---------------------
+python deploy/real-server/deploy.py status          what the real-money server is doing
+python deploy/real-server/deploy.py check-keys      balances + key permissions, read-only
+python deploy/real-server/deploy.py logs            the gateway's log
+python deploy/real-server/deploy.py ssh             a shell on the server (read-only commands only for the panel:
+                                                     systemctl status apnasor-real ; ls /opt/apnasor/releases)
+python deploy/lab-server/deploy.py status           the 24/7 lab server (8 bots)
+python -m unittest discover -s backend/tests -t .   backend tests (~600)
+npx --prefix frontend tsc --noEmit -p frontend      type-check
+python -m ruff check backend scripts start_all.py   lint
+python scripts/security_check.py                    "Every attack was refused." (laptop gateway must be running)
+
+
+8. IF SOMETHING GOES WRONG
+---------------------------
+tunnel dies / "connection refused" on 28000      -> Ctrl+C window 2, run the tunnel command again
+5190 page says "Connecting..." forever           -> the tunnel (window 2) is down; see above
+an exchange shows "trading off" on the real screen -> deploy.py status: the key check line says why; it re-checks every 10 min
+the real order is refused "venues can fund X of Y" -> balances: check-keys; the sweep needs both exchanges funded
+OKX missing on the laptop                          -> Windows Settings -> Network -> DNS over HTTPS on (1.1.1.1), then  ipconfig /flushdns
+real-money screen shows "Sandbox" anywhere        -> you are on :5173 (the laptop), not :5190
