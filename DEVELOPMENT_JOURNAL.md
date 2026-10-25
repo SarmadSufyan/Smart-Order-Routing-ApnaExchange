@@ -2493,3 +2493,36 @@ freeze on our side (and a fix before real money); no slow answers mean the excha
 
 **Files.** deploy/lab-server/setup.sh, deploy/lab-server/status.sh, deploy/real-server/status.sh,
 project-info/LAB_SERVER_GUIDE.md, PROGRESS.md.
+
+---
+
+## 2026-10-25 — Four real keys confirmed, the feed drops explained, both servers rebooted
+
+**Keys.** `check-keys` asks each exchange, from the real-money server's own address, what our key may do. All four
+now answer: spot trading yes, withdrawals no, IP list 16.18.141.32. On the way: OKX and HTX keys can be edited in
+place (Trade added to the read-only test keys, nothing re-entered); Bybit first answered "Unmatched IP" (the key was
+bound to another address; the server's only address is 16.18.141.32, IPv4, no IPv6) and then "read-only key" until
+it was set to Read-Write with Spot Trade. The account fees are read too: 0.100 % on Binance, Bybit and OKX (OKX's
+public rate is 0.150 %), 0.200 % on HTX.
+
+**Bybit's fee.** `check-keys` said "account fee: no answer (NotSupported)" for Bybit, so routing used the public
+rate. ccxt's Bybit `fetch_trading_fees()` raises NotSupported for spot; its per-symbol `fetch_trading_fee()` works
+(as on OKX). `fetch_account_taker_bps` now falls back to the per-symbol call on NotSupported (a unit test; verified
+live after the release: "your Bybit taker fee is 0.100%").
+
+**The feed drops, settled.** The six-hour probe asked the gateway's health endpoint once a second: about 21,600
+answers, none slower than one second. HTX still closed the connection at 21:31 ("ping check expired") while the
+gateway was answering instantly — so the gateway never froze; the drops come from the long network path (Zurich to
+HTX's servers through CloudFront; HTX's "AWS" hostname resolves to the same CloudFront and answers the same). Each
+drop reconnects in about two seconds, and while it lasts the exchange's books are marked invalid, so the router
+simply leaves it out. Nothing to change.
+
+**Reboots.** Both machines had a kernel update waiting (6.17 running, 7.0 installed). The real-money server first
+took `db2e735` (593 tests on the server, healthy), then both rebooted: back in 20-30 s, gateways started by
+themselves, all books 5/5, the lab's 8 bots resumed by themselves (`LAB_AUTO_RESUME`).
+
+**Access.** Sarmad's home internet changes its public IP (103.31.100.49 -> 153.117.28.74 overnight), and the
+security groups allow one address, so SSH was blocked until they were edited again. A lasting fix is proposed: AWS
+Session Manager (the laptop reaches the servers through AWS; no SSH port open at all).
+
+**Files.** backend/exchanges/fees.py, backend/tests/test_exchanges/test_fees.py, PROGRESS.md.
