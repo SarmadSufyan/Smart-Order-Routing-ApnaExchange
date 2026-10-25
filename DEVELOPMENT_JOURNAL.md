@@ -2526,3 +2526,50 @@ security groups allow one address, so SSH was blocked until they were edited aga
 Session Manager (the laptop reaches the servers through AWS; no SSH port open at all).
 
 **Files.** backend/exchanges/fees.py, backend/tests/test_exchanges/test_fees.py, PROGRESS.md.
+
+---
+
+## 2026-10-25 (afternoon) — 20 coins, Discord alerts, OKX behind an intercepting DNS
+
+**20 coins.** A panel can fairly ask why only five coins. Public market lists, read from the real-money server:
+Binance, Bybit, OKX and HTX list 516, 389, 452 and 580 USDT spot pairs; 147 are on all four, and Binance's spot
+testnet lists 502. `SYMBOLS` now defaults to 20 established coins among the most traded of those (BTC, ETH, SOL,
+XRP, BNB, DOGE, ADA, TRX, LINK, AVAX, LTC, DOT, NEAR, SUI, UNI, AAVE, XLM, HBAR, APT, ARB); any other common pair is
+one setting away. The backend was already per-symbol everywhere; the web app had the five written into its code
+— it now reads the list from `GET /api/market-data/symbols` (`useSymbols()` in the data store; the five remain only
+as the first paint and the advisor bot's default coins). Measured: on the laptop 20/20 books on Binance, Bybit and
+Gate, the NBBO for all 20, the history for the 15 new coins downloaded in about two minutes, 60 models trained,
+the gateway at 15 % of one CPU once started; a sandbox buy of 34 ADA filled on Bybit in 0.5 s. On the 2-CPU
+real-money server: 20/20 books (OKX's demo lacks ARB: 19 until real money), 18 % of a core, the worst of 30 health
+answers 5 ms.
+
+**The copilot over 20 coins.** "Any good trade right now?" runs the analyst on every coin, and each analysis reads
+two technique studies over years of candles (about 1 s each); with 20 coins the first question after a start took
+96 s and the language model timed out meanwhile. The research service now computes the studies in the background
+— after the start-up training, and again whenever an hourly or daily candle closes (one at a time) — so the
+question reads ready studies: 23 s, worded by the model.
+
+**Discord alerts.** Telegram does not answer from Pakistan (api.telegram.org timed out; Pushover too; ntfy,
+Discord and Slack answered). `backend/services/alerts/discord.py` posts the Telegram bot's messages
+(`format_event`) to one channel of Sarmad's private Discord server and reads that channel every 3 s for `/stop`
+and `/status` (`!stop` / `!status` too, as Discord's menu can swallow a slash) — accepted only from the owner's
+Discord id and only after the gateway started; nothing releases the kill switch from the phone. Outbound HTTPS
+only; the token is only in the Authorization header. `deploy.py discord` takes the token from the clipboard, checks
+it, finds the owner (the last person who wrote in the channel) and confirms. The first try failed on the channel
+prompt (an empty line): it now asks again, takes a channel link too, or `--channel` on the command line.
+
+**OKX on the laptop.** Even with 8.8.8.8 set, the lookup of `www.okx.com` timed out while other names resolved —
+the provider intercepts plain DNS. Resolved over DNS-over-HTTPS (Cloudflare), OKX answered (HTTP 200, 0.57 s): the
+fix is Windows 11's encrypted DNS, now in CLAUDE.md's gotchas.
+
+**Research direction.** Sarmad shared github.com/Jakeschincariol/day-trader-skill (MIT): eleven US-stock day-trading
+tools chained scanner -> news -> entry -> exit -> Time Machine (10,000 replays of the session from the stock's own
+bars, plus every past time the setup fired) -> budget -> risk -> broker, with a person saying yes. Agreed plan for
+after the demo, on our own data: R1 a scanner over the 147 common coins and a Time Machine for a bracket's odds,
+with an entry timer and exit planner; R2 news and exchange listing announcements, price/stop/target alerts to
+Discord, funding and open interest; R3 the copilot running the chain to a proposal a person confirms.
+
+**Files.** backend/gateway/config.py, .env.example, backend/services/research/service.py, frontend (mockData,
+dataStore, api, ten pages/components), backend/services/alerts/discord.py (new), alerts/__init__.py,
+gateway/dependencies.py, deploy/real-server/deploy.py, write_keys.py, tests (test_alerts_discord.py new,
+test_real_server.py), README.md, CLAUDE.md, RESEARCH_GUIDE.md, REAL_MONEY_GUIDE.md, PHASE_D_PLAN.md, PROGRESS.md.
