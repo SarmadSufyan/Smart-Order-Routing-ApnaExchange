@@ -24,7 +24,8 @@ arbitrage module detects only; forecasts are probabilities with a track record).
 | `scenes.py` | The 16 scenes: each one's narration and what happens on the screen (clicks, typing, captions, spotlights). Also the title cards and the worked example, revealed step by step on cue. |
 | `lib.py` | Recording (1920×1080, the app zoomed 1.2× so it reads well, Studio light mode set before the app paints), the cursor + caption overlay, the sandbox login, the voice (edge-tts with word timings), the scene clock. |
 | `record.py` | `tts` makes the narration and checks every cue phrase; `prep` accepts the exchange balances so the Wallet starts clean; `record [scene …]` records. |
-| `build.py` | One MP4: each scene's clip + narration, a title fade, the script with time stamps. |
+| `build.py` | One MP4: each scene's clip + narration, a title fade, the subtitles burned in, the script with time stamps. |
+| `subtitles.py` | Subtitles from the voice's word timings: the narration's words aligned to the timings, grouped into cues at sentence ends (or a comma when a cue would get long), shifted by the holds and each scene's place in the timeline; an `.srt` beside the video and a styled `.ass` that ffmpeg burns in (bottom centre, above the caption bar). |
 | `sample.py` | A four-frame contact sheet per scene in `out/review/`, to check a take without watching it. |
 | `check_locators.py` | A read-only check that every control the scenes click still exists. |
 

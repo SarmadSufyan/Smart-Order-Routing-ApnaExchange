@@ -2629,7 +2629,12 @@ rgba(255,255,255,.045) by design (a tile inside a card), and the form stage of t
 not — they now do. Light mode is chosen before the app paints (`poc.theme` / `poc.style` in localStorage from
 an init script), the cards are light, and the spotlight outline turns dark on light pages. Trimmed to fit: the
 copilot scene asks for the order only (the question is mentioned in a caption), one clause each off the safety
-and real-money narrations, and 0.3 s between scenes.
+and real-money narrations, and 0.3 s between scenes. Then subtitles, at Sarmad's request: edge-tts reports when
+each word starts, so `subtitles.py` aligns the narration's words (with their punctuation) to those timings,
+groups them into cues that break at sentence ends or at a comma when a cue would pass 84 characters, shifts each
+cue by the recorder's holds and its scene's place in the timeline, and writes an `.srt` beside the video and a
+styled `.ass` that ffmpeg burns into the picture (white on a dark box, bottom centre, above the caption bar, so a
+projector or a phone shows them without a player setting). 133 cues, none overlapping, checked frame by frame.
 
 **Files.** scripts/launch_video/ (lib.py, scenes.py, record.py, build.py, sample.py, check_locators.py,
 README.md — new), frontend/src/components/NewOrderModal.tsx (the refusal reason; every stage opaque), .gitignore,
