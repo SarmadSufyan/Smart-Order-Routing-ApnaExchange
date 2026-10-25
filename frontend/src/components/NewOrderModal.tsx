@@ -478,7 +478,7 @@ export function NewOrderModal({
   // ── CHECKING ──
   if (stage === 'checking') return (
     <div style={overlay}>
-      <div style={{ ...modal, maxWidth: 400 }}>
+      <div data-glass="float" style={{ ...modal, maxWidth: 400 }}>
         <div style={header}>
           <div style={{ fontSize: F.md, fontWeight: 700 }}>Running Pre-Trade Checks</div>
         </div>
@@ -526,7 +526,7 @@ export function NewOrderModal({
   // ── ROUTING ──
   if (stage === 'routing') return (
     <div style={overlay}>
-      <div style={{ ...modal, maxWidth: 400 }}>
+      <div data-glass="float" style={{ ...modal, maxWidth: 400 }}>
         <div style={{ padding: 32, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <Orb state="connecting" size={64} label="Routing the order to the exchanges" style={{ marginBottom: 16 }} />
           <div style={{ fontSize: F.md, fontWeight: 700, marginBottom: 6 }}>Routing order</div>
@@ -560,7 +560,7 @@ export function NewOrderModal({
 
     return (
       <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div style={{ ...modal, maxWidth: 720 }}>
+        <div data-glass="float" style={{ ...modal, maxWidth: 720 }}>
           <div style={{ ...header, padding: '12px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
@@ -632,7 +632,7 @@ export function NewOrderModal({
   // ── REJECTED ──
   if (stage === 'rejected') return (
     <div style={overlay}>
-      <div style={{ ...modal, maxWidth: 420 }}>
+      <div data-glass="float" style={{ ...modal, maxWidth: 420 }}>
         <div style={{ padding: 28, textAlign: 'center' }}>
 
           <div style={{
