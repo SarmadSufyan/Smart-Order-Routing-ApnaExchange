@@ -1,0 +1,608 @@
+1
+00:00:00,003 --> 00:00:01,213
+ApnaSOR.
+
+2
+00:00:01,253 --> 00:00:03,842
+A smart order router for crypto exchanges,
+
+3
+00:00:03,882 --> 00:00:08,630
+built by group CS14 at Usman
+Institute of Technology.
+
+4
+00:00:10,166 --> 00:00:11,183
+Who is it for?
+
+5
+00:00:11,223 --> 00:00:14,727
+People who place crypto orders
+and care about the price they get:
+
+6
+00:00:14,767 --> 00:00:19,456
+a trader working an order, the risk manager
+who must be sure nothing goes wrong,
+
+7
+00:00:19,496 --> 00:00:22,111
+and the administrator who runs the desk.
+
+8
+00:00:22,151 --> 00:00:25,681
+ApnaSOR is the order
+router of Apna Exchange:
+
+9
+00:00:25,721 --> 00:00:29,289
+its users' orders go to the
+best real exchange behind it.
+
+10
+00:00:29,329 --> 00:00:35,230
+The problem: the same coin trades on
+Binance, Bybit, OKX and HTX at once,
+
+11
+00:00:35,270 --> 00:00:38,941
+each with its own price, its
+own fee and its own order book,
+
+12
+00:00:38,981 --> 00:00:41,928
+and a person with four
+tabs open is guessing.
+
+13
+00:00:42,878 --> 00:00:43,882
+An example.
+
+14
+00:00:43,922 --> 00:00:45,970
+A trader wants to buy one Bitcoin.
+
+15
+00:00:46,010 --> 00:00:51,021
+Binance asks eighty thousand seven
+hundred dollars, Bybit six hundred ninety,
+
+16
+00:00:51,061 --> 00:00:55,686
+OKX six hundred eighty-five,
+Gate six hundred ninety-five.
+
+17
+00:00:55,726 --> 00:00:57,220
+OKX looks cheapest.
+
+18
+00:00:57,260 --> 00:01:02,439
+But each exchange charges a taker fee: a
+tenth of a percent on Binance and Bybit,
+
+19
+00:01:02,479 --> 00:01:04,939
+more on OKX, double on Gate.
+
+20
+00:01:04,979 --> 00:01:09,707
+After fees, Bybit is cheapest, and
+the one that looked cheapest is third,
+
+21
+00:01:09,747 --> 00:01:12,696
+about thirty-five dollars
+apart on one Bitcoin.
+
+22
+00:01:12,736 --> 00:01:17,877
+ApnaSOR does this on every order,
+on live books, in milliseconds,
+
+23
+00:01:17,917 --> 00:01:22,464
+and takes the rest from the next cheapest
+level anywhere when one exchange runs
+
+24
+00:01:22,504 --> 00:01:23,186
+thin.
+
+25
+00:01:23,226 --> 00:01:25,055
+And before anything is sent,
+
+26
+00:01:25,095 --> 00:01:28,663
+every order passes seven risk
+checks and a funding check,
+
+27
+00:01:28,703 --> 00:01:32,089
+so a fat finger never reaches an exchange.
+
+28
+00:01:32,330 --> 00:01:36,027
+In one system: live order
+books from the real exchanges;
+
+29
+00:01:36,067 --> 00:01:39,893
+the best price after fees, with
+a proof for every decision;
+
+30
+00:01:39,933 --> 00:01:42,599
+seven risk checks and a kill switch;
+
+31
+00:01:42,639 --> 00:01:45,602
+algorithms that work
+large orders over time;
+
+32
+00:01:45,642 --> 00:01:49,532
+research and a copilot that
+proposes while a person confirms;
+
+33
+00:01:49,572 --> 00:01:52,367
+a wallet reconciled against the exchanges;
+
+34
+00:01:52,407 --> 00:01:54,184
+an audit log of everything.
+
+35
+00:01:54,224 --> 00:01:58,334
+All of it runs against the exchanges'
+own test systems with play money,
+
+36
+00:01:58,374 --> 00:02:02,483
+and the same code runs on a
+real-money server behind extra rails.
+
+37
+00:02:02,523 --> 00:02:03,757
+Let's see it.
+
+38
+00:02:03,830 --> 00:02:05,517
+This is the trader's screen.
+
+39
+00:02:05,557 --> 00:02:06,509
+Log in;
+
+40
+00:02:06,549 --> 00:02:09,254
+every login is written to the audit log.
+
+41
+00:02:09,294 --> 00:02:11,921
+The Dashboard: four exchanges connected,
+
+42
+00:02:11,961 --> 00:02:16,006
+a local copy of each order book
+kept in sync from its live feed,
+
+43
+00:02:16,046 --> 00:02:20,736
+and on the right the best bid and the best
+ask across all of them for twenty coins,
+
+44
+00:02:20,776 --> 00:02:23,480
+with the exchange that holds each price.
+
+45
+00:02:23,520 --> 00:02:26,713
+On the left, every order
+the router has sent.
+
+46
+00:02:28,459 --> 00:02:32,478
+A real order, in the sandbox:
+buy a small amount of Bitcoin,
+
+47
+00:02:32,518 --> 00:02:34,914
+routed by best price after fees.
+
+48
+00:02:34,954 --> 00:02:35,751
+Submit.
+
+49
+00:02:35,791 --> 00:02:38,238
+Seven risk checks, a funding check,
+
+50
+00:02:38,278 --> 00:02:42,903
+then the router walks every book cheapest
+level first and sends a price-protected
+
+51
+00:02:42,943 --> 00:02:45,249
+immediate-or-cancel child order.
+
+52
+00:02:45,289 --> 00:02:45,970
+Filled.
+
+53
+00:02:46,010 --> 00:02:51,679
+And here is the proof: every exchange
+ranked by all-in cost, price plus fee;
+
+54
+00:02:51,719 --> 00:02:52,877
+the levels walked;
+
+55
+00:02:52,917 --> 00:02:55,120
+the cap no child may cross;
+
+56
+00:02:55,160 --> 00:02:56,988
+expected versus actual;
+
+57
+00:02:57,028 --> 00:02:59,553
+and what it saved against
+the worst exchange.
+
+58
+00:02:59,593 --> 00:03:01,782
+Every order keeps this proof.
+
+59
+00:03:02,774 --> 00:03:08,288
+An order that breaks a rule: a fifth of a
+Bitcoin, about sixteen thousand dollars,
+
+60
+00:03:08,328 --> 00:03:10,504
+above this account's per-order limit.
+
+61
+00:03:10,544 --> 00:03:12,019
+Submit.
+
+62
+00:03:12,059 --> 00:03:15,318
+Refused by pre-trade risk,
+with the check that failed,
+
+63
+00:03:15,358 --> 00:03:17,682
+and nothing reached an exchange.
+
+64
+00:03:18,704 --> 00:03:21,241
+A large order should not hit one exchange.
+
+65
+00:03:21,281 --> 00:03:26,100
+The liquidity sweep sends to every exchange
+that can fund it, at the same moment,
+
+66
+00:03:26,140 --> 00:03:30,442
+each part sized by that exchange's
+depth, all under one price cap.
+
+67
+00:03:30,482 --> 00:03:31,963
+A hundredth of a Bitcoin.
+
+68
+00:03:32,003 --> 00:03:33,454
+Submit.
+
+69
+00:03:33,494 --> 00:03:38,389
+The checks run, the children leave
+together, each capped at the same price.
+
+70
+00:03:38,429 --> 00:03:40,644
+One parent order, two exchanges,
+
+71
+00:03:40,684 --> 00:03:44,520
+and the proof shows the split
+and each exchange's fill.
+
+72
+00:03:45,705 --> 00:03:52,946
+Large orders can be worked over time with
+five execution algorithms: TWAP, VWAP,
+
+73
+00:03:52,986 --> 00:03:57,057
+implementation shortfall,
+percentage of volume, and iceberg.
+
+74
+00:03:57,097 --> 00:04:02,508
+Or Auto reads the live books and this
+order, picks one, and explains why;
+
+75
+00:04:02,548 --> 00:04:03,745
+nothing is sent.
+
+76
+00:04:03,785 --> 00:04:07,762
+Every slice is pre-flight
+checked against risk.
+
+77
+00:04:07,802 --> 00:04:11,770
+Let's start a TWAP: six
+slices over one minute,
+
+78
+00:04:11,810 --> 00:04:14,089
+each one through the same order path.
+
+79
+00:04:14,129 --> 00:04:16,127
+We'll come back for the result.
+
+80
+00:04:17,368 --> 00:04:20,060
+Research runs on the
+real market's candles:
+
+81
+00:04:20,100 --> 00:04:24,428
+five years of hourly and eight
+years of daily history per coin.
+
+82
+00:04:24,468 --> 00:04:27,908
+It forecasts the chance that
+the next hour closes higher,
+
+83
+00:04:27,948 --> 00:04:32,508
+with a likely range and its own track
+record on data it had not seen —
+
+84
+00:04:32,548 --> 00:04:37,470
+and mostly it says no proven edge, because
+that is the honest answer on crypto data.
+
+85
+00:04:37,510 --> 00:04:42,753
+A backtester and a study of classic
+techniques pay fees on every trade.
+
+86
+00:04:42,793 --> 00:04:46,587
+Nothing here is advice, and
+nothing here places an order.
+
+87
+00:04:47,899 --> 00:04:51,419
+The copilot takes plain English.
+
+88
+00:04:51,459 --> 00:04:54,344
+Buy twenty dollars of
+SOL with smart routing.
+
+89
+00:04:54,384 --> 00:04:56,883
+A language model only fills a form;
+
+90
+00:04:56,923 --> 00:05:02,437
+the code validates every field, gathers
+the live facts and builds the proposal.
+
+91
+00:05:02,477 --> 00:05:07,231
+The model never holds keys,
+never submits, never sizes risk.
+
+92
+00:05:07,271 --> 00:05:08,133
+Here it is.
+
+93
+00:05:08,173 --> 00:05:09,524
+It waits for a person.
+
+94
+00:05:09,564 --> 00:05:15,082
+Confirm, and the order takes the same
+path as the button, risk checks included.
+
+95
+00:05:15,928 --> 00:05:21,313
+The TWAP is done: six slices,
+each with its own fill,
+
+96
+00:05:21,353 --> 00:05:25,540
+and the chart against the arrival price
+and the real market's volume-weighted price
+
+97
+00:05:25,580 --> 00:05:29,766
+over the same minute, the two
+benchmarks every algorithm reports.
+
+98
+00:05:29,806 --> 00:05:33,194
+The Wallet reads real
+balances from every exchange,
+
+99
+00:05:33,234 --> 00:05:36,313
+keeps a P and L ledger from every fill,
+
+100
+00:05:36,353 --> 00:05:39,560
+and reconciles it against
+what each exchange reports.
+
+101
+00:05:39,600 --> 00:05:42,937
+A mismatch is shown, never edited away.
+
+102
+00:05:44,190 --> 00:05:45,000
+Safety.
+
+103
+00:05:45,040 --> 00:05:49,665
+The kill switch stops every new
+order, algorithm and bot at once.
+
+104
+00:05:49,705 --> 00:05:56,219
+Engage it, with a reason.
+
+105
+00:05:56,259 --> 00:06:01,078
+The order button locks, and the first of
+the seven checks refuses anything else.
+
+106
+00:06:01,118 --> 00:06:03,127
+The switch survives restarts,
+
+107
+00:06:03,167 --> 00:06:07,263
+and is replicated by a three-node
+RAFT cluster with signed messages:
+
+108
+00:06:07,303 --> 00:06:11,129
+engaging works without a
+majority, releasing needs one.
+
+109
+00:06:11,169 --> 00:06:13,304
+Let's kill the leader process.
+
+110
+00:06:13,344 --> 00:06:16,384
+A new leader within seconds, nothing lost.
+
+111
+00:06:16,424 --> 00:06:20,933
+Two of three is a majority, so
+we release, and trading resumes.
+
+112
+00:06:20,973 --> 00:06:24,838
+The limits, a loss limit that
+engages the switch by itself,
+
+113
+00:06:24,878 --> 00:06:28,292
+and concentration alerts
+live on the Risk Manager.
+
+114
+00:06:28,771 --> 00:06:32,996
+Also in the box: bots that trade
+from a fenced automation fund,
+
+115
+00:06:33,036 --> 00:06:36,527
+with a practice lab that measures
+every one of their trades;
+
+116
+00:06:36,567 --> 00:06:41,940
+an arbitrage detector that watches every
+exchange pair after fees and, by design,
+
+117
+00:06:41,980 --> 00:06:43,164
+cannot trade;
+
+118
+00:06:43,204 --> 00:06:44,285
+venue health;
+
+119
+00:06:44,325 --> 00:06:49,038
+and the audit log, the append-only
+record of every step with who did it.
+
+120
+00:06:50,503 --> 00:06:55,063
+Everything so far ran in the
+exchanges' sandboxes, with play money.
+
+121
+00:06:55,103 --> 00:06:59,110
+The same code runs on a separate
+real-money server with a fixed IP,
+
+122
+00:06:59,150 --> 00:07:01,674
+reached only through an SSH tunnel.
+
+123
+00:07:01,714 --> 00:07:06,146
+An exchange gets orders only after it
+confirms that our key can trade but cannot
+
+124
+00:07:06,186 --> 00:07:07,087
+withdraw.
+
+125
+00:07:07,127 --> 00:07:11,107
+Hard caps live in the server's settings
+where no screen can loosen them,
+
+126
+00:07:11,147 --> 00:07:15,205
+going live is typed, alerts
+reach a private Discord channel,
+
+127
+00:07:15,245 --> 00:07:18,246
+and a stop from the phone
+engages the kill switch;
+
+128
+00:07:18,286 --> 00:07:20,514
+nothing releases it from the phone.
+
+129
+00:07:21,515 --> 00:07:26,398
+The contribution is the integration:
+real exchanges, fee-aware routing,
+
+130
+00:07:26,438 --> 00:07:31,926
+deterministic risk, algorithms,
+research, a copilot a person confirms,
+
+131
+00:07:31,966 --> 00:07:35,457
+and an audit trail, one
+system, verified live.
+
+132
+00:07:35,497 --> 00:07:40,432
+ApnaSOR, group CS14, Usman
+Institute of Technology,
+
+133
+00:07:40,472 --> 00:07:43,149
+supervised by Sir Shamaail Jafri.

@@ -103,7 +103,7 @@ class NoSandboxTest(unittest.TestCase):
         self.assertEqual((a.venue_id, a.name, a.has_credentials), ("V7", "HTX", True))
 
 
-def htx_answer(permission: str = "readOnly,trade", ips: str = "16.18.141.32", status: str = "normal",
+def htx_answer(permission: str = "readOnly,trade", ips: str = "203.0.113.10", status: str = "normal",
                valid_days: int = -1, key: str = "K") -> dict:
     return {"code": 200, "message": "success", "data": [
         {"accessKey": "OTHER", "permission": "readOnly,trade,withdraw", "ipAddresses": "", "status": "normal"},

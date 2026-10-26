@@ -12,7 +12,7 @@
 
 Started from a clean folder (`D:\Sor-Fyp\`) that contained only 12 planning markdown files. By the end of this session:
 
-- All planning docs moved into a new `project-info/` directory (except `CLAUDE.md`, which has to stay at the project root so the AI assistant auto-loads it).
+- All planning docs moved into a new `project-info/` directory (except the project guide, which stays at the project root so it is found first).
 - The full canonical folder tree from `project-info/PROJECT_STRUCTURE.md` exists on disk, even for modules we won't write code for until M3 (consensus, policy, migrations).
 - Python packages have `__init__.py` so imports resolve cleanly once we start writing code.
 - Top-level `README.md`, `PROGRESS.md`, this journal, `.env.example`, `.gitignore`, `requirements.txt` for backend + venues, and `pyproject.toml` are all in place.
@@ -24,7 +24,7 @@ Started from a clean folder (`D:\Sor-Fyp\`) that contained only 12 planning mark
 
 1. The team will be pulling from GitHub. A clear, canonical layout means Fizza (frontend), Mahnoor (algorithms), and Maham (testing) can each find their workspace without asking. Code goes in the same place no matter who writes it.
 2. The POC is **Phase 1 of the full system, not a throwaway demo.** Every folder that exists for M3 has to also exist now — empty if needed — so that M3 contributors don't shuffle files around and break imports across the codebase.
-3. AI coding assistants (us) work much better against a known layout. `PROJECT_STRUCTURE.md` is the spec, and the folder tree on disk matches it. No ambiguity.
+3. Everyone works better against a known layout. `PROJECT_STRUCTURE.md` is the spec, and the folder tree on disk matches it. No ambiguity.
 
 **Why `project-info/` instead of `docs/` (which `PROJECT_STRUCTURE.md` originally said).** User direct instruction. The new name reads better — `docs/` could be confused for runtime user documentation; `project-info/` is unambiguously the planning workspace.
 
@@ -64,7 +64,7 @@ Additional decision (carried in from prior conversation, captured in AI memory):
 
 - **Created:** `README.md`, `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md`, `.env.example`, `.gitignore`, `backend/{requirements.txt,requirements-dev.txt,pyproject.toml,README.md}`, `venues/{requirements.txt,README.md}`, `frontend/README.md`, `infra/README.md`, `tests/README.md`, `scripts/README.md`, plus `__init__.py` in every Python package.
 - **Moved:** All 11 planning docs from project root → `project-info/`.
-- **Edited:** `CLAUDE.md` — updated path references from `docs/…` → `project-info/…` and noted AWS-only + POC-is-in-memory caveats.
+- **Edited:** `PROJECT_GUIDE.md` — updated path references from `docs/…` → `project-info/…` and noted AWS-only + POC-is-in-memory caveats.
 
 ### What the next session should expect
 
@@ -621,7 +621,7 @@ The trader's text goes in its **own user message**, never into the instructions,
 ### Files
 
 - **New:** `backend/services/agents/` (`__init__.py`, `llm.py`, `copilot.py`), `backend/shared/models/copilot.py`, `backend/gateway/routers/copilot.py`, `backend/tests/test_copilot/`.
-- **Changed:** `gateway/config.py` (LLM settings), `gateway/dependencies.py` (wiring), `gateway/main.py` (router, error codes), `backend/requirements*.txt` (`httpx` to runtime), `.env.example` (Gemini replaces Anthropic), ROADMAP §5b (done boxes + API contract for the chat panel), API_KEYS_GUIDE, ONBOARDING, PROGRESS, CLAUDE.md.
+- **Changed:** `gateway/config.py` (LLM settings), `gateway/dependencies.py` (wiring), `gateway/main.py` (router, error codes), `backend/requirements*.txt` (`httpx` to runtime), `.env.example` (Gemini replaces Anthropic), ROADMAP §5b (done boxes + API contract for the chat panel), API_KEYS_GUIDE, ONBOARDING, PROGRESS, PROJECT_GUIDE.md.
 
 ---
 
@@ -674,7 +674,7 @@ for round in 0..MAX_REROUTES (2):
 
 ### Files
 
-- **Changed:** `backend/exchanges/base.py`, `backend/exchanges/ccxt_venue.py`, `backend/services/routing_engine/engine.py`, `backend/gateway/config.py` (`trading_block_cooldown_s`), `backend/gateway/dependencies.py`, `backend/services/agents/copilot.py`, `.env.example`, CLAUDE.md, PROGRESS.md, API_KEYS_GUIDE.
+- **Changed:** `backend/exchanges/base.py`, `backend/exchanges/ccxt_venue.py`, `backend/services/routing_engine/engine.py`, `backend/gateway/config.py` (`trading_block_cooldown_s`), `backend/gateway/dependencies.py`, `backend/services/agents/copilot.py`, `.env.example`, PROJECT_GUIDE.md, PROGRESS.md, API_KEYS_GUIDE.
 - **New:** `backend/tests/test_routing/test_reroute.py`, `backend/tests/test_exchanges/test_execution_errors.py`.
 
 ---
@@ -772,7 +772,7 @@ Also fixed on the way: the **venue blacklist was never saved** — a restart sil
 ### Files
 
 - **New:** `backend/services/consensus/` (`core.py`, `storage.py`, `state_machine.py`, `node.py`, `client.py`), `backend/services/risk_engine/` (`checks.py`, `batch.py`, `preflight.py`, `volatility.py`, `controls.py`), `backend/shared/models/consensus.py`, `backend/gateway/routers/consensus.py`, `backend/tests/test_consensus/`, `backend/tests/test_risk_batch/`, `scripts/benchmark_risk_batch.py`, `scripts/raft_demo.py`, `project-info/benchmarks/risk-batch.{json,svg}`.
-- **Changed:** `pre_trade.py` (uses the pure checks, `preflight()`), `risk_monitor.py` (automatic halt via `RiskControls`), `health_checker.py` (blacklist persisted + restored), `twap.py` (pre-flight), `shared/models/risk.py` (pre-flight models), routers `risk.py` / `venues.py` (through `RiskControls`, `POST /api/risk/preflight`), `gateway/config.py` (`RAFT_*`, `RISK_POOL_*`, `RISK_STRESS_*`), `dependencies.py`, `main.py` (start-up sync, 503 `CONSENSUS_UNAVAILABLE`, consensus in `/api/health`), `start_all.py` (starts + restarts the nodes), `.env.example`, `scripts/README.md`, CLAUDE.md, PROGRESS.md, ROADMAP §6.
+- **Changed:** `pre_trade.py` (uses the pure checks, `preflight()`), `risk_monitor.py` (automatic halt via `RiskControls`), `health_checker.py` (blacklist persisted + restored), `twap.py` (pre-flight), `shared/models/risk.py` (pre-flight models), routers `risk.py` / `venues.py` (through `RiskControls`, `POST /api/risk/preflight`), `gateway/config.py` (`RAFT_*`, `RISK_POOL_*`, `RISK_STRESS_*`), `dependencies.py`, `main.py` (start-up sync, 503 `CONSENSUS_UNAVAILABLE`, consensus in `/api/health`), `start_all.py` (starts + restarts the nodes), `.env.example`, `scripts/README.md`, PROJECT_GUIDE.md, PROGRESS.md, ROADMAP §6.
 
 ### Addendum (same night): signed messages, and no waiting without a majority
 
@@ -868,7 +868,7 @@ Books are sampled four times a second, so part of a crossing can be one exchange
 
 ### Files
 
-New: `backend/services/arbitrage/` (`detector.py`), `backend/shared/models/arbitrage.py`, `backend/gateway/routers/arbitrage.py`, `backend/tests/test_arbitrage/` (27 tests), `backend/tests/test_api/test_websocket_channels.py`, `scripts/arb_watch.py`. Changed: `gateway/config.py` (`ARB_*`), `dependencies.py`, `main.py` (start/stop, `arb_update`), `websocket/ws_manager.py` (`algo_update`, `arb_update`), `.env.example`, ROADMAP §5c, CLAUDE.md, `scripts/README.md`. 254 tests.
+New: `backend/services/arbitrage/` (`detector.py`), `backend/shared/models/arbitrage.py`, `backend/gateway/routers/arbitrage.py`, `backend/tests/test_arbitrage/` (27 tests), `backend/tests/test_api/test_websocket_channels.py`, `scripts/arb_watch.py`. Changed: `gateway/config.py` (`ARB_*`), `dependencies.py`, `main.py` (start/stop, `arb_update`), `websocket/ws_manager.py` (`algo_update`, `arb_update`), `.env.example`, ROADMAP §5c, PROJECT_GUIDE.md, `scripts/README.md`. 254 tests.
 
 ---
 
@@ -1086,7 +1086,7 @@ Before the reload, the dashboard was still running the old code and was refused,
 
 ### Files
 
-New: `backend/tests/test_api/test_websocket_auth.py`. Changed: `backend/gateway/middleware/auth.py` (`decode_access_token`, `TokenError`), `backend/gateway/websocket/ws_manager.py` (`serve`, login handshake, expiry close), `backend/gateway/main.py` (`/ws` endpoint), `frontend/src/services/websocket.ts` (auth message, stop on 4401); PROGRESS.md, ROADMAP §7, CLAUDE.md.
+New: `backend/tests/test_api/test_websocket_auth.py`. Changed: `backend/gateway/middleware/auth.py` (`decode_access_token`, `TokenError`), `backend/gateway/websocket/ws_manager.py` (`serve`, login handshake, expiry close), `backend/gateway/main.py` (`/ws` endpoint), `frontend/src/services/websocket.ts` (auth message, stop on 4401); PROGRESS.md, ROADMAP §7, PROJECT_GUIDE.md.
 
 ## 2026-10-06 — The TWAP chart on small phones
 
@@ -1126,7 +1126,7 @@ Closes the open question logged on 2026-10-05: `components/shared.tsx` still car
 
 - **`LatencyChart`** drew random latency lines labelled NYSE / NASDAQ / BATS / IEX — made-up data for venues ApnaSOR has never had. Deleted so nobody reuses it on a page (the panel rejected simulated data).
 - **`fmtLatency`** printed microseconds as a garbled "Âµs". Deleted; real latencies are shown in ms by the pages themselves.
-- **Garbled comments repaired:** the file's 7 section dividers read `// â”€â”€ Card wrapper â”€â”€…` — the UTF-8 box-drawing character `─` decoded as Windows-1252, the PowerShell rewrite damage described in CLAUDE.md's gotchas (the same damage broke "µs"). Restored to `// ── Card wrapper ──…`. A search of `frontend/src` found no other file with it.
+- **Garbled comments repaired:** the file's 7 section dividers read `// â”€â”€ Card wrapper â”€â”€…` — the UTF-8 box-drawing character `─` decoded as Windows-1252, the PowerShell rewrite damage described in PROJECT_GUIDE.md's gotchas (the same damage broke "µs"). Restored to `// ── Card wrapper ──…`. A search of `frontend/src` found no other file with it.
 
 Checked before deleting: neither name is referenced anywhere in `frontend/` (outside `node_modules`). After: no garbled characters left in the file, its Windows line endings unchanged, type-check passes, and a full production build (`vite build`, into a scratch folder) compiles all 77 modules. Nothing on screen changes, so no browser check was needed.
 
@@ -1151,7 +1151,7 @@ Checked after merging: 262 backend tests pass, frontend type-check and productio
 
 ### Files
 
-PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, CLAUDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
+PROGRESS.md (top entry, rows, handoff note, open questions, branch state, test counts), this journal, PROJECT_GUIDE.md (test count; gotchas: VPN → 451/403, a hidden browser pane fires no `ResizeObserver`), ONBOARDING.md (troubleshooting: VPN; a frontend older than the backend gets no live updates), PHASE6_GUIDE.md (expected test count). No code changes beyond the two merges.
 
 ---
 
@@ -1192,7 +1192,7 @@ Sarmad's open question asked Fizza and Mahnoor to check. Fizza's `.env` holds **
 | Bybit ETH | +0.0074 | 0 | +0.0074 ✓ |
 | Bybit USDT | −127 | −130 | −257 ✓ |
 
-All six match. So Sarmad's mystery is two things: Fizza's own test trades, **and a third source** — another gateway with his keys, or someone trading by hand on the exchange websites — which both of their ledgers see as foreign. Maham was already ruled out; Mahnoor is still to check. Until Fizza has her own keys she places no live orders. This is the CLAUDE.md gotcha "each person needs their own exchange accounts/keys", seen from both sides.
+All six match. So Sarmad's mystery is two things: Fizza's own test trades, **and a third source** — another gateway with his keys, or someone trading by hand on the exchange websites — which both of their ledgers see as foreign. Maham was already ruled out; Mahnoor is still to check. Until Fizza has her own keys she places no live orders. This is the PROJECT_GUIDE.md gotcha "each person needs their own exchange accounts/keys", seen from both sides.
 
 ### Finding 2: the first "profitable" arbitrage windows were an OKX glitch
 
@@ -1200,7 +1200,7 @@ With OKX's feed up, the detector audited its first 10 profitable windows (09:25�
 
 ### Files
 
-New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), CLAUDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
+New: `.github/workflows/ci.yml`. Changed: `backend/pyproject.toml` (ruff: FastAPI defaults allowed), `backend/gateway/routers/{auth,orders,execution_reports}.py`, `backend/tests/test_consensus/test_raft_network.py`, `scripts/check_binance_testnet.py` (ruff only); CONTRIBUTING.md (*After you push*, ruff in the daily loop, CI in the merge checklist), PROJECT_GUIDE.md (ruff command, CI), PROGRESS.md (top entry, relay row, handoff note, open questions), ROADMAP §7. 262 backend tests pass on Windows and Linux; ruff clean; type-check passes.
 
 ## 2026-10-06 — Security hardening: no secrets in the code, only our frontend, real passwords
 
@@ -1240,13 +1240,13 @@ Three holes from *Open questions → security hardening* (logged 2026-10-02), cl
 
 ### Files
 
-New: `backend/gateway/middleware/passwords.py`, `scripts/hash_password.py`, `scripts/security_check.py`, `backend/tests/test_api/test_security_settings.py`, `test_logins.py`, `project-info/SECURITY_GUIDE.md`. Changed: `backend/gateway/config.py`, `main.py`, `middleware/auth.py`, `routers/auth.py`, `websocket/ws_manager.py`, `start_all.py`, `scripts/arb_watch.py`, `scripts/raft_demo.py`, `backend/tests/test_api/test_websocket_auth.py`, `frontend/src/pages/Login.tsx`, `frontend/src/services/api.ts`, `.env.example`; docs: CLAUDE.md, PROGRESS.md, ROADMAP §7, ONBOARDING.md, CONTRIBUTING.md (CI "about 2 minutes").
+New: `backend/gateway/middleware/passwords.py`, `scripts/hash_password.py`, `scripts/security_check.py`, `backend/tests/test_api/test_security_settings.py`, `test_logins.py`, `project-info/SECURITY_GUIDE.md`. Changed: `backend/gateway/config.py`, `main.py`, `middleware/auth.py`, `routers/auth.py`, `websocket/ws_manager.py`, `start_all.py`, `scripts/arb_watch.py`, `scripts/raft_demo.py`, `backend/tests/test_api/test_websocket_auth.py`, `frontend/src/pages/Login.tsx`, `frontend/src/services/api.ts`, `.env.example`; docs: PROJECT_GUIDE.md, PROGRESS.md, ROADMAP §7, ONBOARDING.md, CONTRIBUTING.md (CI "about 2 minutes").
 
 ## 2026-10-06 — Team decision: one shared set of testnet keys
 
 *Decided by Fizza (backend relay); documented on `feature/backend-v2`.*
 
-The rule so far was "each person makes their own exchange accounts and keys" (CLAUDE.md gotcha, CONTRIBUTING, ONBOARDING, EXCHANGE_API_KEY_SECURITY.md). In practice the team already shared: each exchange was set up by one person — **Gate: Fizza's account, OKX: Maham's, Binance + Bybit: Sarmad's** — and the keys were passed on. Following the rule would mean three extra accounts per person for fake money, so the team now uses **one shared set of testnet keys** on purpose.
+The rule so far was "each person makes their own exchange accounts and keys" (PROJECT_GUIDE.md gotcha, CONTRIBUTING, ONBOARDING, EXCHANGE_API_KEY_SECURITY.md). In practice the team already shared: each exchange was set up by one person — **Gate: Fizza's account, OKX: Maham's, Binance + Bybit: Sarmad's** — and the keys were passed on. Following the rule would mean three extra accounts per person for fake money, so the team now uses **one shared set of testnet keys** on purpose.
 
 **What sharing costs (and what it doesn't).** Each laptop's ledger (`data/apnasor-testnet.db`) only knows its own fills, so a teammate's trades appear on everyone else's Wallet as reconciliation BREAKs, and each laptop's P&L counts only its own trades. That is exactly what the "someone is trading on Sarmad's accounts" question (2026-10-05) turned out to be. Checked in the code before deciding: the **automatic loss limit** uses only the laptop's own fills (`PnLService.trading_pnl` values the ledger, not the balances), so a teammate's trades can't trip it; **the kill-switch sweep** (`CcxtVenueAdapter.cancel_all_open_orders`) cancels every open order on the account — but ApnaSOR's children are IOC and never rest, so it only matters for a resting order placed by hand on an exchange website. Trading, routing, risk checks, TWAPs and market data don't care who else uses the key.
 
@@ -1254,7 +1254,7 @@ The rule so far was "each person makes their own exchange accounts and keys" (CL
 
 **Consequences:** Fizza's "no live orders until she has her own keys" pause (2026-10-06) is lifted. **Settled the same day:** the third set of trades on Sarmad's accounts was Mahnoor's gateway on his Binance + Bybit keys (Fizza confirmed with her). So all of Sarmad's "unexplained" trades were teammates' — no leak, no key to replace.
 
-Changed: CONTRIBUTING.md, CLAUDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
+Changed: CONTRIBUTING.md, PROJECT_GUIDE.md (gotcha), ONBOARDING.md (§4 + troubleshooting), project-info/EXCHANGE_API_KEY_SECURITY.md (§3.1), project-info/PHASE6_GUIDE.md, PROGRESS.md (*Open questions*). No code change.
 
 ---
 
@@ -1314,7 +1314,7 @@ The four `start_all.py` items from the handoff note *2026-10-06 (3)*: (a) wait f
 
 ### Files
 
-New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: CLAUDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
+New: `project-info/START_STOP_GUIDE.md`, `backend/tests/test_start_all.py`. Changed: `start_all.py`, `backend/services/risk_engine/controls.py`, `backend/services/consensus/node.py`, `backend/tests/test_consensus/test_risk_controls.py`; docs: PROJECT_GUIDE.md (test count, repo map, trusted docs, three gotchas), PROGRESS.md, ROADMAP §7, ONBOARDING.md (Ctrl+C, troubleshooting row).
 
 **Handover (same night):** Fizza is done for now; the backend relay goes to Sarmad. His to-do list (CI check, try it, merge, team message, docs rewrite, demo-laptop prep, the RAFT-on-for-the-demo decision) and a one-line summary of everything done so far: PROGRESS.md → *Handoff 2026-10-06 (night) — Fizza → Sarmad*.
 
@@ -1343,9 +1343,9 @@ Fizza's handover asked for: CI check → try it → merge. Done in that order.
 
 **Options (not decided; PROGRESS.md → *Open questions*):** (a) a guarded Windows-only fix at gateway start so a failing `shutdown()` still closes the socket and detaches (cures the cause; touches a private asyncio method); (b) run uvicorn from our own script with a time limit on `wait_closed()` only, after connections and requests are done (cancels nothing in flight); (c) uvicorn's `--timeout-graceful-shutdown` (simplest, but cancels running requests at its limit — rule 6; Fizza rejected it for that reason).
 
-Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binance had 5/5 books (the known `MOCK_VENUES` item); OKX unreachable on this machine (ISP DNS — CLAUDE.md gotcha); Bybit's WebSocket timed out a few times at start and then synced 5/5. A test RAFT log now exists on this machine (`data/raft-testnet/`, gitignored).
+Also seen: the Login page's venue panel says "Binance DISCONNECTED" while Binance had 5/5 books (the known `MOCK_VENUES` item); OKX unreachable on this machine (ISP DNS — PROJECT_GUIDE.md gotcha); Bybit's WebSocket timed out a few times at start and then synced 5/5. A test RAFT log now exists on this machine (`data/raft-testnet/`, gitignored).
 
-Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), CLAUDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
+Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Open questions*, branch state), PROJECT_GUIDE.md (gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), this journal.
 
 ---
 
@@ -1376,14 +1376,14 @@ Files: PROGRESS.md (top entry, rows, relay note, Fizza's to-do marked done, *Ope
 **Design notes.**
 - An `OSError` raised by the protocol itself (asyncio's clean-up finished: `_called_connection_lost` is set) is passed on unchanged; only a failure before the clean-up finished is handled.
 - Handled resets are logged at debug level (`connection_reset_closed`) instead of the old "Exception in callback" traceback.
-- Installed first thing in the gateway's `lifespan` (uvicorn runs it before it accepts connections) and in a node's `main()` before `asyncio.run`. Any new process that runs an asyncio server on Windows should call `fix_windows_connection_reset()` too (CLAUDE.md gotcha).
+- Installed first thing in the gateway's `lifespan` (uvicorn runs it before it accepts connections) and in a node's `main()` before `asyncio.run`. Any new process that runs an asyncio server on Windows should call `fix_windows_connection_reset()` too (PROJECT_GUIDE.md gotcha).
 - The wrapper keeps asyncio's own method as `__wrapped__`, which the test uses to show the bug before showing the fix.
 
 **Verified.**
 - `backend/tests/test_asyncio_fixes.py`, 8 tests: the wrapper on a fake transport (every OS, against asyncio's real method), installation, and on Windows real sockets: half-close then reset → `wait_closed()` **hangs with asyncio's own method** (so the test really exercises the bug) and **returns with the fix**, with nothing reaching the loop's error handler. 3 runs in a row, stable. 322 tests in all; ruff clean.
 - Live (RAFT on, a throwaway secret as environment variables, browser logged in and clicked through 8 pages, two `/ws` connections open at the stop, real Ctrl+C in `start_all.py`'s console): gateway stopped cleanly in 2.8 s, `gateway_stopped` audited, frontend and nodes stopped, 3.7 s in all, no ports left. The browser's trigger didn't happen in that run, so this shows no regression; the Windows test is the proof of the fix.
 
-Files: new `backend/shared/utils/asyncio_fixes.py`, `backend/tests/test_asyncio_fixes.py`; changed `backend/gateway/main.py` (`lifespan`), `backend/services/consensus/node.py` (`main`); docs: CLAUDE.md (repo map, test count, gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), PROGRESS.md, this journal.
+Files: new `backend/shared/utils/asyncio_fixes.py`, `backend/tests/test_asyncio_fixes.py`; changed `backend/gateway/main.py` (`lifespan`), `backend/services/consensus/node.py` (`main`); docs: PROJECT_GUIDE.md (repo map, test count, gotcha), project-info/START_STOP_GUIDE.md (*Honest limits*), PROGRESS.md, this journal.
 
 ---
 
@@ -1452,7 +1452,7 @@ The 12 October deadline is no longer the goal; a complete, correct product is. S
 
 ### One branch, one person at a time
 
-From today everyone works on `feature/crypto-pivot`, backend and screens together, as a relay (Sarmad decides who holds it). `feature/backend-v2` / `feature/frontend-v2` are retired. Before retiring them: the Ctrl+C fix (`feature/backend-v2`) was merged, and Mahnoor + Maham's redesign was saved as **`theme/liquid-glass`** — a visual theme to borrow from, not the product. Maham's three bug fixes from that branch were taken into the product as they are (one WebSocket per tab, `npm audit` 9 → 4, the Audit Log *Logins* filter); her journal entries came with them. CLAUDE.md, CONTRIBUTING.md, ONBOARDING.md and PROGRESS.md describe the new loop.
+From today everyone works on `feature/crypto-pivot`, backend and screens together, as a relay (Sarmad decides who holds it). `feature/backend-v2` / `feature/frontend-v2` are retired. Before retiring them: the Ctrl+C fix (`feature/backend-v2`) was merged, and Mahnoor + Maham's redesign was saved as **`theme/liquid-glass`** — a visual theme to borrow from, not the product. Maham's three bug fixes from that branch were taken into the product as they are (one WebSocket per tab, `npm audit` 9 → 4, the Audit Log *Logins* filter); her journal entries came with them. PROJECT_GUIDE.md, CONTRIBUTING.md, ONBOARDING.md and PROGRESS.md describe the new loop.
 
 ### Routing strategies: what was fake
 
@@ -1473,7 +1473,7 @@ Design choice: the three strategies share one implementation (`BestPriceStrategy
 
 ### Files
 
-New: `strategies/sweep.py`, `strategies/smart.py`, `tests/test_routing/test_strategies.py`, `tests/test_routing/test_engine_strategies.py`. Changed: `strategies/best_price.py` (fees, hooks), `strategies/base.py`, `strategies/__init__.py` (`build_strategies`), `routing_engine/engine.py` (strategy per order, fees, fill window, `limit_final`), `shared/models/order.py`, `shared/models/routing.py`, `gateway/config.py` (`SWEEP_BAND_BPS`), `gateway/dependencies.py`, `gateway/routers/routing.py`, `.env.example`; frontend `services/api.ts`, `stores/dataStore.ts`, `components/NewOrderModal.tsx`, `components/RoutingProof.tsx`; ROADMAP *Full product*, PROGRESS.md, CLAUDE.md, CONTRIBUTING.md, ONBOARDING.md.
+New: `strategies/sweep.py`, `strategies/smart.py`, `tests/test_routing/test_strategies.py`, `tests/test_routing/test_engine_strategies.py`. Changed: `strategies/best_price.py` (fees, hooks), `strategies/base.py`, `strategies/__init__.py` (`build_strategies`), `routing_engine/engine.py` (strategy per order, fees, fill window, `limit_final`), `shared/models/order.py`, `shared/models/routing.py`, `gateway/config.py` (`SWEEP_BAND_BPS`), `gateway/dependencies.py`, `gateway/routers/routing.py`, `.env.example`; frontend `services/api.ts`, `stores/dataStore.ts`, `components/NewOrderModal.tsx`, `components/RoutingProof.tsx`; ROADMAP *Full product*, PROGRESS.md, PROJECT_GUIDE.md, CONTRIBUTING.md, ONBOARDING.md.
 
 ---
 
@@ -1511,7 +1511,7 @@ On the page: the five algorithms and their fields, Auto's card and **Use this** 
 
 ### Files
 
-New: `services/algos/engine.py`, `services/algos/schedules.py`, `services/market_data/history.py`, `tests/test_algos/test_schedules.py`, `tests/test_algos/test_algo_kinds.py`, `project-info/ALGORITHMS_GUIDE.md`. Changed: `services/algos/twap.py` (re-exports), `services/algos/__init__.py`, `shared/models/strategy.py` (`AlgoKind`, `AlgoCreate`, `AlgoState`, recommendation models), `shared/models/market_data.py` (`MinuteBar`), `exchanges/base.py` (`Candle`, `fetch_candles`), `exchanges/ccxt_venue.py`, `gateway/routers/algos.py`, `gateway/dependencies.py` (`algo_engine`, `market_history`), `gateway/main.py`; frontend `services/api.ts`, `stores/dataStore.ts`, `pages/AlgoOrders.tsx`; ROADMAP, PROGRESS, CLAUDE.md.
+New: `services/algos/engine.py`, `services/algos/schedules.py`, `services/market_data/history.py`, `tests/test_algos/test_schedules.py`, `tests/test_algos/test_algo_kinds.py`, `project-info/ALGORITHMS_GUIDE.md`. Changed: `services/algos/twap.py` (re-exports), `services/algos/__init__.py`, `shared/models/strategy.py` (`AlgoKind`, `AlgoCreate`, `AlgoState`, recommendation models), `shared/models/market_data.py` (`MinuteBar`), `exchanges/base.py` (`Candle`, `fetch_candles`), `exchanges/ccxt_venue.py`, `gateway/routers/algos.py`, `gateway/dependencies.py` (`algo_engine`, `market_history`), `gateway/main.py`; frontend `services/api.ts`, `stores/dataStore.ts`, `pages/AlgoOrders.tsx`; ROADMAP, PROGRESS, PROJECT_GUIDE.md.
 
 ---
 
@@ -1553,7 +1553,7 @@ Sarmad asked for a tool that predicts prices and suggests the next trade "using 
 
 ### Files
 
-New: `backend/services/research/` (`candles.py`, `indicators.py`, `model.py`, `signals.py`, `backtest.py`, `sizing.py`, `service.py`), `backend/gateway/routers/research.py`, `backend/tests/test_research/`, `frontend/src/pages/Research.tsx`, `frontend/src/components/ResearchChart.tsx`, `project-info/RESEARCH_GUIDE.md`. Changed: `backend/requirements.txt` (numpy), `gateway/config.py` (`MARKET_HISTORY_DB_PATH`), `gateway/dependencies.py`, `gateway/main.py`, `.env.example`; frontend `services/api.ts`, `App.tsx`, `components/AppShell.tsx`; ROADMAP, PROGRESS, CLAUDE.md.
+New: `backend/services/research/` (`candles.py`, `indicators.py`, `model.py`, `signals.py`, `backtest.py`, `sizing.py`, `service.py`), `backend/gateway/routers/research.py`, `backend/tests/test_research/`, `frontend/src/pages/Research.tsx`, `frontend/src/components/ResearchChart.tsx`, `project-info/RESEARCH_GUIDE.md`. Changed: `backend/requirements.txt` (numpy), `gateway/config.py` (`MARKET_HISTORY_DB_PATH`), `gateway/dependencies.py`, `gateway/main.py`, `.env.example`; frontend `services/api.ts`, `App.tsx`, `components/AppShell.tsx`; ROADMAP, PROGRESS, PROJECT_GUIDE.md.
 
 ## 2026-10-08 (later) — Phase C: bots and agents, a fund of their own, and a practice lab
 
@@ -1646,7 +1646,7 @@ New: `backend/services/automation/` (`fund.py`, `cycle.py`, `advisor.py`, `lab.p
 `project-info/AUTOMATION_GUIDE.md`. Changed: `order_state/entry.py` (the guard), `research/service.py`
 (`forecast_horizon`, measured slippage), `database/store.py` (tables `bots`, `lab_samples`), `gateway/dependencies.py`,
 `gateway/main.py`, `websocket/ws_manager.py` (`bot_update`), `scripts/check_exchange_keys.py`; frontend `api.ts`,
-`App.tsx`, `AppShell.tsx`, `Wallet.tsx`; docs CLAUDE.md, PROGRESS.md, ROADMAP.md.
+`App.tsx`, `AppShell.tsx`, `Wallet.tsx`; docs PROJECT_GUIDE.md, PROGRESS.md, ROADMAP.md.
 
 ---
 
@@ -1758,7 +1758,7 @@ install `previous` pointed at `current` (now `readlink -e`). CI now checks for b
   `tests/test_automation/test_engine.py`.
 - Frontend: `services/api.ts`, `services/websocket.ts`, `vite-env.d.ts`, `.env.lab-server`, `package.json`,
   `components/AppShell.tsx`, `pages/Login.tsx`.
-- Config and docs: `.env.example`, AUTOMATION_GUIDE.md, ROADMAP.md, CLAUDE.md, PROGRESS.md.
+- Config and docs: `.env.example`, AUTOMATION_GUIDE.md, ROADMAP.md, PROJECT_GUIDE.md, PROGRESS.md.
 
 **Later the same day: Zurich, not Mumbai** (Sarmad didn't want the server in India). The region was chosen by test
 this time, not by assumption. check-host.net called Binance (testnet + real market) and Bybit (demo + real market)
@@ -1897,7 +1897,7 @@ ceilings.py` (new), `pre_trade.py`, `controls.py`; `backend/shared/models/risk.p
 `dependencies.py`, `main.py`, `routers/risk.py`; `scripts/check_exchange_keys.py`; frontend `components/shared.tsx`,
 `NewOrderModal.tsx`, `pages/AlgoOrders.tsx`, `Automation.tsx`, `RiskManager.tsx`, `VenueHealth.tsx`, `services/api.ts`;
 tests `test_exchanges/test_key_permissions.py`, `test_real_money.py`, `test_automation/test_engine.py`,
-`test_consensus/test_risk_controls.py`; `.env.example`; docs `project-info/REAL_MONEY_GUIDE.md` (new), ROADMAP, CLAUDE.md,
+`test_consensus/test_risk_controls.py`; `.env.example`; docs `project-info/REAL_MONEY_GUIDE.md` (new), ROADMAP, PROJECT_GUIDE.md,
 PROGRESS.md.
 
 ---
@@ -1938,7 +1938,7 @@ this network: the known DNS issue); the Dashboard shows SANDBOX, Depth Sweep and
 `ccxt_venue.py`, `coinbase/adapter.py`, `registry.py`, `services/venue_monitor/coherence.py`, `gateway/main.py`,
 `routers/auth.py`, `routers/venues.py`, `services/automation/engine.py`, `fund.py`, `lab.py`, `services/wallet/pnl.py`,
 `shared/models/arbitrage.py`; test `test_api/test_logins.py`. Docs: supervisor corrected to Sir Shamaail Jafri
-(CLAUDE.md, project-info/README.md).
+(PROJECT_GUIDE.md, project-info/README.md).
 
 ---
 
@@ -2015,7 +2015,7 @@ table, quick analysis in the drawer. **Not verified live: the chat with a model*
 `gateway/config.py`, `dependencies.py`, `routers/copilot.py`, `routers/research.py`; `requirements.txt`;
 `.env.example`. Tests: `test_research/test_techniques.py`, `test_copilot/test_analyst.py`, `test_claude.py`,
 `test_copilot_v2.py`. Frontend: `components/CopilotPanel.tsx` (new), `AppShell.tsx`, `pages/Research.tsx`,
-`services/api.ts`, `format.ts`. Docs: `project-info/COPILOT_GUIDE.md` (new), `RESEARCH_GUIDE.md`, `CLAUDE.md`,
+`services/api.ts`, `format.ts`. Docs: `project-info/COPILOT_GUIDE.md` (new), `RESEARCH_GUIDE.md`, `PROJECT_GUIDE.md`,
 `PROGRESS.md`, `ROADMAP.md`.
 
 **Later the same day — the live chat check (Gemini).** Sarmad added his free Gemini key and about twenty requests
@@ -2034,7 +2034,7 @@ request timed out on the free tier (the same text answered in 4 s straight after
 after a timeout or a 5xx, never after a refused key or the free-tier limit. Also: POV and iceberg ask "how long may
 it keep working at most", and the drawer says "Connecting…" instead of "Add an AI key" while its status loads.
 5 new tests (534). Files: `agents/copilot.py`, `analyst.py`, `llm.py`, `components/CopilotPanel.tsx`, tests
-`test_copilot_v2.py`, `test_analyst.py`, `test_llm.py`; docs `COPILOT_GUIDE.md`, `PROGRESS.md`, `ROADMAP.md`, `CLAUDE.md`.
+`test_copilot_v2.py`, `test_analyst.py`, `test_llm.py`; docs `COPILOT_GUIDE.md`, `PROGRESS.md`, `ROADMAP.md`, `PROJECT_GUIDE.md`.
 
 ---
 
@@ -2078,7 +2078,7 @@ to be fully separate from the sandbox, with every experiment finished in the san
   verdict.
 
 *Pending:* Sarmad's decisions A1–A7 (server, exchanges, starting money, alerts, copilot, bots, the M3 date).
-*Files:* `project-info/PHASE_D_PLAN.md` (new); links in `ROADMAP.md`, `REAL_MONEY_GUIDE.md`, `CLAUDE.md`; `PROGRESS.md`.
+*Files:* `project-info/PHASE_D_PLAN.md` (new); links in `ROADMAP.md`, `REAL_MONEY_GUIDE.md`, `PROJECT_GUIDE.md`; `PROGRESS.md`.
 
 ---
 
@@ -2088,7 +2088,7 @@ to be fully separate from the sandbox, with every experiment finished in the san
 **Maham's AWS account** (Maham has the credits), signed in as an IAM user Maham created for her with EC2 access only.
 In Zurich (`eu-central-2`, zone `eu-central-2b`): instance `apnasor-real` (`i-030b4aa1557f802f8`), t4g.small, Ubuntu
 Server 24.04 LTS arm64, 20 GiB gp3, termination protection on, credit specification Standard; Elastic IP
-`16.18.141.32` allocated and attached; security group `apnasor-real-ssh` (`sg-0332c00dd6014d57a`) with two inbound
+`<server IP>` allocated and attached; security group `apnasor-real-ssh` (`<security group id>`) with two inbound
 rules only — SSH from Sarmad's home IP (/32) and SSH from the EC2 Instance Connect prefix list — and the default
 outbound rule (the server must reach the exchanges). It runs with 3/3 status checks passed and holds nothing: no code,
 no keys. SSH is not tested yet: only Sarmad's IP may connect.
@@ -2183,7 +2183,7 @@ lab engines (shared fee view); `backend/shared/models/venue.py`, `venue_monitor/
 `scripts/export_records.py` (new); frontend `VenueHealth.tsx`, `AppShell.tsx`, `api.ts`, `vite-env.d.ts`,
 `package.json`, `.env.real-server` (new); tests `test_fees.py`, `test_real_server.py`, `test_alerts.py`,
 `test_export_records.py` (new), `test_key_permissions.py`; docs `PHASE_D_PLAN.md`, `REAL_MONEY_GUIDE.md` (parts 3-7
-rewritten as the server runbook), `CLAUDE.md`, `PROGRESS.md`, `.env.example`.
+rewritten as the server runbook), `PROJECT_GUIDE.md`, `PROGRESS.md`, `.env.example`.
 
 ---
 
@@ -2265,7 +2265,7 @@ and Anthropic's API data isn't used for training; the free Gemini tier may use w
 
 Files: deploy/real-server/deploy.py, write_keys.py, check_ai_key.py (new), check_settings.sh,
 deploy/lab-server/requirements.lock, backend/tests/test_real_server.py, .github/workflows/real-server-kit.yml;
-docs PHASE_D_PLAN (§1, §9, §15), REAL_MONEY_GUIDE, COPILOT_GUIDE, CLAUDE.md, PROGRESS.
+docs PHASE_D_PLAN (§1, §9, §15), REAL_MONEY_GUIDE, COPILOT_GUIDE, PROJECT_GUIDE.md, PROGRESS.
 
 ---
 
@@ -2273,7 +2273,7 @@ docs PHASE_D_PLAN (§1, §9, §15), REAL_MONEY_GUIDE, COPILOT_GUIDE, CLAUDE.md, 
 
 **Why.** Sarmad: two exchanges (Binance, Bybit) are too few for the real-money demo; at least two more, and they
 must accept accounts from Pakistan. Researched and tested the same night:
-- **From the real-money server's own IP** (`16.18.141.32`, Zurich) Binance, Bybit, OKX, Gate, Bitget, KuCoin, HTX,
+- **From the real-money server's own IP** (`<server IP>`, Zurich) Binance, Bybit, OKX, Gate, Bitget, KuCoin, HTX,
   MEXC and Kraken all answer their public APIs. Our 5 coins are listed everywhere with small minimums (ccxt on the lab
   server: OKX/Bitget/HTX/MEXC ~$1, Gate $3, KuCoin ~$0.1).
 - **Gate is out for real money:** its own User Agreement (clause 2.5) names **Pakistan** a restricted location.
@@ -2313,7 +2313,7 @@ the kit (HTX keys accepted, no HTX sandbox key asked).
 **Files.** backend/exchanges/htx/ (new), key_permissions.py, registry.py, gateway/config.py,
 scripts/check_exchange_keys.py, deploy/real-server/deploy.py, write_keys.py, frontend/src/adapters.ts,
 .env.example, tests (test_exchanges/test_htx.py new, test_real_server.py, test_arbitrage/test_detector.py);
-docs CLAUDE.md, PHASE_D_PLAN.md (§1, §7, §15), PROGRESS.md.
+docs PROJECT_GUIDE.md, PHASE_D_PLAN.md (§1, §7, §15), PROGRESS.md.
 
 ---
 
@@ -2344,7 +2344,7 @@ itself: that prompt treats the paste as Ctrl+C.
 - both accounts hold no USDT or coins yet.
 So the whole chain works from Zurich: keys reach only the server's root-only file, both exchanges accept the
 server's address, and the permission parsers read each exchange's real answer. Next: the final keys (Read + Trade,
-withdraw off, IP `16.18.141.32`), deleting the read-only test keys, funding, Binance + Bybit keys, Telegram.
+withdraw off, IP `<server IP>`), deleting the read-only test keys, funding, Binance + Bybit keys, Telegram.
 
 
 ---
@@ -2379,7 +2379,7 @@ each page:
 is invalid CSS, so no table ever showed its hairlines — now `C.border2` / `tint()`. Four pages scrolled sideways on a
 phone (fixed grids, unwrapped tables, the trace controls): now they wrap or scroll inside their card.
 
-**Why this way.** The pages keep their inline styles and theme tokens (the project's convention, CLAUDE.md), so the
+**Why this way.** The pages keep their inline styles and theme tokens (the project's convention, PROJECT_GUIDE.md), so the
 three looks stay interchangeable and a teammate's page follows whichever look is chosen without extra work. Data
 attributes instead of matching style strings for Studio, because rows and inputs also use `C.surface` and must not
 become floating glass.
@@ -2431,7 +2431,7 @@ refused counter climbs. Running `start_all.py` in an ordinary terminal (as on th
 **Files.** frontend/package.json (+ lock: thinking-orbs 0.3.2), src/components/Orb.tsx (new), themeStyles.ts,
 theme.ts (`onAccent`), components (AppShell, CopilotPanel, NewOrderModal, OrderProofModal, RoutingProof, RaftPanel,
 AuditTimeline, shared), pages (AlgoOrders, Arbitrage, AuditLog, Automation, Dashboard, HowItWorks, Login, Research,
-RiskManager, Wallet); CLAUDE.md (repo map), PROGRESS.md.
+RiskManager, Wallet); PROJECT_GUIDE.md (repo map), PROGRESS.md.
 
 ---
 
@@ -2499,9 +2499,9 @@ project-info/LAB_SERVER_GUIDE.md, PROGRESS.md.
 ## 2026-10-25 — Four real keys confirmed, the feed drops explained, both servers rebooted
 
 **Keys.** `check-keys` asks each exchange, from the real-money server's own address, what our key may do. All four
-now answer: spot trading yes, withdrawals no, IP list 16.18.141.32. On the way: OKX and HTX keys can be edited in
+now answer: spot trading yes, withdrawals no, IP list the server's fixed IP. On the way: OKX and HTX keys can be edited in
 place (Trade added to the read-only test keys, nothing re-entered); Bybit first answered "Unmatched IP" (the key was
-bound to another address; the server's only address is 16.18.141.32, IPv4, no IPv6) and then "read-only key" until
+bound to another address; the server's only address is its fixed IP, IPv4, no IPv6) and then "read-only key" until
 it was set to Read-Write with Spot Trade. The account fees are read too: 0.100 % on Binance, Bybit and OKX (OKX's
 public rate is 0.150 %), 0.200 % on HTX.
 
@@ -2521,7 +2521,7 @@ simply leaves it out. Nothing to change.
 took `db2e735` (593 tests on the server, healthy), then both rebooted: back in 20-30 s, gateways started by
 themselves, all books 5/5, the lab's 8 bots resumed by themselves (`LAB_AUTO_RESUME`).
 
-**Access.** Sarmad's home internet changes its public IP (103.31.100.49 -> 153.117.28.74 overnight), and the
+**Access.** Sarmad's home internet changes its public IP (a new address overnight), and the
 security groups allow one address, so SSH was blocked until they were edited again. A lasting fix is proposed: AWS
 Session Manager (the laptop reaches the servers through AWS; no SSH port open at all).
 
@@ -2560,7 +2560,7 @@ prompt (an empty line): it now asks again, takes a channel link too, or `--chann
 
 **OKX on the laptop.** Even with 8.8.8.8 set, the lookup of `www.okx.com` timed out while other names resolved —
 the provider intercepts plain DNS. Resolved over DNS-over-HTTPS (Cloudflare), OKX answered (HTTP 200, 0.57 s): the
-fix is Windows 11's encrypted DNS, now in CLAUDE.md's gotchas.
+fix is Windows 11's encrypted DNS, now in PROJECT_GUIDE.md's gotchas.
 
 **Research direction.** Sarmad shared github.com/Jakeschincariol/day-trader-skill (MIT): eleven US-stock day-trading
 tools chained scanner -> news -> entry -> exit -> Time Machine (10,000 replays of the session from the stock's own
@@ -2572,7 +2572,7 @@ Discord, funding and open interest; R3 the copilot running the chain to a propos
 **Files.** backend/gateway/config.py, .env.example, backend/services/research/service.py, frontend (mockData,
 dataStore, api, ten pages/components), backend/services/alerts/discord.py (new), alerts/__init__.py,
 gateway/dependencies.py, deploy/real-server/deploy.py, write_keys.py, tests (test_alerts_discord.py new,
-test_real_server.py), README.md, CLAUDE.md, RESEARCH_GUIDE.md, REAL_MONEY_GUIDE.md, PHASE_D_PLAN.md, PROGRESS.md.
+test_real_server.py), README.md, PROJECT_GUIDE.md, RESEARCH_GUIDE.md, REAL_MONEY_GUIDE.md, PHASE_D_PLAN.md, PROGRESS.md.
 
 ---
 
@@ -2651,13 +2651,13 @@ money for the first time in front of a panel. Both stay enabled for their books 
 balance on this venue to fund the order").
 
 **Go-live.** Sarmad ran `deploy.py go-live --exchanges binance,bybit,okx,htx` at 20:00 UTC and typed REAL MONEY
-(the app refused to start it from the assistant's side, which is the intended split). The server switched to
+(go-live is typed by a person, by design). The server switched to
 mainnet on release `261cd34`: sandbox keys removed, caps $25 per order / $100 per algorithm / $150 exposure /
 $10 loss limit, the safety check passed, each exchange re-confirmed from the server's address that the key can
 trade spot and cannot withdraw and is IP-locked, Discord got "Gateway started (mainnet …)", and a fresh
 `apnasor-mainnet.db` took the opening balances (15 USDT, 14.99 USDT) as its baseline.
 
-**The two orders.** The assistant filled each form on the 5190 screen in the Browser pane; Sarmad ticked the
+**The two orders.** Each form was filled on the 5190 screen; Sarmad ticked the
 real-money box and pressed Submit (he places real orders, nobody else). The trick that makes a $22 sweep split
 with $30 of capital: the router never gives an exchange more than that exchange's balance, so an order larger
 than either balance must split.

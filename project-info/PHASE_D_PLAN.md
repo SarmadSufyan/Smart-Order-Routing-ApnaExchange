@@ -33,7 +33,7 @@ widen one step at a time: more exchanges, higher limits, and bots only if the la
 | Fees | ⚠️ public base rate (0.10 %) | the account's real rate is not read yet |
 | Bots | ⚠️ lab verdict 2026-10-23: **no bot makes money on its own yet** | 11.2 days, $1,700: −$23.57 (−1.4 %). Cycle bots: every one of 326 sales profitable after real fees (+$20), but the coins they hold lost $34 as ETH fell 5.8 % and BTC 2.2 %; −1.5 % net vs −4.3 % for simply holding. Only **BTC 1 %** ended positive (+$1.65); no threshold proven better than another. Advisor (loose rule): −0.28 % per trade, proven loser; strict advisor: 0 trades. Details: journal 2026-10-23 |
 | Copilot | ✅ works (Gemini, sandbox) | asks before every action; Auto is sandbox-only. Real money: **Claude** (A5, 2026-10-23) — set up, off until Sarmad's key (`deploy.py ai-key`) |
-| Real-money server | ✅ created 2026-10-18, **empty** | Maham's AWS account, Zurich: `apnasor-real`, Elastic IP `16.18.141.32`; nothing installed, no keys — §5 C |
+| Real-money server | ✅ created 2026-10-18, **empty** | Maham's AWS account, Zurich: `apnasor-real`, Elastic IP `<server IP>`; nothing installed, no keys — §5 C |
 | Real orders | ❌ none yet | Sarmad places the first ones (stage D4) |
 
 ---
@@ -60,9 +60,9 @@ mixed.
 | Where | the laptop | AWS EC2, Zurich (live since 2026-10-12) | **new** AWS EC2 server, its own fixed IP (Elastic IP) |
 | Money | exchange sandbox funds | exchange sandbox funds | **real**, small |
 | Exchange keys | sandbox keys (`*_TESTNET_*`) | sandbox keys | **real keys only** (`*_MAINNET_*`), **locked to the server's IP**, trade-only |
-| Can it hold a real key? | no (stays empty, CLAUDE.md rule 2) | no (its installer refuses) | yes — and no sandbox key |
+| Can it hold a real key? | no (stays empty, PROJECT_GUIDE.md rule 2) | no (its installer refuses) | yes — and no sandbox key |
 | Database | its own | its own | its own (`apnasor-mainnet.db`) |
-| Who uses it | everyone (the relay) | Sarmad (read-only checks by the assistant) | **Sarmad only** |
+| Who uses it | everyone (the relay) | Sarmad (read-only checks from the laptop) | **Sarmad only** |
 | How you see it | `localhost:5173` | tunnel → `localhost:5180` (blue LAB SERVER) | tunnel → `localhost:5190` (red REAL MONEY) |
 | What it is for | building features | experiments, bots, the lab's verdicts | real trading, the M3 evidence |
 
@@ -103,7 +103,7 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 - Open / verify the exchange accounts (§5 B): identity verification, 2FA, small funding.
 - **Done when:** §15 is filled in, and Binance + Bybit accounts are verified with ~$50 USDT each ready to move in.
 
-### D1 — Build and test everything in the sandbox (the assistant; no real money anywhere)
+### D1 — Build and test everything in the sandbox (sandbox only; no real money anywhere)
 | # | What | Done when (tested how) |
 |---|---|---|
 | D1-1 ✅ 10-20 | **Real-money server kit** (`deploy/real-server/`, reusing the lab kit): set up the machine, install a release, roll back, status, logs, backups, tunnel; *rehearsal* mode (sandbox keys) and a deliberate *go-live* command | unit tests + CI deploys it to a clean Ubuntu machine (like the lab kit) |
@@ -119,8 +119,8 @@ Each stage has a goal, the steps, and **"done when"** — we don't start the nex
 | D1-11 ✅ 10-20 | Docs: `REAL_MONEY_GUIDE.md` rewritten around the server; a runbook and the incident playbook (§11) | — |
 - **Done when:** all of the above pass, tests + CI ✅, the lab ran the new version ≥ 3 days.
 
-### D2 — The real-money server, tested empty (Sarmad: 10 minutes in AWS; the assistant: the rest)
-- Sarmad creates the server and its fixed IP (§5 C). The assistant installs it in **rehearsal mode** (sandbox keys,
+### D2 — The real-money server, tested empty (Sarmad: 10 minutes in AWS; the rest from the laptop with `deploy.py`)
+- Sarmad creates the server and its fixed IP (§5 C). `deploy.py` installs it in **rehearsal mode** (sandbox keys,
   no real key exists yet) and runs the full rehearsal:
 
 | Rehearsal check | Pass means |
@@ -229,7 +229,7 @@ prompts yourself.
 > **Item 2 done 2026-10-18 by Fizza, ahead of D2, in Maham's AWS account** (her credits), signed in as an IAM user
 > Maham made for her (EC2 only). Instance `apnasor-real` (`i-030b4aa1557f802f8`), Zurich `eu-central-2b`, t4g.small,
 > Ubuntu 24.04 arm64, 20 GiB gp3 (not encrypted), termination protection on, credit specification Standard;
-> **Elastic IP `16.18.141.32`** attached; security group `apnasor-real-ssh` (`sg-0332c00dd6014d57a`): inbound SSH from
+> **Elastic IP `<server IP>`** attached; security group `apnasor-real-ssh` (`<security group id>`): inbound SSH from
 > Sarmad's home IP (/32) and from the EC2 Instance Connect prefix list only, outbound default. Key pair `apnasor-real`
 > (ED25519) **made by AWS**: the `.pem` was downloaded to Fizza's laptop and goes to Sarmad by hand; she deletes her
 > copy once his login works. Running, 3/3 status checks, **empty**. SSH not tested yet (only Sarmad's IP may connect).
@@ -253,11 +253,10 @@ prompts yourself.
 
 ---
 
-## 6. What I (the assistant) will do
+## 6. What is done from the laptop, with `deploy.py`
 
 Everything in D1, the D2 installation and rehearsal, the D3 read-only check, the `go-live` command, the journal
-entries and the docs. I never place a real order, type a key or password, or change AWS or exchange settings — those
-stay yours.
+entries and the docs. Real orders, keys, passwords and AWS or exchange settings are always typed by Sarmad himself.
 
 ---
 
@@ -273,7 +272,7 @@ stay yours.
 
 If the gateway refuses a key, **make a new key** with the right settings — never weaken the check.
 
-**HTX** (added 2026-10-24): API Management → create a key — **Read-only** (+ **Trade** after the read-only check), **Withdraw off**, **IP address `16.18.141.32`** (an IP-bound key also doesn't expire after 90 days). It shows an Access Key and a Secret Key (the secret once). What the gateway asks: `GET /v2/user/api-key` (after `GET /v2/user/uid`): permission, ipAddresses, status. **Gate is not used for real money**: Pakistan is a restricted location in its User Agreement (clause 2.5).
+**HTX** (added 2026-10-24): API Management → create a key — **Read-only** (+ **Trade** after the read-only check), **Withdraw off**, **IP address `<server IP>`** (an IP-bound key also doesn't expire after 90 days). It shows an Access Key and a Secret Key (the secret once). What the gateway asks: `GET /v2/user/api-key` (after `GET /v2/user/uid`): permission, ipAddresses, status. **Gate is not used for real money**: Pakistan is a restricted location in its User Agreement (clause 2.5).
 
 ---
 
@@ -376,7 +375,7 @@ The AWS free plan ends **2026-12-05**: upgrade before 2026-11-28, or wind the la
 
 | # | Decision | Answer | Date |
 |---|---|---|---|
-| A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `16.18.141.32`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C). **Confirmed by Sarmad 2026-10-20**: the real system in Maham's account, the sandbox bots stay on the lab server in his account; access rules in §10 | 2026-10-18 / 2026-10-20 |
+| A1 | Where real money runs | its own AWS server in Zurich (t4g.small, Elastic IP `<server IP>`), in **Maham's AWS account** (her credits); created by Fizza on Sarmad's request (§5 C). **Confirmed by Sarmad 2026-10-20**: the real system in Maham's account, the sandbox bots stay on the lab server in his account; access rules in §10 | 2026-10-18 / 2026-10-20 |
 | A2 | Exchanges and order | Binance + Bybit first; OKX third (after its sandbox works); Gate fourth with $5 orders (Sarmad: all recommended) | 2026-10-20 |
 | A2 (widened) | Exchanges and order | **Binance, Bybit, OKX, HTX** for real money (Sarmad: two exchanges are too few). Gate dropped for real money (Pakistan restricted in its User Agreement); HTX added (PVARA NOC; new adapter V7); **Bitget** = backup (Sarmad's old KYC account; recent hack). OKX works from Zurich (tested); the laptop only needs DNS 8.8.8.8 to open okx.com | 2026-10-24 |
 | A3 | Starting money | ~$50 USDT on each of Binance and Bybit; caps at step 1 | 2026-10-20 |

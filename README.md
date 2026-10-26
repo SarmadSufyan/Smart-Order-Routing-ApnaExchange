@@ -1,6 +1,6 @@
 # ApnaSOR — Smart Order Router for Crypto Exchanges
 
-[![CI](https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange/actions/workflows/ci.yml/badge.svg?branch=feature/crypto-pivot)](https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange/actions/workflows/ci.yml)
+[![CI](https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange/actions/workflows/ci.yml/badge.svg?branch=feature/crypto-pivot)](https://github.com/SarmadSufyan/Smart-Order-Routing-ApnaExchange/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **One order, every exchange, the best price — with risk controls a person can trust.**
 
@@ -11,6 +11,8 @@ execution algorithms; a copilot answers questions and proposes trades in plain E
 append-only audit log.
 
 Final Year Project · Usman Institute of Technology (UITU) · Group CS14 · Supervisor: **Sir Shamaail Jafri**
+
+**Launch video (8 minutes, recorded on the live system):** [`reports/launch-video/ApnaSOR-launch-video-720p.mp4`](reports/launch-video/ApnaSOR-launch-video-720p.mp4) · **First real orders:** [`reports/rehearsal-2026-10-26/`](reports/rehearsal-2026-10-26/) (screenshots of the real-money server)
 
 | Team | Roll no. |
 |---|---|
@@ -120,7 +122,7 @@ set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` in `.env`
 ## Tests and quality
 
 ```powershell
-python -m unittest discover -s backend/tests -t .   # 592 backend tests
+python -m unittest discover -s backend/tests -t .   # 606 backend tests
 npx --prefix frontend tsc --noEmit -p frontend      # strict TypeScript type-check
 python -m ruff check backend scripts start_all.py   # lint
 ```
@@ -161,6 +163,7 @@ commit has run for 72 hours on the lab server with CI green (the promotion gate)
 | [`SECURITY_GUIDE.md`](project-info/SECURITY_GUIDE.md) · [`EXCHANGE_API_KEY_SECURITY.md`](project-info/EXCHANGE_API_KEY_SECURITY.md) | Logins, signing keys, CORS, and how exchange keys are protected |
 | [`REAL_MONEY_GUIDE.md`](project-info/REAL_MONEY_GUIDE.md) · [`PHASE_D_PLAN.md`](project-info/PHASE_D_PLAN.md) | The real-money rails, the separate server, the stages and decisions |
 | [`API_KEYS_GUIDE.md`](project-info/API_KEYS_GUIDE.md) | Which sandbox keys you need and how to get them |
+| [`PROJECT_GUIDE.md`](PROJECT_GUIDE.md) | The project guide: the architecture as built, the repository map, the design rules, how to run, test and verify, the gotchas |
 | [`ROADMAP.md`](project-info/ROADMAP.md) · [`PROGRESS.md`](PROGRESS.md) | What is done, what is next, and the current state |
 | [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md) | Every change, dated: what, why, and the design choices |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`ONBOARDING.md`](ONBOARDING.md) | Team workflow and first-time setup |
@@ -181,7 +184,7 @@ the June 2026 simulated-venue prototype and are kept for the record ([index](pro
    `backend/services/consensus/` (RAFT: `core.py` is the algorithm with no I/O).
 5. **The copilot** — `backend/services/agents/copilot.py`: the model fills a form, code validates every field,
    a person confirms.
-6. **Tests** — `backend/tests/` (592), and the CI runs on this branch.
+6. **Tests** — `backend/tests/` (606), and the CI runs on this branch.
 7. **The history** — [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md): why each decision was made.
 
 ## Scope and honest limits

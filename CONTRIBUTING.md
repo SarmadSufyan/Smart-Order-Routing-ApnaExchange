@@ -2,7 +2,7 @@
 
 > Simple workflow for our 4-person team. Read once, follow the loop.
 > **New on the team? Start with [`ONBOARDING.md`](ONBOARDING.md)** (clone, `.env`, first run, the relay).
-> Before any work: [`CLAUDE.md`](CLAUDE.md) (project guide and rules) → [`PROGRESS.md`](PROGRESS.md) (state + who is working on what) → [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means).
+> Before any work: [`PROJECT_GUIDE.md`](PROJECT_GUIDE.md) (project guide and rules) → [`PROGRESS.md`](PROGRESS.md) (state + who is working on what) → [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means).
 
 ---
 
@@ -84,10 +84,10 @@ git push
 
 ---
 
-## Working with AI coding assistants (several people, several sessions)
+## Working in several sessions (several people)
 
-- **One session = one person on their own clone, one session at a time.** You can't type into a teammate's session. What every session *shares* is the repo itself: the project guide (`CLAUDE.md`, loaded automatically at the start of every session in this folder), `PROGRESS.md` (including the backend handoff notes), `project-info/ROADMAP.md` and `DEVELOPMENT_JOURNAL.md`. An assistant's own memory stays on the computer where it ran. **Anything important must be written into those files**, or the next person won't know it.
-- **Start and end every session with the prompts in [`ONBOARDING.md`](ONBOARDING.md) §7.** They make the assistant pull first, respect page ownership or the relay handoff, and push with notes at the end.
+- **One session = one person on their own clone, one session at a time.** You can't type into a teammate's session. What every session *shares* is the repo itself: the project guide (`PROJECT_GUIDE.md`), `PROGRESS.md` (including the backend handoff notes), `project-info/ROADMAP.md` and `DEVELOPMENT_JOURNAL.md`. **Anything the team needs must be written there** — nothing lives only on one computer.
+- **Start every session by pulling and reading the newest handoff note; end it with a handoff note and a push** ([`ONBOARDING.md`](ONBOARDING.md) §7).
 - **Commits and PRs carry no tool or AI attribution** — no co-author trailers, no "generated with" lines.
 
 ---

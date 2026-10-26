@@ -70,7 +70,7 @@ uvicorn runs the gateway's start-up **before** it takes port 8000. A second gate
 |---|---|
 | B1 — Before starting anything, try to take each needed port for a moment, the same way the real server will | **Chosen.** It answers exactly "would the server's start succeed?", on every system and in every language. |
 | B2 — A lock file in `data/` | **No.** After a crash the stale lock needs clean-up logic; the ports are the real shared resource. |
-| B3 — Try to connect to each port | **No.** On Windows, connecting to a closed local port takes ~2 s to fail (CLAUDE.md gotcha). |
+| B3 — Try to connect to each port | **No.** On Windows, connecting to a closed local port takes ~2 s to fail (PROJECT_GUIDE.md gotcha). |
 | B4 — Always check all five ports | **No** (Fizza): only the ports this start will use. 8000 always, 5173 unless `--no-frontend`, 9001–9003 only with RAFT on. |
 
 **How it works:** `port_free()` binds a test socket with the same options asyncio's servers use (no `SO_REUSEADDR` on Windows, where it would let us bind over a live server). The frontend is checked on `127.0.0.1` **and** `::1`, because Vite listens on "localhost", which is IPv6 on Windows. On Windows the message names the program and pid from `netstat -ano`. It recognises the listening line by its empty remote end (`0.0.0.0:0`), because the word "LISTENING" is translated on non-English Windows. The message ends with a ready-made `taskkill /PID … /T /F` line for leftovers.

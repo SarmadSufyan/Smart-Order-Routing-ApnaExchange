@@ -1,7 +1,7 @@
 # Onboarding — get ApnaSOR running on your machine
 
 > For teammates joining the build. About 30–45 minutes, once.
-> When you're done, read [`CLAUDE.md`](CLAUDE.md) (project guide and rules), [`PROGRESS.md`](PROGRESS.md) (where things stand) and [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means for your workstream).
+> When you're done, read [`PROJECT_GUIDE.md`](PROJECT_GUIDE.md) (project guide and rules), [`PROGRESS.md`](PROGRESS.md) (where things stand) and [`project-info/ROADMAP.md`](project-info/ROADMAP.md) (what "done" means for your workstream).
 
 **The whole idea in four lines:**
 1. Clone the repo on **`feature/crypto-pivot`** (it's private; sign in with your own GitHub account).
@@ -20,9 +20,8 @@
 | Git | any recent | `git --version` |
 | Python | 3.11 or newer (tested on 3.14) | `python --version` |
 | Node.js | 18 or newer (tested on 24) | `node --version` |
-| Your AI coding assistant's **desktop app** | latest | — |
 
-Use the assistant in **local** mode on your own computer, not in a cloud session. The exchanges have to be reached from your machine's network, and you need to see the dashboard in your browser.
+Run everything on your own computer: the exchanges have to be reached from your machine's network, and you need to see the dashboard in your browser.
 
 ## 2. Clone — the exact command for you
 
@@ -110,22 +109,16 @@ Everyone works on `feature/crypto-pivot`, backend and frontend, **one person at 
 5. Tests + type-check pass, push **everything**, check CI ✅ on GitHub, then add your handoff note: what's done, what's half-done (file + function), the exact next step.
 6. Message the group ("free, pushed").
 
-## 7. Working with your AI coding assistant
+## 7. Every session
 
-Open your `apnasor` folder in the desktop app (local mode). The project guide (`CLAUDE.md`) loads automatically and tells it the rules.
+**Start:** `git checkout feature/crypto-pivot` and `git pull`; read `PROJECT_GUIDE.md`, `PROGRESS.md` (the newest handoff note first) and `project-info/ROADMAP.md`; take the relay (message the group). Plan against the ROADMAP's "done" criteria, list the risks and contradictions you find in the code, then build.
 
-**First message of every session** (use your name):
-
-> Run `git checkout feature/crypto-pivot` and `git pull`. Read CLAUDE.md, PROGRESS.md (the newest handoff note first) and project-info/ROADMAP.md. I'm **Maham** and I have the relay. Continue from the handoff note: plan against the ROADMAP "done" criteria, list risks and contradictions you find in the code, then build backend and screens together. Verify with tests, the type-check, the browser and a small live testnet order.
-
-**Last message of every session:**
-
-> Run the tests and the type-check. Add a handoff note at the top of the relay table in PROGRESS.md, append a dated entry to DEVELOPMENT_JOURNAL.md, then commit with a conventional message and push feature/crypto-pivot. Tell me when CI is green.
+**End:** run the tests and the type-check, add a handoff note at the top of the relay table in `PROGRESS.md`, append a dated entry to `DEVELOPMENT_JOURNAL.md`, commit with a conventional message, push `feature/crypto-pivot`, and check that CI is green.
 
 Rules:
 - **One session at a time.** Two sessions in the same folder overwrite each other's files. Finish and push one before starting the next.
 - **No AI or tool attribution** in commits, PRs, code or docs. No co-author lines, no "generated with".
-- The assistant's memory stays on your computer. Anything the team needs must be written into `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md` or the code.
+- Anything the team needs must be written into `PROGRESS.md`, `DEVELOPMENT_JOURNAL.md` or the code; nothing lives only on one computer.
 
 ## 8. The sync loop
 

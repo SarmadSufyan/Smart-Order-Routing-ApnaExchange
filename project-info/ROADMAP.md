@@ -1,7 +1,7 @@
 # ApnaSOR Roadmap
 
 > What is built, what is next, and what "done" means for each next piece.
-> Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../CLAUDE.md`](../CLAUDE.md).
+> Live status and who is working on what: [`../PROGRESS.md`](../PROGRESS.md). Rules everyone follows: [`../PROJECT_GUIDE.md`](../PROJECT_GUIDE.md).
 > Last updated: 2026-10-08 (Phase C built: automation fund, profit-cycle bot, advisor agent, practice lab). 2026-10-07: the **Full product** plan — phases A–E; Phase A routing strategies done. Before that, 2026-10-06: §7 security hardening and CI on GitHub Actions.
 
 ---

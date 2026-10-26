@@ -13,7 +13,7 @@
 apna-exchange/
 │
 ├── docs/                          # Project documentation (you are here)
-│   ├── CLAUDE.md                  # Master Claude Code reference — READ FIRST
+│   ├── PROJECT_GUIDE.md                  # Master Claude Code reference — READ FIRST
 │   ├── README.md                  # Project overview, quick start
 │   ├── ARCHITECTURE.md            # System design, subsystems, data flows
 │   ├── MILESTONES.md              # FYP phases, timeline, feature tracking

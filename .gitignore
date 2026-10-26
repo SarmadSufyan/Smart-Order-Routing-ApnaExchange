@@ -65,7 +65,7 @@ data/
 *.p12
 secrets/
 
-# AI assistant — per-developer local settings & cache (not shared project rules)
+# per-developer local settings & cache (not shared project rules)
 .claude/local/
 .claude/settings.local.json
 
@@ -81,4 +81,10 @@ notes/
 
 # the launch video's recordings and narration (scripts/launch_video), and the finished video
 scripts/launch_video/out/
-reports/launch-video/*.mp4
+reports/launch-video/ApnaSOR-launch-video.mp4
+reports/launch-video/ApnaSOR-linkedin-cut.mp4
+reports/launch-video/ApnaSOR-linkedin-cut-720p.mp4
+
+# local tooling pointers (the public guide is PROJECT_GUIDE.md)
+CLAUDE.md
+.claude/
