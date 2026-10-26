@@ -2685,3 +2685,34 @@ correct, and a good panel answer to "what happens when a limit is crossed".
 **Files.** reports/rehearsal-2026-10-26/ (21 screenshots of the real-money screen), reports/screenshots-sandbox/
 (17 pages at 1080p for the report), frontend/src/adapters.ts, pages/Login.tsx, Wallet.tsx, Arbitrage.tsx,
 Automation.tsx (`0560dc9`: no "sandbox" wording on a mainnet gateway), scripts/launch_video/shots.py, PROGRESS.md.
+
+---
+
+## 2026-10-26 (evening) — After the demo: a public repo, a rewritten history, the LinkedIn cut
+
+**The demo.** Monday morning, the laptop sandbox first and then the real-money server through the tunnel; the panel
+was happy. The real-money server stays live with its kill switch engaged.
+
+**Public-ready.** Before the repo goes public (Sarmad flips it), four things changed. The project guide is
+`PROJECT_GUIDE.md` now, with every link updated; a local, gitignored pointer keeps it loading on each machine. The
+real-money server's address, its security-group id, two personal IP addresses and the local key path were in the
+journal, PROGRESS, the Phase D plan, the real-money guide and the HTX test fixture; they are replaced by neutral
+wording (a documentation address in the test), and every removed line is kept verbatim outside the repo so nothing is
+lost. The workflow sections of CONTRIBUTING and ONBOARDING now describe the relay without naming tools. An MIT
+license, and the README links the 720p launch video (tracked, 9.6 MB) and the first real orders' screenshots.
+
+**History.** Three June commits carried co-author trailers that the project's own rule forbids. `git filter-branch`
+dropped them and replaced the old guide name in messages, on every branch; everything after June got a new commit id.
+The old-to-new map and a full pre-rewrite bundle are kept outside the repo. Commit ids quoted in this journal and in
+PROGRESS before this entry are the old ones. Every branch is force-pushed from Sarmad's own GitHub login; a clone
+that still has the old history must then be reset to the remote, never merged.
+
+**The LinkedIn cut.** The panel version opens with a title card, which is right for a classroom and slow for a feed.
+The LinkedIn cut starts with fourteen seconds cut from the clips already recorded: the dashboard ("One order. Every
+exchange."), the split proof, the kill switch, the real-money proof ("Tested with real money"), the title; a short
+voice hook over it; then scenes 01 to 15 unchanged. Nothing was re-recorded.
+
+**Files.** PROJECT_GUIDE.md (was CLAUDE.md), README.md, LICENSE, CONTRIBUTING.md, ONBOARDING.md, PROGRESS.md,
+DEVELOPMENT_JOURNAL.md, project-info/PHASE_D_PLAN.md, REAL_MONEY_GUIDE.md, ROADMAP.md, START_STOP_GUIDE.md,
+PROJECT_STRUCTURE.md, backend/tests/test_exchanges/test_htx.py, .gitignore, reports/launch-video/ (the 720p video,
+the script and the subtitles tracked).
