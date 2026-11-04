@@ -2716,3 +2716,53 @@ voice hook over it; then scenes 01 to 15 unchanged. Nothing was re-recorded.
 DEVELOPMENT_JOURNAL.md, project-info/PHASE_D_PLAN.md, REAL_MONEY_GUIDE.md, ROADMAP.md, START_STOP_GUIDE.md,
 PROJECT_STRUCTURE.md, backend/tests/test_exchanges/test_htx.py, .gitignore, reports/launch-video/ (the 720p video,
 the script and the subtitles tracked).
+
+## 2026-10-28 — After the demo: the LinkedIn material, the outreach list, and what is safe to say
+
+**LinkedIn.** The caption written on 2026-10-26 was 708 characters over LinkedIn's limit of 3,000. It was cut in
+three passes to 2,861, keeping about 140 characters free because tagging a page swaps the typed name for the page's
+full name. The cut dropped repetition, not claims: the honest paragraph (the sandbox is the exchanges' own test
+systems, arbitrage is detected and never traded, the forecasts show mostly no edge after fees, the contribution is
+the integration) stayed whole. A Projects entry for the profile followed: the name says what it is and which
+exchanges; the description, under LinkedIn's 2,000 characters, leads with the real-money proof and the numbers and
+states the role plainly; the skills are ordered by what a recruiter for trading infrastructure searches first.
+LinkedIn's project media takes images, documents and links, not video, so the video goes into the post, the entry
+links to the post and carries the proof screenshots, and the post is featured on the profile.
+
+**The outreach list.** The university asks the team to reach the organisations that supported the work. Six groups
+were researched from official pages only: PVARA and Pakistani public bodies; the four exchanges; the providers the
+project runs on (AWS, Google, GitHub, ccxt, Anthropic); Pakistani companies that build or run trading technology;
+global trading-infrastructure firms; Pakistani media, communities and competitions. The rules: a contact is listed
+only with the page it came from and a confidence rating; "not published" instead of a guess; no pattern-guessed
+email addresses; phone numbers only where the organisation itself lists them; people by public role only. What it
+found: PVARA has one real door (the address in its own April advisory; its "contact" link is a complaints portal);
+no exchange publishes a partnership mailbox (media addresses, plus Binance's Academy, Student Ambassador and
+Pakistani community programmes); no provider has a recognition-letter route (programmes instead); the two Pakistani
+teams building order routing for the stock exchange are the closest fit for showing the work; and every fitting
+2026 competition has closed. Every contact, the priority order, six templates and the gaps are in one file under
+`data/private/` because it holds contact data. Nothing has been sent.
+
+**What is safe to say.** Three questions were settled before the first letter. (1) Contacting the exchanges exposes
+nothing: sandboxes exist for this, the books come from public feeds within rate limits, API trading of our own funds
+on accounts that passed their KYC is what API keys are for, and open-sourcing code that talks to their APIs is
+common. No one can promise an exchange never closes an account; what closes accounts is restricted jurisdictions,
+sanctions, manipulation and account sharing, not a letter. Two things stay out of every letter: the shared sandbox
+keys (technically against every exchange's "accounts are personal" clause; the real keys were never shared) and any
+word that sounds like a service: users, clients, platform, launch, pilot. No proof screenshot leaves the machine with
+a UID, an email address or a balance page on it. (2) Writing to PVARA carries no risk; the letter's wording does.
+The Virtual Assets Act regulates service providers, and the project never offered a service. The name "Apna
+Exchange", and the caption's "the order router behind Apna Exchange", read to a regulator like a live exchange, so
+the letter and the README state in their first lines that it is the project's working name with no company,
+customers, custody or public service. "Pilot" never appears (advisory PVARA/ADV/001/2026). The real-money sentence
+stays, factual: an individual trading their own funds. The one clause worth reading is whether the Act says anything
+about residents using exchanges without a PVARA licence (Binance holds a no-objection certificate; Bybit, which
+took half of the $22 order, does not). (3) The letters can be generated from the mail account as drafts for review,
+one per recipient, but not as one bulk send: only about twenty of the forty contacts are email addresses, each
+group gets a different ask, identical text to media mailboxes is spam, and replies change later letters. Waves,
+follow-ups after a week, a university address over a new mailbox.
+
+**Files.** PROGRESS.md, DEVELOPMENT_JOURNAL.md; outside the repo (gitignored): data/private/LINKEDIN_POST.md,
+data/private/reports/, data/private/research_notes/, data/private/OUTREACH_SAFETY_QA_2026-10-28.md,
+data/private/SESSION_CONTEXT_2026-10-28.md, data/handoff/NEXT_SESSION_PROMPT_2026-10-28.md.
+
+---
