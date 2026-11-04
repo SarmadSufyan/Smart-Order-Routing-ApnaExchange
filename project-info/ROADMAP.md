@@ -50,6 +50,24 @@ Sarmad's direction (2026-10-07): **every algorithm real** (nothing listed that d
 
 Honest limits we say up front (and in the product): no one can predict prices reliably, so forecasts are probabilities with a track record; a profit-cycle bot guarantees every **completed** cycle beats its fees, not that the price comes back after a buy; trading always costs fees (exchange commission, blockchain gas); a Web3 wallet trades on DEXes, not on Binance/Bybit.
 
+### R — The trade desk (research agents, agreed 2026-10-25): R1 ✅ 2026-11-04, R2 and R3 next
+
+Ideas from an MIT-licensed US-stock day-trading toolkit, rebuilt on our own crypto data; every number measured, nothing
+sent ([`TRADE_DESK_GUIDE.md`](TRADE_DESK_GUIDE.md)).
+
+- [x] **R1 — scanner + time machine** (2026-11-04): the universe = every USDT spot coin all the enabled exchanges' real
+  markets list (their public market lists, the 20 traded coins first, capped at 200); small daily / hourly / 5-minute
+  histories per coin; eight setups (channel breakout, reclaimed 20-average, oversold bounce, volume surge, pull-back,
+  bull flag, squeeze, opening-range breakout after the 00:00 / 08:00 / 13:30 UTC opens); for each hit the real history
+  of the same setup on the same coin with the desk's bracket (stop 1 ATR, target 1.5 R, a time limit), after costs,
+  and an entry timer (waiting / triggered / expired); a plan = size by the research planner's rules + the time machine
+  (10,000 replays of the next bars from the coin's own bars by time of day, the stop checked first) + one verdict.
+  `GET/POST /api/trade-desk/*`, the **Trade Desk** page; 33 tests; verified live (journal 2026-11-04).
+- [ ] **R2 — news, listings and alerts:** exchange listing announcements and news for the scanned coins; price, stop
+  and target alerts to Discord (the stop and target the plan chose); funding and open interest where public.
+- [ ] **R3 — the copilot runs the chain:** scan → plan → a proposal with its reasons that a person confirms (the
+  copilot's planner already proposes orders and bots); the advisor bot reads the desk in the lab first.
+
 ### Copilot 2 — the assistant before real money: ✅ 2026-10-15
 
 Sarmad (2026-10-15): before Phase D, the copilot must do what it is asked, use the research, suggest with reasons

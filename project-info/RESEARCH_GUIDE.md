@@ -100,6 +100,12 @@ whether it just changed).
 
 The copilot's analyst counts a technique **only if it worked** — and then by what it says now (`COPILOT_GUIDE.md`).
 
+## 8. The trade desk — setups across every coin, and a time machine
+
+Built on the same store and the same costs (2026-11-04): a scanner over every USDT coin the exchanges share, eight
+classic setups, each hit's real history on its own coin, and a plan whose size comes from §6's rules and whose odds come
+from 10,000 replays of the coin's own bars. Its own guide: [`TRADE_DESK_GUIDE.md`](TRADE_DESK_GUIDE.md).
+
 ## Panel Q&A
 
 * **"Can your system predict prices?"** — It forecasts probabilities and shows how often they were right on data it had not seen. Mostly it can't beat a simple baseline — and it says so on the screen. The ranges it gives are reliable.

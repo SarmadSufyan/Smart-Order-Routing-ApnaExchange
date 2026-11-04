@@ -105,13 +105,19 @@ class TradePlan:
 
 
 def plan_trade(entry: float, atr_now: float, equity: float, risk_pct: float, k_atr: float, rr: float,
-               cost_bps_round_trip: float, stats: BracketStats, max_notional: float | None = None) -> TradePlan:
-    """Size a long trade by fixed-fractional risk, capped by half-Kelly and by the money available."""
-    risk_per_unit = k_atr * atr_now
+               cost_bps_round_trip: float, stats: BracketStats, max_notional: float | None = None,
+               stop: float | None = None) -> TradePlan:
+    """Size a long trade by fixed-fractional risk, capped by half-Kelly and by the money available.
+
+    ``stop`` given = a stop chosen elsewhere (the trade desk's opening-range midpoint) instead of k_atr x ATR.
+    """
+    risk_per_unit = (entry - stop) if stop is not None else k_atr * atr_now
     stop, target = entry - risk_per_unit, entry + rr * risk_per_unit
     risk_amount = equity * risk_pct / 100
     qty = risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0
-    reasons = [f"Stop {k_atr:g} × ATR below the entry, target {rr:g} × the risk above it (reward : risk {rr:g} : 1)",
+    where = (f"Stop {risk_per_unit:,.6g} below the entry" if atr_now <= 0 or abs(risk_per_unit - k_atr * atr_now) > 1e-12
+             else f"Stop {k_atr:g} × ATR below the entry")
+    reasons = [f"{where}, target {rr:g} × the risk above it (reward : risk {rr:g} : 1)",
                f"Risking {risk_pct:g}% of {equity:,.2f} = {risk_amount:,.2f} if the stop is hit"]
     caps = []
     if stats.kelly_fraction is not None and stats.kelly_fraction > 0:

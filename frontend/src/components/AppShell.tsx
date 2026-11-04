@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import {
-  AlertOctagon, ArrowLeftRight, BookOpen, Bot, CandlestickChart, Check, ChevronLeft, ChevronRight,
+  AlertOctagon, ArrowLeftRight, BookOpen, Bot, CandlestickChart, Check, ChevronLeft, ChevronRight, Crosshair,
   LayoutDashboard, LineChart, LogOut, Menu, Moon, Network, Palette, ScrollText, ShieldCheck, Sun,
   Wallet, Workflow, X,
 } from 'lucide-react'
@@ -28,6 +28,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   ] },
   { section: 'Insight', items: [
     { path: '/research',    label: 'Research',           icon: LineChart },
+    { path: '/trade-desk',  label: 'Trade Desk',         icon: Crosshair },
     { path: '/arbitrage',   label: 'Arbitrage',          icon: ArrowLeftRight },
   ] },
   { section: 'Control', items: [

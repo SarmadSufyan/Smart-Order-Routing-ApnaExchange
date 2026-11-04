@@ -43,6 +43,7 @@ from backend.exchanges.base import (
     FeedStatus,
     SymbolRules,
     TickerStats,
+    usdt_spot_symbols,
 )
 from backend.exchanges.fees import account_fee_note, fetch_account_taker_bps
 from backend.exchanges.key_permissions import (
@@ -671,18 +672,33 @@ class CcxtVenueAdapter(ExchangeAdapter):
         others = sum(1 for a, v in total.items() if v and a not in assets)
         return BalanceSnapshot(assets=tracked, other_nonzero_assets=others)
 
-    # ── execution-book probe (for the coherence monitor) ────────────
-    async def fetch_candles(
-        self, symbol: str, timeframe: str = "1m", since_ms: int | None = None, limit: int = 1000,
-    ) -> list[Candle]:
-        """Public OHLCV candles from the market-data client (the real market when MARKET_DATA_MODE=mainnet)."""
+    # ── public candles and market lists (research, the trade desk) ───
+    async def _data_client_with_markets(self) -> Any | None:
+        """The public market-data client, its markets loaded (once, shared, shielded from a caller's timeout)."""
         client = self._data_client
-        if client is None or symbol not in self._requested_symbols:
-            return []
+        if client is None:
+            return None
         if not client.markets:
             if self._history_markets is None or (self._history_markets.done() and self._history_markets.exception()):
                 self._history_markets = asyncio.create_task(client.load_markets(), name=f"{self.venue_id}-history-markets")
             await asyncio.shield(self._history_markets)
+        return client
+
+    async def data_markets(self) -> list[str]:
+        """Every USDT spot market the data client's exchange lists (the real market when MARKET_DATA_MODE=mainnet)."""
+        client = await self._data_client_with_markets()
+        return usdt_spot_symbols(client.markets) if client is not None else []
+
+    async def fetch_candles(
+        self, symbol: str, timeframe: str = "1m", since_ms: int | None = None, limit: int = 1000,
+    ) -> list[Candle]:
+        """Public OHLCV candles from the market-data client (the real market when MARKET_DATA_MODE=mainnet).
+
+        Any market the exchange lists, not only the coins we trade: the trade desk scans the wider universe.
+        """
+        client = await self._data_client_with_markets()
+        if client is None or (symbol not in self._requested_symbols and symbol not in (client.markets or {})):
+            return []
         rows = await client.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=limit)
         return [Candle(ts_ms=int(r[0]), open=float(r[1]), high=float(r[2]), low=float(r[3]), close=float(r[4]),
                        volume=float(r[5] or 0.0)) for r in rows if r and r[4] is not None]

@@ -23,6 +23,7 @@ from backend.gateway.routers import (
     research,
     risk,
     routing,
+    trade_desk,
     venues,
     wallet,
 )
@@ -180,7 +181,8 @@ async def lifespan(app: FastAPI):
     await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
                   svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.incident_guard,
-                  svc.arbitrage, svc.research, *([svc.alerts] if svc.alerts is not None else []))
+                  svc.arbitrage, svc.research, svc.trade_desk,
+                  *([svc.alerts] if svc.alerts is not None else []))
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
@@ -260,7 +262,7 @@ async def domain_error_handler(request, exc: DomainError):
 
 
 for router_module in (auth, orders, venues, market_data, risk, routing, admin, execution_reports, wallet, audit,
-                      algos, copilot, consensus, arbitrage, research, automation):
+                      algos, copilot, consensus, arbitrage, research, trade_desk, automation):
     app.include_router(router_module.router)
 
 

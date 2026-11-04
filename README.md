@@ -48,6 +48,7 @@ Final Year Project · Usman Institute of Technology (UITU) · Group CS14 · Supe
 | **Execution algorithms** | **TWAP, VWAP, implementation shortfall (Almgren–Chriss), POV, iceberg** — or **Auto** chooses one and explains why. Every slice goes through the same order path and risk checks |
 | **Wallet and P&L** | Balances read from each exchange, a P&L ledger from opening balances plus every fill, and reconciliation against what each exchange reports |
 | **Research** (read-only) | Five years of hourly and ~8 years of daily real-market candles: indicators, next-minute / hour / day forecasts with a walk-forward track record, fee-aware backtests, a study of classic trading techniques against buy-and-hold, trade plans |
+| **Trade desk** (read-only) | A scanner over every USDT coin the exchanges share (their own market lists) for eight classic setups: channel breakout, reclaimed average, oversold bounce, volume surge, pull-back, bull flag, squeeze, opening-range breakout. Each hit shows what happened **every past time the same setup fired on the same coin** with the same bracket, after costs, and an entry timer. A plan sizes the trade and runs a **time machine**: 10,000 replays of the next bars from the coin's own candles by time of day ([guide](project-info/TRADE_DESK_GUIDE.md)) |
 | **Copilot** | Plain-English questions and instructions. A language model only fills a strict form; code validates it, gathers the facts (an analyst of pure rules on the research) and builds the proposal. **A person confirms every action** |
 | **Bots and practice lab** | A profit-cycle bot and an advisor agent trading from a separate automation fund; a practice lab records every bot trade (measured costs, a variant scoreboard, outcome models) |
 | **Arbitrage detector** | Scans every exchange pair four times a second and measures cross-exchange gaps after both taker fees. **Detection only** — it cannot trade |
@@ -125,7 +126,7 @@ set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` in `.env`
 ## Tests and quality
 
 ```powershell
-python -m unittest discover -s backend/tests -t .   # 650 backend tests
+python -m unittest discover -s backend/tests -t .   # 683 backend tests
 npx --prefix frontend tsc --noEmit -p frontend      # strict TypeScript type-check
 python -m ruff check backend scripts start_all.py   # lint
 ```
@@ -187,7 +188,7 @@ the June 2026 simulated-venue prototype and are kept for the record ([index](pro
    `backend/services/consensus/` (RAFT: `core.py` is the algorithm with no I/O).
 5. **The copilot** — `backend/services/agents/copilot.py`: the model fills a form, code validates every field,
    a person confirms.
-6. **Tests** — `backend/tests/` (650), and the CI runs on this branch.
+6. **Tests** — `backend/tests/` (683), and the CI runs on this branch.
 7. **The history** — [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md): why each decision was made.
 
 ## Scope and honest limits

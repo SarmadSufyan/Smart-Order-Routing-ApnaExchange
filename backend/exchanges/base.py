@@ -103,6 +103,17 @@ class Candle(BaseModel):
     volume: float  # base asset
 
 
+def usdt_spot_symbols(markets: dict | None) -> list[str]:
+    """The spot markets quoted in USDT in a ccxt market list ("BTC/USDT"; never a swap like "BTC/USDT:USDT")."""
+    out = []
+    for symbol, market in (markets or {}).items():
+        if not isinstance(market, dict) or "/" not in symbol or ":" in symbol:
+            continue
+        if market.get("spot") and market.get("quote") == "USDT" and market.get("active") is not False:
+            out.append(symbol)
+    return sorted(out)
+
+
 class ExchangeAdapter(ABC):
     """Base class for all venue adapters."""
 
@@ -199,6 +210,10 @@ class ExchangeAdapter(ABC):
         self, symbol: str, timeframe: str = "1m", since_ms: int | None = None, limit: int = 1000,
     ) -> list[Candle]:
         """Historical candles of the venue's real market (public data). Empty where unsupported."""
+        return []
+
+    async def data_markets(self) -> list[str]:
+        """Every spot market quoted in USDT that the venue's REAL market lists (public data). Empty where unknown."""
         return []
 
     async def execution_tops(self, symbols: list[str]) -> dict[str, tuple[float | None, float | None]]:

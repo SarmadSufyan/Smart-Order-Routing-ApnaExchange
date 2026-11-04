@@ -19,6 +19,7 @@ from backend.services.order_state.entry import OrderEntry
 from backend.services.order_state.order_manager import OrderManager
 from backend.services.research.candles import CandleStore, CandleSync
 from backend.services.research.service import ResearchService
+from backend.services.research.trade_desk import TradeDeskService, parse_session_opens
 from backend.services.risk_engine.batch import RiskBatchRunner
 from backend.services.risk_engine.controls import RiskControls
 from backend.services.risk_engine.kill_switch import KillSwitch
@@ -64,6 +65,7 @@ class Services:
     arbitrage: ArbitrageDetector
     automation: AutomationEngine
     incident_guard: IncidentGuard
+    trade_desk: TradeDeskService
     alerts: DiscordAlerts | TelegramAlerts | None = None
 
 
@@ -234,6 +236,17 @@ def init_services() -> Services:
     order_entry.set_guard(fund.check_order)
     lab = PracticeLab(store, research, volatility, aggregator, settings.exchange_mode, fees)
     research.set_cost_source(lab.measured_slippage)
+    # The trade desk (research R1): the scanner over the coins every exchange shares, the time machine, plans.
+    # Read-only like the research service; it shares the candle store and the lab's measured costs.
+    trade_desk = TradeDeskService(
+        candle_store, registry, aggregator, settings.symbol_list, universe=settings.scanner_universe,
+        max_coins=settings.scanner_max_coins, interval_s=settings.scanner_interval_s,
+        session_opens=parse_session_opens(settings.scanner_session_opens_utc),
+        range_minutes=settings.scanner_range_minutes, window_minutes=settings.scanner_entry_window_minutes,
+        replays=settings.time_machine_replays, pool_days=settings.time_machine_days,
+        reference_fee_bps=fees.get("V1", 10.0), risk_engine=risk_engine, enabled=settings.trade_desk_enabled,
+    )
+    trade_desk.set_cost_source(lab.measured_slippage)
     automation = AutomationEngine(
         order_entry, order_manager, aggregator, routing_engine, registry, risk_engine, wallet_service, fund, lab,
         settings.symbol_list, research=research, store=store, mode=settings.exchange_mode, market_fee_bps=fees,
@@ -277,6 +290,7 @@ def init_services() -> Services:
         arbitrage=arbitrage,
         automation=automation,
         incident_guard=incident_guard,
+        trade_desk=trade_desk,
         alerts=_build_alerts(risk_controls, risk_engine, risk_monitor, wallet_service, venue_monitor, algo_engine,
                              automation, registry),
     )

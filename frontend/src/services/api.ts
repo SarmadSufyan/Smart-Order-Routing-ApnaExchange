@@ -428,6 +428,55 @@ export interface TradePlanResponse {
   disclaimer: string
 }
 
+// ── Trade desk (research R1): scanner, entry timer, time machine, plan ──
+export type TradeDeskTf = '5m' | '1h' | '1d'
+export interface SetupInfo { name: string; label: string; kind: 'entry' | 'watch'; timeframes: TradeDeskTf[]; idea: string }
+export interface HistoryCheck {
+  samples: number; wins: number; losses: number; timeouts: number; win_rate: number | null; expectancy_r: number | null
+  break_even_win_rate: number; median_bars_to_outcome: number | null; first_ts: number | null; last_ts: number | null
+  recent: { ts: number; outcome: 'target' | 'stop' | 'timeout'; r: number; bars: number; entry: number }[]
+}
+export type HistoryVerdict = 'positive' | 'too_few' | 'negative'
+export interface ScanHit {
+  symbol: string; setup: string; label: string; kind: 'entry' | 'watch'; timeframe: TradeDeskTf; bar_ts: number
+  age_bars: number; price: number; trigger: number; dollar_volume: number; details: Record<string, number | null>; idea: string
+  live_price: number | null; state: 'waiting' | 'triggered' | 'expired'; state_text: string
+  history: HistoryCheck; history_verdict: HistoryVerdict; history_text: string; traded_here: boolean; rank: number
+}
+export interface ScanResponse {
+  as_of_ts: number; took_s: number
+  universe: { coins: number; with_data: number; source: string; traded: string[] }
+  setups: SetupInfo[]; bracket: { k_atr: number; rr: number; time_limit_bars: Record<TradeDeskTf, number> }
+  hits: ScanHit[]; errors: Record<string, string>; note: string
+}
+export interface TradeDeskStatus {
+  enabled: boolean; scanning: boolean; universe: { coins: number; source: string; discovered_ts: number | null }
+  last_scan_ts: number | null; next_scan_in_s: number | null; interval_s: number; hits: number
+  errors: Record<string, string>; setups: SetupInfo[]
+  session: { opens_utc: string[]; range_minutes: number; entry_window_minutes: number }
+  time_machine: { replays: number; days: number }
+}
+export interface TimeMachineOdds {
+  replays: number; bars: number; entry: number; stop: number; target: number; rr: number
+  p_target: number; p_stop: number; p_neither: number; p_green: number; avg_r: number
+  median_close: number; close_p5: number; close_p95: number; median_bars_to_outcome: number | null
+  break_even_share: number; share: number | null; verdict: 'favourable' | 'coin_flip' | 'unfavourable'; verdict_text: string
+  bands: { bar: number; p5: number; p25: number; p50: number; p75: number; p95: number }[]
+  histogram: { edges: number[]; counts: number[] }; pool_bars: number; pool_sessions: number; seed: number
+}
+export interface TimeMachineResponse {
+  symbol: string; timeframe: TradeDeskTf; cost_bps_round_trip: number; cost_text: string
+  pool: { bars: number; sessions: number; first_ts: number; last_ts: number; days: number }
+  odds: TimeMachineOdds; note: string
+}
+export interface TradeDeskPlan {
+  symbol: string; timeframe: TradeDeskTf; setup: string | null; side: string; equity: number; risk_pct: number
+  k_atr: number; rr: number; max_bars: number; stop_rule: 'atr' | 'range_mid'; atr: number; entry_source: string
+  plan: TradePlanResponse['plan']; history: HistoryCheck; history_verdict: HistoryVerdict; history_text: string
+  time_machine: TimeMachineResponse; verdict: 'favourable' | 'mixed' | 'coin_flip' | 'skip'; verdict_text: string
+  reasons: string[]; cost_bps_round_trip: number; disclaimer: string
+}
+
 // ── Algo (parent) orders — TWAP, VWAP, IS, POV, ICEBERG ─────────────
 export type AlgoStatus = 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED' | 'FAILED'
 export type AlgoKind = 'TWAP' | 'VWAP' | 'IS' | 'POV' | 'ICEBERG'
@@ -1159,6 +1208,19 @@ export const api = {
     request<CopilotTurn>('/api/copilot/cancel', { method: 'POST', body: JSON.stringify({ proposal_id: proposalId }) }),
   copilotAnalysis: (symbol: string) =>
     request<AnalysisCard>(`/api/copilot/analysis?symbol=${encodeURIComponent(symbol)}`),
+
+  getTradeDeskScan: () => request<ScanResponse>('/api/trade-desk/scan'),
+  getTradeDeskStatus: () => request<TradeDeskStatus>('/api/trade-desk/status'),
+  tradeDeskRescan: () => request<ScanResponse>('/api/trade-desk/rescan', { method: 'POST' }),
+  getTradeDeskEntry: (symbol: string, setup: string, timeframe: TradeDeskTf) =>
+    request<ScanHit & { checked_ts: number }>(
+      `/api/trade-desk/entry?symbol=${encodeURIComponent(symbol)}&setup=${encodeURIComponent(setup)}&timeframe=${timeframe}`),
+  runTimeMachine: (req: { symbol: string; timeframe: TradeDeskTf; entry: number; stop: number; target: number;
+                          max_bars?: number | null; replays?: number | null }) =>
+    request<TimeMachineResponse>('/api/trade-desk/time-machine', { method: 'POST', body: JSON.stringify(req) }),
+  makeTradeDeskPlan: (req: { symbol: string; timeframe: TradeDeskTf; setup?: string | null; equity: number; risk_pct: number;
+                             k_atr: number; rr: number; max_bars?: number | null; stop_rule: 'atr' | 'range_mid'; replays?: number | null }) =>
+    request<TradeDeskPlan>('/api/trade-desk/plan', { method: 'POST', body: JSON.stringify(req) }),
 
   runBacktest: (req: { symbol: string; timeframe: ResearchTf; strategy: BacktestRule; params: Record<string, unknown>;
                        bars?: number; capital?: number; fee_bps?: number | null; slippage_bps?: number | null }) =>

@@ -2825,3 +2825,66 @@ backend/shared/models/venue.py; backend/tests/test_incident_guard.py (new), test
 frontend: VenueHealth, AppShell, AuditLog, AuditTimeline, HowItWorks, api.ts, dataStore.ts; .env.example; README.md;
 PROJECT_GUIDE.md; project-info/INCIDENT_GUARD_GUIDE.md (new); outside the repo (gitignored):
 data/private/LINKEDIN_CAPTION_INCIDENT.txt, LINKEDIN_POST_INCIDENT_2026-10-31.md, post-binance-incident/.
+
+## 2026-11-04 — The trade desk: setups across every coin, and a time machine (research R1)
+
+**Why.** The research page answers one coin at a time. A day trader's first question is the opposite: of everything
+that trades, where is something starting now, and did that pattern ever pay on that coin? The plan agreed on 25
+October took the shape of an MIT-licensed US-stock toolkit (scanner, entry timer, exit planner, a Time Machine of
+10,000 replayed sessions) and moved it onto our own crypto candles, our fees and the lab's measured slippage. Only the
+ideas were taken; every rule here is written out and tested.
+
+**What we built.** `research/scanner.py` (pure): eight setups on closed candles, each a boolean mask over the whole
+history so the same rule that finds today's hit also finds every past one; the opening range per session (00:00,
+08:00, 13:30 UTC; the first 30 minutes; one fire per session, none after four hours, none for an incomplete range);
+fresh fires (the first bar of a run); the entry timer. `research/timemachine.py` (pure): the pool of past bars as
+ratios grouped by time of day, the vectorised replay (10,000 paths, a fixed seed, stop before target, fan bands,
+a verdict against the break-even share), and `replay_history`, which places a bracket at every past fire and reads
+the real bars. `research/trade_desk.py`: the universe from the exchanges' public market lists (the intersection; a
+sandbox's list is not the market), small candle histories per coin kept gently in the research store, the scan loop,
+the plan (the research planner's sizing, both kinds of odds, one verdict), the entry timer, status. A router, the
+**Trade Desk** page, nine settings.
+
+**Decisions.**
+
+- *The evidence travels with the hit.* A scanner that only lists patterns invites action; this one lists, for each
+  hit, what happened every past time the same setup fired on the same coin with the same bracket. On the first live
+  scan that was 12 paid before, 58 too few fires and 94 no edge, out of 164. Ranking puts the paid-before first, but
+  the page shows the losing majority in the same font.
+- *Two opinions, no averaging.* The plan's verdict is favourable only when the real history and the replays agree;
+  if either argues against the bracket it says skip. The first top hit (SOL, oversold bounce, daily, +0.354 R on 27
+  past fires) was still a skip: the replays put the target first in 29.7 % of decided paths against 42.1 % needed.
+- *Time of day is the structure, nothing more.* The replay draws each bar from past bars of the same hour (or
+  5-minute slot) and scales it onto the path; draws are independent. That keeps the hour's volatility honest and
+  claims nothing about momentum. Stated in the guide as a limit, with the source kit's same simplification.
+- *The stop is checked first.* Within a bar the order of high and low is unknown, so a bar touching both is a loss,
+  in the replays and in the history alike, so the two stay comparable. Odds are a little pessimistic on purpose.
+- *The wider universe, cheaply.* 400 daily, 1,500 hourly and two days of 5-minute bars per coin; the 20 traded coins
+  keep 30 days of 5-minute bars for the opening-range time machine and their years of hourly and daily bars belong to
+  the research sync, which the desk never trims (verified: BTC/USDT still 44,288 hourly bars after the first scan).
+  The first collection for 200 coins took 130 s; later scans fetch the new bars only.
+- *Adapters serve any listed coin.* `fetch_candles` refused symbols outside the 20; it now serves any market the
+  data client's exchange lists, and `data_markets()` returns the USDT spot list. The requested-symbol fast path stays.
+- *Daily pools get a year.* Sixty daily bars is too thin a sample for a ten-day bracket; the daily pool is at least
+  365 bars.
+- *A dead tape is not a squeeze.* Zero band width satisfied "narrowest tenth"; excluded. And a flat tape's volume has
+  zero sigma, so the surge rule's sigma is at least a tenth of the mean.
+
+**Verified, live on the sandbox (14:07–14:11 UTC).** Universe "every USDT spot coin listed by Binance, Bybit, Gate
+(234 coins)" capped at 200 (OKX's list did not count: its domain does not resolve on this network). 200 of 200 coins
+with candles, 0 collection errors, 164 live setups (pull-back 70, oversold bounce 33, reclaimed average 23, squeeze
+18, volume surge 8, breakout 7, opening-range breakout 4 from the 13:30 session, bull flag 1); 145 triggered, 19
+waiting. The SOL plan: entry 92.815 from the live mid, stop 88.59, target 99.15, 2.3676 SOL for $10 at risk; 135 ms
+including the time machine; the time machine alone on BTC/USDT hourly (1,440-bar pool) in 201 ms. The page showed the
+same numbers, the fan chart and the verdict. 683 tests, ruff and tsc clean.
+
+**What it is not.** A setup is a pattern, not a forecast; 20–90 fires is a small sample; the replays know nothing of
+tomorrow's news and carry no momentum; the wider universe's short histories make most daily setups "too few fires";
+long only; nothing is sent. R3 is where a favourable plan becomes a proposal a person confirms.
+
+**Files.** backend/services/research/scanner.py, timemachine.py, trade_desk.py (new), sizing.py (an explicit stop);
+backend/exchanges/base.py (`usdt_spot_symbols`, `data_markets`), ccxt_venue.py; backend/gateway/routers/trade_desk.py
+(new), config.py, dependencies.py, main.py; backend/tests/test_research/test_trade_desk_maths.py,
+test_trade_desk_service.py (new); frontend: pages/TradeDesk.tsx (new), App.tsx, components/AppShell.tsx,
+services/api.ts; .env.example; README.md; PROJECT_GUIDE.md; project-info/TRADE_DESK_GUIDE.md (new), ROADMAP.md,
+RESEARCH_GUIDE.md.

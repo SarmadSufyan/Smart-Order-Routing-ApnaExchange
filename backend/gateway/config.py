@@ -179,6 +179,20 @@ class Settings(BaseSettings):
     # data, the same whichever environment orders go to).
     market_history_db_path: str = ""
 
+    # ─── Trade desk (research R1) ─────────────────────────────────
+    # A scanner over every USDT spot coin the enabled exchanges' real markets share ("common"; 147 on
+    # 2026-10-25) or over the trading universe only ("symbols"), with a measured history per hit, and a
+    # time machine for a bracket's odds. Read-only: it holds no order entry. project-info/TRADE_DESK_GUIDE.md
+    trade_desk_enabled: bool = True
+    scanner_universe: str = "common"
+    scanner_max_coins: int = 200
+    scanner_interval_s: float = 300.0
+    scanner_session_opens_utc: str = "00:00,08:00,13:30"  # the UTC day, London, New York
+    scanner_range_minutes: int = 30  # the opening range: the first N minutes after a session open
+    scanner_entry_window_minutes: int = 240  # no opening-range entries later than this after the open
+    time_machine_replays: int = 10_000
+    time_machine_days: int = 60  # the pool: this many days of the coin's own bars
+
     # ─── RAFT cluster (Phase 6) ───────────────────────────────────
     # Three node processes replicate the kill switch, risk limits and venue
     # blacklist; the gateway writes through the leader. Off = everything
