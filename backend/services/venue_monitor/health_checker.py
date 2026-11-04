@@ -67,6 +67,7 @@ class VenueHealthMonitor:
         self._ping_failures: dict[str, int] = defaultdict(int)
         self._running = False
         self._coherence = None  # set_coherence(); per-symbol execution-book check
+        self._guard = None  # set_guard(); the incident guard's view, shown with each venue
 
         for adapter in registry.all():
             vid = adapter.venue_id
@@ -96,6 +97,9 @@ class VenueHealthMonitor:
 
     def set_coherence(self, coherence_monitor) -> None:
         self._coherence = coherence_monitor
+
+    def set_guard(self, incident_guard) -> None:
+        self._guard = incident_guard
 
     # ── reads ───────────────────────────────────────────────────────
     def get_all_health(self) -> list[VenueHealth]:
@@ -276,6 +280,8 @@ class VenueHealthMonitor:
         health.fee_note = getattr(adapter, "fee_note", None)  # real money only
         if self._coherence is not None and adapter.execution_available:
             health.execution_coherence = self._coherence.venue_states(vid)
+        if self._guard is not None:
+            health.guard = self._guard.state(vid)
 
         if status != health.status:
             logger.info(

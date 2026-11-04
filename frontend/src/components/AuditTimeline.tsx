@@ -24,7 +24,10 @@ export function auditColor(e: AuditEvent): string {
     case 'risk_limits_changed':
     case 'concentration_alert':
     case 'venue_blacklisted':
+    case 'incident_drill':
     case 'venue_degraded':       return C.orange
+    case 'venue_incident':       return C.red
+    case 'venue_incident_cleared': return C.green
     case 'login':                return C.blue
     case 'login_failed':         return C.red
     default:                     return C.dim

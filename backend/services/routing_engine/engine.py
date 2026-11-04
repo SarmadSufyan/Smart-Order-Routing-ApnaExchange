@@ -21,6 +21,10 @@ cancel. A child that expired at its price limit is not re-routed (that would
 chase the price). A refusal of our key's right to trade also pauses routing
 to that venue for ``trading_block_s`` — found live: an OKX key that could
 read balances but not trade failed every order whose best price was on OKX.
+
+An exchange in trouble leaves routing through the incident guard
+(``venue_monitor/incident_guard.py``): the order keeps its normal path over
+the other exchanges, and the routing proof says who was left out and why.
 """
 
 import asyncio
@@ -113,6 +117,7 @@ class RoutingEngine:
         self._protection_bps = price_protection_bps
         self._child_band_bps: dict[str, float] = {}  # band actually used per child
         self._coherence = coherence
+        self._guard = None  # set_guard(): the incident guard, built after the risk controls it acts through
         self._wallet = wallet
         self._block_s = trading_block_s
         self._clock = clock
@@ -132,6 +137,9 @@ class RoutingEngine:
 
     async def stop(self) -> None:
         return None
+
+    def set_guard(self, guard) -> None:
+        self._guard = guard
 
     def restore_stats(self, orders: list[Order]) -> None:
         """Recount today's routed orders, and each venue's recent fill ratio, from the restored history."""
@@ -194,11 +202,15 @@ class RoutingEngine:
         ]
         if symbol and self._coherence is not None:
             venues = [v for v in venues if self._coherence.blocking_reason(v, symbol) is None]
+        if symbol and self._guard is not None:
+            venues = [v for v in venues if self._guard.blocking_reason(v, symbol) is None]
         return venues
 
     def excluded_venues(self, symbol: str | None = None) -> dict[str, str]:
         """Every non-executable venue with the reason, for status and proofs."""
         excluded = dict(self._venue_monitor.get_excluded_venues())
+        if self._guard is not None:
+            excluded.update({vid: why for vid in excluded if (why := self._guard.venue_reason(vid))})
         for vid in self._venue_monitor.get_routable_venues():
             adapter = self._registry.get(vid)
             if adapter is None:
@@ -210,6 +222,9 @@ class RoutingEngine:
             elif symbol and self._coherence is not None:
                 reason = self._coherence.blocking_reason(vid, symbol)
                 if reason:
+                    excluded[vid] = reason
+            if symbol and vid not in excluded and self._guard is not None:
+                if reason := self._guard.blocking_reason(vid, symbol):
                     excluded[vid] = reason
         return excluded
 
@@ -321,8 +336,12 @@ class RoutingEngine:
             if (d := self._collector.get_depth(vid, order.symbol, self._depth_levels)) is not None
         }
         names = {a.venue_id: a.name for a in self._registry.all()}
+        # Quotes of venues the guard holds out join for the proof only: they aren't in ``routable``, so they
+        # can't win, and the proof shows what was passed up.
+        seen = nbbo if self._guard is None else nbbo.model_copy(update={
+            "venue_quotes": {**self._guard.left_out_quotes(order.symbol), **nbbo.venue_quotes}})
         result = await self.strategy_for(order).route(
-            order, nbbo, routable, depth=depth, lot_steps=steps, venue_names=names,
+            order, seen, routable, depth=depth, lot_steps=steps, venue_names=names,
             exclusion_reasons=self.excluded_venues(order.symbol), capacity=capacity, min_sizes=minimums,
             fees_bps=self._fees, fill_ratios=self.fill_ratios(),
         )
@@ -334,6 +353,10 @@ class RoutingEngine:
                 result.decision.notes.insert(
                     0, f"Quantity rounded down to the venue lot size: {fmt_qty(original_qty)} -> {fmt_qty(order.quantity)}"
                 )
+            if self._guard is not None:  # unless the strategy already said why ("quoted better but was skipped: ...")
+                told = " ".join(result.decision.notes)
+                result.decision.notes[:0] = [n for n in self._guard.routing_notes(order.symbol)
+                                             if n.split(": ", 1)[-1] not in told]
             # Persist the decision so the UI can show exactly why it routed this way.
             self._orders.get_order(order.id).routing_decision = result.decision.model_dump()
         await event_bus.publish("routing_decision", self._decision_event(order, result))

@@ -3,11 +3,71 @@ import { C, F, tint } from '../theme'
 import { Card, CardTitle, ConnDot, PageHeader } from '../components/shared'
 import { useDataStore } from '../stores/dataStore'
 import { backendVenueToUi, fmtRate, LATENCY_WARN_MS, connectionLabel, dataFeedLabel } from '../adapters'
+import { fmtUsd } from '../format'
+import type { VenueGuard, VenueHealth as BackendVenue } from '../services/api'
 
 function fmtMs(ms: number): string {
   if (!ms) return '—'
   if (ms < 10) return `${ms.toFixed(1)} ms`
   return `${ms.toFixed(0)} ms`
+}
+
+function fmtBps(bps: number): string {
+  return `${bps >= 0 ? '+' : ''}${bps.toFixed(1)} bps`
+}
+
+/** Can money leave this exchange, and does its price still agree with the others? What the guard reads. */
+function GuardFacts({ guard }: { guard: VenueGuard }) {
+  const closed = guard.withdrawals_closed
+  const shut = guard.transfers_known && closed >= guard.coins_checked / 2
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px', fontSize: F.xs, marginBottom: 10 }}>
+      <div title={guard.transfer_source ? `From ${guard.transfer_source}` : 'This exchange publishes it only to a real-money key'}>
+        <div style={{ color: C.dim }}>Withdrawals</div>
+        <div style={{ color: !guard.transfers_known ? C.dim : shut ? C.red : C.green, fontWeight: 500 }}>
+          {guard.transfers_known ? `${guard.coins_checked - closed}/${guard.coins_checked} coins open` : 'not published'}
+        </div>
+      </div>
+      <div title="Median gap between this exchange's prices and the other exchanges'">
+        <div style={{ color: C.dim }}>Price vs others</div>
+        <div style={{ color: guard.wide_gap_coins.length ? C.orange : C.text, fontWeight: 500 }}>
+          {guard.median_gap_bps === null ? '—' : fmtBps(guard.median_gap_bps)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Shown at the top of the page while any exchange is at WATCH or GUARDED. */
+function IncidentBanner({ venues }: { venues: BackendVenue[] }) {
+  const open = venues.filter((v) => v.guard && v.guard.level !== 'NORMAL')
+  if (open.length === 0) return null
+  const parked = open.reduce((sum, v) => sum + (v.guard?.funds_usdt ?? 0), 0)
+  const guarded = open.some((v) => v.guard?.level === 'GUARDED')
+  const tone = guarded ? C.red : C.orange
+  return (
+    <div role="alert" style={{
+      background: tint(tone, 8), border: `1px solid ${tint(tone, 45)}`, borderRadius: 6,
+      padding: '12px 16px', marginBottom: 14,
+    }}>
+      <div style={{ fontSize: F.base, fontWeight: 700, color: tone, marginBottom: 6 }}>
+        {guarded ? 'Exchange incident: routing around it' : 'Exchange warning'}
+      </div>
+      {open.map((v) => (
+        <div key={v.venue_id} style={{ fontSize: F.sm, lineHeight: 1.5 }}>
+          <strong>{v.name}</strong>: {v.guard?.reasons.join('; ')}
+          {v.guard?.blocked && ' — no new orders go there.'}
+        </div>
+      ))}
+      {parked > 0 && (
+        <div style={{ fontSize: F.xs, color: C.muted, marginTop: 6 }}>
+          {fmtUsd(parked)} of our {venues[0]?.mode === 'mainnet' ? '' : 'sandbox '}balance sits on{' '}
+          {open.length === 1 ? 'that exchange' : 'those exchanges'}. A router can avoid an exchange, but it can't take
+          money out of one: our keys can't withdraw, by design.
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function VenueHealth() {
@@ -16,6 +76,7 @@ export function VenueHealth() {
   const unblacklistVenue = useDataStore((s) => s.unblacklistVenue)
   const degradeVenue    = useDataStore((s) => s.degradeVenue)
   const recoverVenue    = useDataStore((s) => s.recoverVenue)
+  const incidentDrill   = useDataStore((s) => s.incidentDrill)
 
   const [busy, setBusy] = useState<string | null>(null)
   // e.g. un-blacklisting is refused while RAFT has no majority
@@ -51,6 +112,13 @@ export function VenueHealth() {
     setBusy(null)
   }
 
+  async function handleDrill(venueId: string, on: boolean) {
+    setBusy(venueId)
+    const err = await incidentDrill(venueId, on)
+    setActionError(err ? { venueId, text: err } : null)
+    setBusy(null)
+  }
+
   return (
     <div>
       <PageHeader
@@ -62,9 +130,13 @@ export function VenueHealth() {
         about={<>
           Latency is the measured REST round-trip. “Inject latency” adds a fixed delay to our own connection to that
           exchange (fault injection), so the health monitor's response can be observed on a live venue; the exchange
-          is not affected.
+          is not affected. The incident guard reads whether money can leave each exchange and whether its prices still
+          agree with the others: an exchange in trouble leaves routing automatically, and only a person lets it back.
+          “Incident drill” simulates that in the sandbox.
         </>}
       />
+
+      <IncidentBanner venues={backendVenues} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 14, marginBottom: 14 }}>
         {venues.map((v) => {
@@ -116,6 +188,7 @@ export function VenueHealth() {
                       </div>
                     ))}
                   </div>
+                  {b.guard && <GuardFacts guard={b.guard} />}
                   {b.execution_coherence && Object.keys(b.execution_coherence).length > 0 && (
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ fontSize: F.xs, color: C.dim, marginBottom: 4 }}>
@@ -209,18 +282,57 @@ export function VenueHealth() {
                       {busy === v.backend.venue_id ? '…' : 'Blacklist'}
                     </button>
                   </div>
+                  {b.mode !== 'mainnet' && (
+                    <button
+                      onClick={() => handleDrill(v.backend.venue_id, !b.guard?.drill)}
+                      disabled={busy === v.backend.venue_id}
+                      title="Simulates this exchange closing its withdrawals: the block, the alert and the order routed around it all run for real, in the sandbox"
+                      style={{
+                        width: '100%', marginTop: 6, padding: '5px 0',
+                        border: `1px solid ${C.border}`, borderRadius: 3,
+                        background: C.surface, color: C.muted,
+                        fontSize: F.xs, cursor: 'pointer', fontFamily: 'inherit',
+                        opacity: busy === v.backend.venue_id ? 0.5 : 1,
+                      }}
+                    >
+                      {busy === v.backend.venue_id ? '…' : b.guard?.drill ? 'End incident drill' : 'Incident drill'}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
                   <div style={{ textAlign: 'center', padding: '14px 0', color: C.red, fontSize: F.base }}>
-                    {v.blacklisted ? 'Venue blacklisted' : 'Feed disconnected'}
-                    <div style={{ color: C.dim, fontSize: F.xs, marginTop: 4 }}>
-                      {v.blacklisted
+                    {b.guard?.blocked ? 'Blocked by the incident guard' : v.blacklisted ? 'Venue blacklisted' : 'Feed disconnected'}
+                    <div style={{ color: C.dim, fontSize: F.xs, marginTop: 4, lineHeight: 1.5 }}>
+                      {b.guard?.blocked
+                        ? (b.guard.reasons.join('; ') || 'The warning signs have cleared') + ' — orders route through the other exchanges until a person lifts this'
+                        : v.blacklisted
                         ? 'Excluded from routing by an operator — no orders being sent'
                         : 'Reconnecting and re-syncing order books — excluded from routing until healthy'}
                     </div>
                   </div>
+                  {b.guard && v.blacklisted && <GuardFacts guard={b.guard} />}
+                  {b.guard?.funds_usdt != null && b.guard.blocked && (
+                    <div style={{ fontSize: F.xs, color: C.muted, textAlign: 'center', marginBottom: 10 }}>
+                      Our {b.mode === 'mainnet' ? '' : 'sandbox '}balance there: {fmtUsd(b.guard.funds_usdt)}
+                    </div>
+                  )}
                   {v.blacklisted && <div style={{ display: 'flex', gap: 6, maxWidth: 240, margin: '0 auto' }}>
+                    {b.guard?.drill && (
+                      <button
+                        onClick={() => handleDrill(v.backend.venue_id, false)}
+                        disabled={busy === v.backend.venue_id}
+                        style={{
+                          flex: 1, padding: '5px 0',
+                          border: `1px solid ${C.border}`, borderRadius: 3,
+                          background: C.surface, color: C.muted,
+                          fontSize: F.xs, cursor: 'pointer', fontFamily: 'inherit',
+                          opacity: busy === v.backend.venue_id ? 0.5 : 1,
+                        }}
+                      >
+                        {busy === v.backend.venue_id ? '…' : 'End drill'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleUnblacklist(v.backend.venue_id)}
                       disabled={busy === v.backend.venue_id}
@@ -232,7 +344,7 @@ export function VenueHealth() {
                         opacity: busy === v.backend.venue_id ? 0.5 : 1,
                       }}
                     >
-                      {busy === v.backend.venue_id ? '…' : 'Unblacklist (Restore)'}
+                      {busy === v.backend.venue_id ? '…' : b.guard?.blocked ? 'Lift the block' : 'Unblacklist (Restore)'}
                     </button>
                   </div>}
                 </>

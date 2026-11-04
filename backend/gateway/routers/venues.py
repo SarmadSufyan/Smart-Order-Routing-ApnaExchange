@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.gateway.middleware.auth import User, UserRole, get_current_user, require_role
 from backend.shared.events.event_bus import audit
-from backend.shared.models.venue import VenueDetail, VenueHealth, VenueListResponse
+from backend.shared.models.venue import (
+    IncidentDrill,
+    VenueDetail,
+    VenueGuard,
+    VenueHealth,
+    VenueListResponse,
+)
 
 router = APIRouter(prefix="/api/venues", tags=["venues"])
 
@@ -95,3 +101,18 @@ async def recover_venue(venue_id: str, user: Annotated[User, Depends(get_current
     await audit("venue_recovered", f"{venue_id}: artificial latency removed by {user.username}",
                 actor=user.username, venue_id=venue_id)
     return {"venue_id": venue_id, "degraded": False}
+
+
+@router.post(
+    "/{venue_id}/incident-drill",
+    response_model=VenueGuard,
+    dependencies=[Depends(require_role(UserRole.RISK_MANAGER, UserRole.ADMIN))],
+)
+async def incident_drill(venue_id: str, body: IncidentDrill, user: Annotated[User, Depends(get_current_user)]):
+    """Sandbox fire drill: pretend this exchange closed its withdrawals; refused on real money.
+
+    The whole response runs for real (the block, the alert, the order routed around it). Ending the drill
+    clears the signal, and the block stays until someone lifts it, as it would after a real incident.
+    """
+    svc, _ = _require_venue(venue_id)
+    return await svc.incident_guard.set_drill(venue_id, body.on, user.username)

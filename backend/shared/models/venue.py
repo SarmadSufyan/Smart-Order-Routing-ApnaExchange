@@ -51,6 +51,37 @@ class CoherenceState(BaseModel):
     checked_at: datetime | None = None
 
 
+class IncidentLevel(str, Enum):
+    NORMAL = "NORMAL"
+    WATCH = "WATCH"  # something is off: the owner is told, routing is unchanged
+    GUARDED = "GUARDED"  # no new orders go there; only a person lets them go back
+
+
+class VenueGuard(BaseModel):
+    """The incident guard's view of one exchange (services/venue_monitor/incident_guard.py)."""
+
+    level: IncidentLevel = IncidentLevel.NORMAL
+    reasons: list[str] = []  # in plain English
+    blocked: bool = False  # the guard took this venue out of routing, and it is still out
+    lifted: bool = False  # a person let it back in while the signal continues
+    since: datetime | None = None
+    checked_at: datetime | None = None
+    # What the exchange itself says, per coin. Known = it publishes this here and the list was read recently.
+    transfers_known: bool = False
+    transfer_source: str | None = None
+    coins_checked: int = 0
+    withdrawals_closed: int = 0
+    deposits_closed: int = 0
+    # How far its prices sit from the other exchanges
+    coins_compared: int = 0
+    wide_gap_coins: list[str] = []
+    median_gap_bps: float | None = None
+    # Our money parked there: the part no router can move
+    funds_usdt: float | None = None
+    funds_share_pct: float | None = None
+    drill: bool = False  # a simulated incident (sandbox only)
+
+
 class VenueHealth(BaseModel):
     venue_id: str
     name: str = ""
@@ -84,6 +115,11 @@ class VenueHealth(BaseModel):
     fee_note: str | None = None  # real money: the account's own taker fee, as the exchange reports it
     # Per symbol: does the execution (testnet) book track the real market?
     execution_coherence: dict[str, CoherenceState] = {}
+    guard: VenueGuard = Field(default_factory=VenueGuard)
+
+
+class IncidentDrill(BaseModel):
+    on: bool = True
 
 
 class VenueDetail(BaseModel):

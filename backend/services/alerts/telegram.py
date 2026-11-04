@@ -5,10 +5,11 @@ kill-switch release, a venue blacklisted, an exchange that refused part of an or
 every order that filled (the lab server's bots trade too often for that). Plus a daily summary. The words are the
 audit log's own summaries: one description of each event, wherever it is read.
 
-What it obeys: ``/stop`` engages the kill switch, ``/status`` answers with the summary - and only from the one chat
-in ``TELEGRAM_CHAT_ID``. Releasing the kill switch is NOT possible from the phone: stopping is always safe,
-restarting needs the screen (the same asymmetry as RAFT's tighten-at-once / loosen-with-a-majority rule). Commands
-sent before the gateway started are ignored, so an old ``/stop`` never fires at a restart.
+What it obeys: ``/stop`` engages the kill switch, ``/block binance`` takes one exchange out of routing, ``/status``
+answers with the summary - and only from the one chat in ``TELEGRAM_CHAT_ID``. Releasing or lifting is NOT possible
+from the phone: stopping is always safe, restarting needs the screen (the same asymmetry as RAFT's tighten-at-once /
+loosen-with-a-majority rule). Commands sent before the gateway started are ignored, so an old ``/stop`` never fires
+at a restart.
 
 The bot token sits in the URL of every Telegram call (that is Telegram's API), so no URL and no raw error text is
 ever logged - only the error's type.
@@ -39,6 +40,7 @@ FORWARDED_AUDIT = {
     "bots_auto_resumed": "🤖",
 }
 REPEAT_AFTER_S = {"CONCENTRATION": 3600.0}  # the same concentration warning at most once an hour
+RISK_ICONS = {"LOSS_LIMIT": "🛑", "VENUE_INCIDENT": "🚨"}
 MAX_LEN = 3500  # Telegram's limit is 4096 characters
 
 
@@ -55,9 +57,10 @@ def format_event(channel: str, data: dict, real_money: bool) -> str | None:
             return f"🛑 Kill switch ENGAGED by {operator}: {data.get('reason') or 'no reason given'}"
         return f"✅ Kill switch released by {operator}"
     if channel == "risk_alert":
-        kind = data.get("type", "")
-        icon = "🛑" if kind == "LOSS_LIMIT" else "⚠️"
-        return f"{icon} {kind.replace('_', ' ').title()}: {data.get('message', '')}"
+        kind, message = data.get("type", ""), data.get("message", "")
+        label = kind.replace("_", " ").title()
+        text = message if message.startswith(f"{label}:") else f"{label}: {message}"  # some messages name themselves
+        return f"{RISK_ICONS.get(kind, '⚠️')} {text}"
     if not real_money:
         return None  # fills and refusals: real money only
     if channel == "order_update" and data.get("new_status") in ("FILLED", "PARTIALLY_FILLED"):
@@ -76,7 +79,18 @@ def parse_command(text: str) -> tuple[str, str] | None:
         return None
     head, _, rest = text.partition(" ")
     command = head[1:].split("@", 1)[0].lower()  # "/stop@ApnaSorBot" in a group
-    return (command, rest.strip()) if command in ("stop", "status", "help") else None
+    return (command, rest.strip()) if command in ("stop", "block", "status", "help") else None
+
+
+async def block_from_phone(block: Callable[[str, str], Awaitable[str]] | None, text: str, via: str) -> str:
+    """Run ``/block``; a failure is said plainly, so the owner knows to use the screen."""
+    if block is None:
+        return "Blocking an exchange from the phone isn't set up here - use the Venues page."
+    try:
+        return await block(text, via)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("phone_block_failed", error=type(exc).__name__)
+        return f"❗ The exchange could NOT be blocked ({type(exc).__name__}) - use the screen now."
 
 
 def next_summary_at(now: datetime, hour_utc: int) -> datetime:
@@ -94,11 +108,13 @@ class TelegramAlerts:
                  engage_kill_switch: Callable[[str, str], Awaitable[Any]],
                  status: Callable[[], Awaitable[str]], summary_hour_utc: int = 3,
                  transport: httpx.AsyncBaseTransport | None = None, poll_timeout_s: int = 25,
-                 send_interval_s: float = 1.1) -> None:
+                 send_interval_s: float = 1.1,
+                 block_venue: Callable[[str, str], Awaitable[str]] | None = None) -> None:
         self._token = token
         self._chat = str(chat_id).strip()
         self._real_money = real_money
         self._engage = engage_kill_switch
+        self._block = block_venue
         self._status = status
         self._summary_hour = summary_hour_utc
         self._transport = transport
@@ -216,11 +232,14 @@ class TelegramAlerts:
             except Exception as exc:  # noqa: BLE001
                 logger.error("telegram_stop_failed", error=type(exc).__name__)
                 self.notify(f"❗ The kill switch could NOT be engaged ({type(exc).__name__}) - use the screen now.")
+        elif name == "block":
+            self.notify(await block_from_phone(self._block, rest, "telegram"))
         elif name == "status":
             self.notify(await self._status())
         else:
-            self.notify("/stop [reason] - engage the kill switch (stops all trading)\n/status - the summary\n"
-                        "Releasing the kill switch is done on the screen only.")
+            self.notify("/stop [reason] - engage the kill switch (stops all trading)\n"
+                        "/block binance - no new orders to that exchange\n/status - the summary\n"
+                        "Releasing and lifting are done on the screen only.")
 
     # ── daily summary ───────────────────────────────────────────────
     async def _summary_loop(self) -> None:

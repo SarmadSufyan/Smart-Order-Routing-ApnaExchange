@@ -99,6 +99,16 @@ class Settings(BaseSettings):
     coherence_threshold_bps: float = 50.0
     coherence_check_interval_s: float = 5.0
 
+    # ─── Incident guard: an exchange in trouble leaves routing ────
+    # Watches what each exchange says about withdrawals, and its prices against the others. Blocking is
+    # automatic, lifting is a person's. Off = no signals are read; AUTO_BLOCK off = it warns but never blocks.
+    incident_guard_enabled: bool = True
+    incident_guard_auto_block: bool = True
+    incident_gap_bps: float = 75.0  # normal gaps measured ~±4 bps on the main coins
+    incident_gap_hold_s: float = 30.0  # a gap must last this long: a bad tick is not an incident
+    incident_transfers_interval_s: float = 60.0  # how often the exchanges' coin lists are read
+    incident_clear_after_s: float = 300.0  # how long the signs must stay quiet before the level falls
+
     # ─── Venue health / wallet ────────────────────────────────────
     venue_health_check_interval_s: float = 2.0
     wallet_refresh_interval_s: float = 15.0

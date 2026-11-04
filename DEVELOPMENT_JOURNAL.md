@@ -2766,3 +2766,62 @@ data/private/reports/, data/private/research_notes/, data/private/OUTREACH_SAFET
 data/private/SESSION_CONTEXT_2026-10-28.md, data/handoff/NEXT_SESSION_PROMPT_2026-10-28.md.
 
 ---
+
+## 2026-10-30 — The incident guard: can money leave?
+
+**Why.** On 2026-10-29 Binance lost about $6.3bn from hot wallets (its own estimate) and closed withdrawals. We asked
+what ApnaSOR would have done that night, and measured instead of guessing. It would have kept routing there. Binance's
+books were synced, its latency normal, its health score 75 %, its prices within about 5 bps of the others, and at
+20:50 UTC the next day it was the best sell on 17 of 20 coins after fees against Bybit, Gate and HTX. Its own coin list
+said withdrawals were closed on 990 of 990 coins. Nothing we measured looked at that. With withdrawals closed,
+arbitrage can't pull prices together, so a router that follows the best price follows it into the exchange nobody can
+leave. A healthy book says the market is open, not that the exit is.
+
+**What we built.** `exchanges/transfers.py` reads what each exchange says about deposits and withdrawals per coin, in
+the style of `key_permissions.py`: pure parsers, one per exchange. `venue_monitor/incident_guard.py` compares each
+exchange's prices with the median of the others, decides NORMAL / WATCH / GUARDED with one pure function, and acts.
+
+**Decisions.**
+
+- *Blacklist, not a new kind of block.* GUARDED calls `RiskControls.blacklist_venue`, so it is replicated, survives a
+  restart, leaves the NBBO and is lifted by a person. Design rules 1 and 5 for free, and no second truth to keep in step.
+- *Half of the coins.* Measured on the same day: Gate 1 of 21 closed, HTX 3 of 21, Binance 21 of 21. A coin counts as
+  closed only if none of its networks is open: one network under maintenance is an ordinary day.
+- *A failed read proves nothing.* Not an incident, not an all-clear. Binance's list is undocumented and may move.
+- *Respect a person.* Someone who lifts the block during an episode isn't overruled until the episode ends. A restart
+  forgets that and blocks again: fail-safe.
+- *Both sides are blocked.* Selling on that exchange leaves the USDT on it, so custody risk doesn't change.
+- *No ccxt for the lists.* `fetch_currencies` held the event loop ~250 ms on Gate's and HTX's lists; reading them
+  directly and parsing in a thread cost ~20 ms. Every order and book update would have waited behind the first.
+- *Show what it cost.* A blacklisted venue isn't in the NBBO, so the strategy never saw it and the first proof simply
+  didn't mention Binance's better price. The guard now adds held venues' quotes for the proof only: they aren't routable,
+  so they can't win. The existing "quoted a better bid ... but was skipped" line then says it, in the system's own words.
+- *A drill.* After the incident there is nothing real to read, so a sandbox drill pretends an exchange closed its
+  withdrawals and everything else runs for real. Real money refuses it.
+
+**Found live.** The alert promised "the other exchanges" with none left. Just after a restart it quoted $7,696 of a
+$96,640 sandbox balance because wallet prices were still arriving, hence a 15 s warm-up before the first decision.
+"Our balance" on a screen that may be photographed now says "sandbox balance".
+
+**Verified, on the real incident.** Detection used Binance's real list and nothing was simulated; orders ran in the
+sandbox. Blocked within seconds, RAFT log index 36. Sandbox sells of 0.0002 BTC filled on Bybit; one proof reads
+"Binance (V1) quoted a better bid ($76,956.00, 7.6 bps better) but was skipped: incident guard: withdrawals closed on
+21 of 21 coins". With a drill on Bybit too, the order was refused and the proof named both. Ending the drill cleared the
+signal and kept the block; a person lifted it; a trader login got 403. Four restarts kept the block. The copilot answered
+"Is Binance safe?" from these facts. 650 tests, ruff and tsc clean.
+
+**What it is not.** It can't stop a hack or bring money back: our keys can't withdraw, by design. It reacts when the
+exchange closes withdrawals, after the theft has begun, and in this incident the price signal would not have fired on
+most coins. It was built the day after and wasn't running that night. Bybit's and OKX's signed reads are tested against
+recorded formats only, since no real key is ever on a development machine. Limits are spelled out in the guide.
+
+**Also.** `/block binance` from the phone (tightening only); the doubled "Concentration:" in the alert; the README's
+working-name sentence, which was meant to go in before the repo went public; the same sentence in template B.
+
+**Files.** backend/exchanges/transfers.py (new), base.py, ccxt_venue.py; backend/services/venue_monitor/incident_guard.py
+(new), health_checker.py; backend/services/routing_engine/engine.py; backend/services/alerts/telegram.py, discord.py;
+backend/services/agents/analyst.py; backend/gateway/config.py, dependencies.py, main.py, routers/venues.py;
+backend/shared/models/venue.py; backend/tests/test_incident_guard.py (new), test_alerts.py, test_alerts_discord.py;
+frontend: VenueHealth, AppShell, AuditLog, AuditTimeline, HowItWorks, api.ts, dataStore.ts; .env.example; README.md;
+PROJECT_GUIDE.md; project-info/INCIDENT_GUARD_GUIDE.md (new); outside the repo (gitignored):
+data/private/LINKEDIN_CAPTION_INCIDENT.txt, LINKEDIN_POST_INCIDENT_2026-10-31.md, post-binance-incident/.

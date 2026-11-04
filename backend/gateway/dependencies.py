@@ -30,9 +30,11 @@ from backend.services.risk_engine.volatility import VolatilityTracker
 from backend.services.routing_engine.engine import RoutingEngine
 from backend.services.venue_monitor.coherence import CoherenceMonitor
 from backend.services.venue_monitor.health_checker import VenueHealthMonitor
+from backend.services.venue_monitor.incident_guard import IncidentGuard
 from backend.services.wallet import PnLService, WalletService
 from backend.shared.database.store import AuditStore
 from backend.shared.models.risk import RiskCeilings, RiskLimits
+from backend.shared.models.venue import IncidentLevel
 
 
 @dataclass
@@ -61,6 +63,7 @@ class Services:
     risk_controls: RiskControls
     arbitrage: ArbitrageDetector
     automation: AutomationEngine
+    incident_guard: IncidentGuard
     alerts: DiscordAlerts | TelegramAlerts | None = None
 
 
@@ -174,6 +177,16 @@ def init_services() -> Services:
         risk_engine, pnl_service, wallet_service, order_manager, registry,
         interval_s=settings.risk_monitor_interval_s, controls=risk_controls,
     )
+    # An exchange in trouble leaves routing. It acts through risk_controls alone: it can block, never trade.
+    incident_guard = IncidentGuard(
+        registry, collector, wallet_service, risk_controls, settings.symbol_list,
+        enabled=settings.incident_guard_enabled, auto_block=settings.incident_guard_auto_block,
+        gap_bps=settings.incident_gap_bps, gap_hold_s=settings.incident_gap_hold_s,
+        transfers_interval_s=settings.incident_transfers_interval_s,
+        clear_after_s=settings.incident_clear_after_s, real_money=settings.is_real_money,
+    )
+    routing_engine.set_guard(incident_guard)
+    venue_monitor.set_guard(incident_guard)
     # The one way orders enter: the REST endpoint and every algo use it.
     order_entry = OrderEntry(order_manager, routing_engine)
     # Real-market candles (public data) for VWAP profiles, POV volume and the market-VWAP benchmark.
@@ -263,14 +276,15 @@ def init_services() -> Services:
         risk_controls=risk_controls,
         arbitrage=arbitrage,
         automation=automation,
+        incident_guard=incident_guard,
         alerts=_build_alerts(risk_controls, risk_engine, risk_monitor, wallet_service, venue_monitor, algo_engine,
-                             automation),
+                             automation, registry),
     )
     return _services
 
 
 def _build_alerts(risk_controls, risk_engine, risk_monitor, wallet, venue_monitor, algo_engine,
-                  automation) -> DiscordAlerts | TelegramAlerts | None:
+                  automation, registry) -> DiscordAlerts | TelegramAlerts | None:
     """The phone alerts: Discord when its bot, channel and owner are configured, else Telegram, else none."""
     discord_token = settings.discord_bot_token.get_secret_value().strip() if settings.discord_bot_token else ""
     use_discord = bool(discord_token and settings.discord_channel_id.strip() and settings.discord_owner_id.strip())
@@ -287,21 +301,34 @@ def _build_alerts(risk_controls, risk_engine, risk_monitor, wallet, venue_monito
         pnl = state.trading_pnl if state is not None else None
         trading = [h.name for h in venue_monitor.get_all_health() if h.trading_enabled]
         where = "REAL MONEY" if settings.is_real_money else "Sandbox"
+        incidents = [f"Incident: {h.name} {h.guard.level.value} - {'; '.join(h.guard.reasons)}"
+                     for h in venue_monitor.get_all_health() if h.guard.level != IncidentLevel.NORMAL]
         return "\n".join([
             f"{where} - exchanges trading: {', '.join(trading) or 'none'}",
             f"Kill switch: {'ENGAGED - ' + (ks.reason or '') if ks.active else 'off'}",
+            *incidents,
             f"Trading P&L: {'unknown' if pnl is None else f'{pnl:+,.2f} USDT'}",
             f"Balances: {wallet.get_snapshot().total_value_usdt:,.2f} USDT",
             f"Running: {running(algo_engine.list())} algos, {running(automation.list())} bots",
         ])
 
+    async def block(text: str, via: str) -> str:
+        """``/block binance``: tightening, so the phone may do it; lifting it needs the screen."""
+        wanted = (text.split() or [""])[0].lower()
+        adapter = next((a for a in registry.all() if wanted in (a.exchange_id, a.name.lower(), a.venue_id.lower())), None)
+        if adapter is None:
+            return f"Which exchange? /block {' | '.join(a.exchange_id for a in registry.all())}"
+        await risk_controls.blacklist_venue(adapter.venue_id, actor=via)
+        return (f"🚫 Done: no new orders go to {adapter.name}; they route through the other exchanges. "
+                "Lift it from the screen (Venues page) when you have looked.")
+
     if use_discord:
         return DiscordAlerts(discord_token, settings.discord_channel_id, settings.discord_owner_id,
                              real_money=settings.is_real_money, engage_kill_switch=risk_controls.engage_kill_switch,
-                             status=status, summary_hour_utc=settings.alerts_summary_hour_utc)
+                             status=status, summary_hour_utc=settings.alerts_summary_hour_utc, block_venue=block)
     return TelegramAlerts(token, settings.telegram_chat_id, real_money=settings.is_real_money,
                           engage_kill_switch=risk_controls.engage_kill_switch, status=status,
-                          summary_hour_utc=settings.alerts_summary_hour_utc)
+                          summary_hour_utc=settings.alerts_summary_hour_utc, block_venue=block)
 
 
 def get_services() -> Services:

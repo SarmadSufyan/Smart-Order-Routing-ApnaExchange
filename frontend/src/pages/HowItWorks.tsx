@@ -49,7 +49,7 @@ const STEP_DEFS = [
     key: 'sor',
     title: 'SOR Strategy Decision',
     short: 'Walks the consolidated order book',
-    what: 'The Best-Price strategy merges the price levels of every eligible exchange into one ladder, sorts it best-first and consumes it until the order is filled. The result is each venue\'s allocation plus the expected VWAP and slippage. Blacklisted, critical or disconnected venues are excluded.',
+    what: 'The Best-Price strategy merges the price levels of every eligible exchange into one ladder, sorts it best-first and consumes it until the order is filled. The result is each venue\'s allocation plus the expected VWAP and slippage. Blacklisted, critical or disconnected venues are excluded, and so is an exchange the incident guard took out because money can\'t leave it: the order fills on the others, and the proof shows the price that was passed up.',
   },
   {
     key: 'route',

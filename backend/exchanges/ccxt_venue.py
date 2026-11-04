@@ -53,6 +53,7 @@ from backend.exchanges.key_permissions import (
 )
 from backend.exchanges.orderbook import LocalOrderBook
 from backend.exchanges.precision import floor_to_step, is_close
+from backend.exchanges.transfers import TransferStatus, fetch_transfer_status
 from backend.shared.models.execution_report import ExecType
 from backend.shared.models.order import OrderSide, OrderType
 from backend.shared.utils.logger import get_logger
@@ -693,6 +694,11 @@ class CcxtVenueAdapter(ExchangeAdapter):
             return {}
         tickers = await self._client.fetch_tickers(wanted)
         return {s: (tickers.get(s, {}).get("bid"), tickers.get(s, {}).get("ask")) for s in wanted}
+
+    async def fetch_transfer_status(self, coins: list[str]) -> TransferStatus | None:
+        """The REAL exchange's deposits and withdrawals: a testnet's own status means nothing, so only a real-money
+        key is used, and otherwise the public list (transfers.py)."""
+        return await fetch_transfer_status(self.exchange_id, coins, self._client if self.key_check_required else None)
 
     # ── health ──────────────────────────────────────────────────────
     async def ping(self) -> float:

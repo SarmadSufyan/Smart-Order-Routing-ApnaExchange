@@ -86,6 +86,39 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.discord.posted[0]["allowed_mentions"], {"parse": []})  # it never pings anyone
         self.assertTrue(str(self.discord.requests[0].url).endswith(f"/channels/{CHANNEL}/messages"))
 
+    async def test_block_takes_one_exchange_out_and_says_so(self) -> None:
+        blocked: list[tuple[str, str]] = []
+
+        async def block(text: str, via: str) -> str:
+            blocked.append((text, via))
+            return "🚫 Done"
+
+        self.alerts._block = block
+        await self.alerts.handle_message(self.message("!block binance"))
+        self.assertEqual(blocked, [("binance", "discord")])
+        await self.drain()
+        self.assertEqual(self.discord.posted[0]["content"], "🚫 Done")
+
+    async def test_a_block_that_fails_says_to_use_the_screen(self) -> None:
+        async def block(text: str, via: str) -> str:
+            raise RuntimeError("no")
+
+        self.alerts._block = block
+        await self.alerts.handle_message(self.message("/block binance"))
+        await self.drain()
+        self.assertIn("could NOT be blocked (RuntimeError) - use the screen", self.discord.posted[0]["content"])
+
+    async def test_block_only_answers_the_owner(self) -> None:
+        blocked: list[str] = []
+
+        async def block(text: str, via: str) -> str:
+            blocked.append(text)
+            return "done"
+
+        self.alerts._block = block
+        await self.alerts.handle_message(self.message("/block binance", author="800000000000000009"))
+        self.assertEqual(blocked, [])
+
     async def test_others_bots_and_old_messages_are_ignored_silently(self) -> None:
         await self.alerts.handle_message(self.message("/stop", author="800000000000000009"))  # someone else
         await self.alerts.handle_message(self.message("/stop", bot=True))  # a bot, ours included

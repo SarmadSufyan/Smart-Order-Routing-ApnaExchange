@@ -41,7 +41,9 @@ class FormatTest(unittest.TestCase):
         self.assertEqual(parse_command("/stop market is wild"), ("stop", "market is wild"))
         self.assertEqual(parse_command("/STOP@ApnaSorBot"), ("stop", ""))
         self.assertEqual(parse_command("/status"), ("status", ""))
+        self.assertEqual(parse_command("/block binance"), ("block", "binance"))
         self.assertIsNone(parse_command("stop"))
+        self.assertIsNone(parse_command("/unblock binance"))  # no such command: lifting needs the screen
         self.assertIsNone(parse_command("/release"))  # no such command: releasing needs the screen
 
     def test_next_summary(self) -> None:

@@ -183,6 +183,7 @@ export function AppShell() {
   }
 
   const venuesForDots = venues.length > 0 ? venues.map((v) => backendVenueToUi(v)) : []
+  const guarded = venues.filter((v) => v.guard?.level === 'GUARDED').map((v) => v.name)
   const exchangeMode = venues[0]?.mode
   const realMoney = exchangeMode === 'mainnet'
   const showLabels = isDrawer || !collapsed
@@ -254,6 +255,12 @@ export function AppShell() {
               style={pill(SERVER_IS_REAL_MONEY ? C.red : C.blue)}>
               {SERVER_LABEL}
             </span>
+          )}
+          {guarded.length > 0 && (
+            <button onClick={() => navigate('/venues')} title="The incident guard took this out of routing: see why"
+              style={{ ...pill(C.red, true), cursor: 'pointer', fontFamily: 'inherit' }}>
+              Incident: {guarded.join(', ')}
+            </button>
           )}
         </div>
 

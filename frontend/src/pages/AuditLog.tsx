@@ -9,7 +9,7 @@ const FILTERS: { label: string; types: string }[] = [
   { label: 'Everything', types: '' },
   { label: 'Operator actions', types: 'kill_switch,kill_switch_release_refused,risk_limits_changed,baseline_set,venue_blacklisted,venue_unblacklisted,venue_degraded,venue_recovered' },
   { label: 'Orders', types: 'order_submitted,order_status' },
-  { label: 'Risk', types: 'risk_check,risk_preflight,risk_limits_changed,concentration_alert,concentration_cleared,kill_switch,kill_switch_release_refused' },
+  { label: 'Risk', types: 'risk_check,risk_preflight,risk_limits_changed,concentration_alert,concentration_cleared,kill_switch,kill_switch_release_refused,venue_incident,venue_incident_cleared,incident_drill' },
   { label: 'Routing & fills', types: 'routing_decision,execution_report,venue_trading_blocked' },
   { label: 'Algos (TWAP)', types: 'algo_started,algo_slice,algo_paused,algo_resumed,algo_finished' },
   { label: 'Copilot', types: 'copilot_proposed,copilot_clarify,copilot_refused,copilot_confirmed,copilot_cancelled,copilot_confirm_failed,copilot_unreadable_answer' },

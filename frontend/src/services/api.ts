@@ -98,6 +98,28 @@ export interface VenueHealth {
   fee_note?: string | null        // real money: the account's own taker fee, as the exchange reports it
   // Per symbol: does the venue's execution (testnet) book track the real market?
   execution_coherence?: Record<string, CoherenceState>
+  guard?: VenueGuard
+}
+
+// The incident guard's view of one exchange
+export interface VenueGuard {
+  level: 'NORMAL' | 'WATCH' | 'GUARDED'
+  reasons: string[]
+  blocked: boolean                // the guard took it out of routing, and it is still out
+  lifted: boolean                 // a person let it back in while the signal continues
+  since: string | null
+  checked_at: string | null
+  transfers_known: boolean        // false = this exchange doesn't say here (Bybit, OKX without a real-money key)
+  transfer_source: string | null
+  coins_checked: number
+  withdrawals_closed: number
+  deposits_closed: number
+  coins_compared: number
+  wide_gap_coins: string[]
+  median_gap_bps: number | null
+  funds_usdt: number | null       // our money parked there: the part no router can move
+  funds_share_pct: number | null
+  drill: boolean                  // a simulated incident (sandbox only)
 }
 
 export interface CoherenceState {
@@ -1027,6 +1049,12 @@ export const api = {
 
   unblacklistVenue: (venueId: string) =>
     request<unknown>(`/api/venues/${venueId}/unblacklist`, { method: 'POST' }),
+
+  incidentDrill: (venueId: string, on: boolean) =>
+    request<VenueGuard>(`/api/venues/${venueId}/incident-drill`, {
+      method: 'POST',
+      body: JSON.stringify({ on }),
+    }),
 
   degradeVenue: (venueId: string) =>
     request<unknown>(`/api/venues/${venueId}/degrade`, { method: 'POST' }),

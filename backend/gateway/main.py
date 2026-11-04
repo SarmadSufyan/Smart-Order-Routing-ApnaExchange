@@ -179,8 +179,8 @@ async def lifespan(app: FastAPI):
     # RAFT on: agree with the cluster before anything can trade (no-op when off).
     await svc.risk_controls.startup()
     background = (svc.venue_monitor, svc.market_data_collector, svc.coherence_monitor,
-                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.arbitrage,
-                  svc.research, *([svc.alerts] if svc.alerts is not None else []))
+                  svc.wallet_service, svc.risk_monitor, svc.volatility, svc.risk_controls, svc.incident_guard,
+                  svc.arbitrage, svc.research, *([svc.alerts] if svc.alerts is not None else []))
     for service in background:
         _background_tasks.append(asyncio.create_task(service.start()))
 
@@ -251,6 +251,7 @@ async def domain_error_handler(request, exc: DomainError):
         "BOT_REJECTED": 409,
         "FUND_REJECTED": 409,
         "FUND_RESERVED": 409,
+        "DRILL_REFUSED": 409,
     }
     return JSONResponse(
         status_code=status_map.get(exc.code, 500),

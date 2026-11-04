@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, Field
 
 from backend.exchanges.orderbook import LocalOrderBook
+from backend.exchanges.transfers import TransferStatus
 from backend.shared.models.execution_report import ExecType
 from backend.shared.models.order import OrderSide, OrderType
 
@@ -204,6 +205,10 @@ class ExchangeAdapter(ABC):
         """Best bid/ask on the EXECUTION venue per symbol (for coherence checks).
         Venues that can't execute have nothing to report."""
         return {}
+
+    async def fetch_transfer_status(self, coins: list[str]) -> TransferStatus | None:
+        """Are deposits and withdrawals open, per coin? None = this exchange doesn't say here."""
+        return None
 
     # ── account ─────────────────────────────────────────────────────
     @abstractmethod

@@ -10,6 +10,8 @@ and splits it into price-protected orders on several exchanges at once. Large or
 execution algorithms; a copilot answers questions and proposes trades in plain English; every step is written to an
 append-only audit log.
 
+"Apna Exchange" is the project's working name; there is no company, no customers, no custody and no public service.
+
 Final Year Project · Usman Institute of Technology (UITU) · Group CS14 · Supervisor: **Sir Shamaail Jafri**
 
 **Launch video (8 minutes, recorded on the live system):** [`reports/launch-video/ApnaSOR-launch-video-720p.mp4`](reports/launch-video/ApnaSOR-launch-video-720p.mp4) · **First real orders:** [`reports/rehearsal-2026-10-26/`](reports/rehearsal-2026-10-26/) (screenshots of the real-money server)
@@ -41,6 +43,7 @@ Final Year Project · Usman Institute of Technology (UITU) · Group CS14 · Supe
 | **Execution** | Every child order is **IOC LIMIT, price-protected**; a refused part is re-routed to the remaining exchanges; network errors are reconciled by client order id |
 | **Pre-trade risk** | Seven deterministic checks in one pure function (kill switch, size, notional, rate, position, exposure, symbol) plus a funding check that each exchange can pay for its part |
 | **Risk monitor** | Watches the whole book every 2 s: a trading-loss limit engages the kill switch automatically; concentration alerts |
+| **Incident guard** | Reads what each exchange says about deposits and withdrawals, and compares its prices with the others. An exchange in trouble leaves routing automatically and orders fill on the rest; only a person lets it back. It limits new exposure: it can't stop a hack or bring money back ([guide](project-info/INCIDENT_GUARD_GUIDE.md)) |
 | **Kill switch, limits, blacklist** | Persisted across restarts; optionally replicated by a 3-node **RAFT** cluster (signed messages; tightening works without a majority, loosening needs one) |
 | **Execution algorithms** | **TWAP, VWAP, implementation shortfall (Almgren–Chriss), POV, iceberg** — or **Auto** chooses one and explains why. Every slice goes through the same order path and risk checks |
 | **Wallet and P&L** | Balances read from each exchange, a P&L ledger from opening balances plus every fill, and reconciliation against what each exchange reports |
@@ -122,7 +125,7 @@ set `RAFT_ENABLED=true` and your own `RAFT_SHARED_SECRET` in `.env`
 ## Tests and quality
 
 ```powershell
-python -m unittest discover -s backend/tests -t .   # 606 backend tests
+python -m unittest discover -s backend/tests -t .   # 650 backend tests
 npx --prefix frontend tsc --noEmit -p frontend      # strict TypeScript type-check
 python -m ruff check backend scripts start_all.py   # lint
 ```
@@ -184,7 +187,7 @@ the June 2026 simulated-venue prototype and are kept for the record ([index](pro
    `backend/services/consensus/` (RAFT: `core.py` is the algorithm with no I/O).
 5. **The copilot** — `backend/services/agents/copilot.py`: the model fills a form, code validates every field,
    a person confirms.
-6. **Tests** — `backend/tests/` (606), and the CI runs on this branch.
+6. **Tests** — `backend/tests/` (650), and the CI runs on this branch.
 7. **The history** — [`DEVELOPMENT_JOURNAL.md`](DEVELOPMENT_JOURNAL.md): why each decision was made.
 
 ## Scope and honest limits
@@ -192,6 +195,8 @@ the June 2026 simulated-venue prototype and are kept for the record ([index](pro
 - **Sandbox means exchange-run fake funds.** Binance's testnet, Bybit's and OKX's demo trading are the exchanges' own
   systems with play money; HTX has no sandbox, so there it supplies market data only.
 - **Not non-custodial.** The exchanges hold the funds; ApnaSOR reads balances and places orders with API keys.
+- **The incident guard limits new exposure, nothing more.** Money already on an exchange stays there: our keys can't
+  withdraw, by design. It was built after the Binance incident of 2026-10-29, so it was not running that night.
 - **The arbitrage module detects; it does not trade.** After both taker fees, real cross-exchange gaps are rare.
 - **Forecasts are probabilities with a measured track record, not predictions.** Most show no proven edge after
   fees, and the system says so. Nothing in the research or the copilot is financial advice.

@@ -25,7 +25,7 @@ import httpx
 from backend.shared.events.event_bus import event_bus
 from backend.shared.utils.logger import get_logger
 
-from .telegram import REPEAT_AFTER_S, format_event, next_summary_at, parse_command
+from .telegram import REPEAT_AFTER_S, block_from_phone, format_event, next_summary_at, parse_command
 
 logger = get_logger("alerts")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -59,12 +59,14 @@ class DiscordAlerts:
                  engage_kill_switch: Callable[[str, str], Awaitable[Any]],
                  status: Callable[[], Awaitable[str]], summary_hour_utc: int = 3,
                  transport: httpx.AsyncBaseTransport | None = None, poll_every_s: float = 3.0,
-                 send_interval_s: float = 1.1) -> None:
+                 send_interval_s: float = 1.1,
+                 block_venue: Callable[[str, str], Awaitable[str]] | None = None) -> None:
         self._token = token
         self._channel = str(channel_id).strip()
         self._owner = str(owner_id).strip()
         self._real_money = real_money
         self._engage = engage_kill_switch
+        self._block = block_venue
         self._status = status
         self._summary_hour = summary_hour_utc
         self._transport = transport
@@ -188,11 +190,14 @@ class DiscordAlerts:
             except Exception as exc:  # noqa: BLE001
                 logger.error("discord_stop_failed", error=type(exc).__name__)
                 self.notify(f"❗ The kill switch could NOT be engaged ({type(exc).__name__}) - use the screen now.")
+        elif name == "block":
+            self.notify(await block_from_phone(self._block, rest, "discord"))
         elif name == "status":
             self.notify(await self._status())
         else:
-            self.notify("/stop [reason] - engage the kill switch (stops all trading)\n/status - the summary\n"
-                        "(!stop and !status work too.) Releasing the kill switch is done on the screen only.")
+            self.notify("/stop [reason] - engage the kill switch (stops all trading)\n"
+                        "/block binance - no new orders to that exchange\n/status - the summary\n"
+                        "(!stop, !block and !status work too.) Releasing and lifting are done on the screen only.")
 
     # ── daily summary ───────────────────────────────────────────────
     async def _summary_loop(self) -> None:

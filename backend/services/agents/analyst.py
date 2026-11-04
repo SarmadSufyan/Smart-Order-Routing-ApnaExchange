@@ -274,6 +274,9 @@ class Analyst:
         if topic == "system" and self._venues is not None:
             return {"environment": "sandbox" if self.mode == "testnet" else "real funds",
                     "exchanges": [{"name": h.name, "status": h.status.value, "latency_ms": h.latency_ms,
-                                   "can_trade": h.trading_enabled, "note": h.execution_note}
+                                   "can_trade": h.trading_enabled, "note": h.execution_note,
+                                   "incident_level": h.guard.level.value, "incident_reasons": h.guard.reasons,
+                                   "withdrawals_closed_coins": h.guard.withdrawals_closed if h.guard.transfers_known
+                                   else None, "our_balance_usdt": h.guard.funds_usdt}
                                   for h in self._venues.get_all_health()]}
         return {}

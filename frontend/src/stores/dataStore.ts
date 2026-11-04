@@ -74,6 +74,7 @@ interface DataState {
   unblacklistVenue: (venueId: string) => Promise<string | null>
   degradeVenue: (venueId: string) => Promise<string | null>
   recoverVenue: (venueId: string) => Promise<string | null>
+  incidentDrill: (venueId: string, on: boolean) => Promise<string | null>
   activateKillSwitch: (reason: string) => Promise<string | null>
   deactivateKillSwitch: () => Promise<string | null>
   setupWebSocket: () => void
@@ -331,6 +332,16 @@ export const useDataStore = create<DataState>((set, get) => ({
   recoverVenue: async (venueId) => {
     try {
       await api.recoverVenue(venueId)
+      await get().fetchVenues()
+      return null
+    } catch (e) {
+      return (e as Error).message
+    }
+  },
+
+  incidentDrill: async (venueId, on) => {
+    try {
+      await api.incidentDrill(venueId, on)
       await get().fetchVenues()
       return null
     } catch (e) {
